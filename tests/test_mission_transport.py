@@ -147,10 +147,30 @@ class TransportTests(unittest.TestCase):
         report={'run_id':self.run['id'],'status':'qa','candidate':'a'*40,'review_id':'review-A',
                 'verdict':'pass','summary':'A review ended, now superseded','tests':['A suite passed']}
         sent=[]
-        with patch.object(transport,'verify_participant'),patch.object(transport.Gossip,'invoke',side_effect=lambda *a:sent.append(a)):
+        with patch.object(transport,'verify_publisher'),patch.object(transport.Gossip,'invoke',side_effect=lambda *a:sent.append(a)):
             transport.report(self.store,self.run['id'],'qa',report)
         self.assertEqual(sent[0][:2],('a2a','artifact'))
         self.assertIn('qa-native',sent[0])
+
+    def test_publisher_rejects_bad_role_shape_and_local_signer_before_send(self):
+        self.run['tasks']['task'].update(gossip_task='native-task',state='working')
+        self.store.save(self.run)
+        data={'run_id':self.run['id'],'task_id':'task','status':'blocked','summary':'Need fixture'}
+        state=self.store.root/self.run['id']/'worker-gossip.json'
+        state.parent.mkdir()
+        state.write_text(json.dumps({'gossip':'room','nickname':'worker','pubkey':'foreign'}))
+        with patch.object(transport.Gossip,'invoke') as send:
+            with self.assertRaisesRegex(RuntimeError,'role'):
+                transport.report(self.store,self.run['id'],'leader',data)
+            with self.assertRaisesRegex(RuntimeError,'JSON object'):
+                transport.report(self.store,self.run['id'],'worker',[])
+            with self.assertRaisesRegex(RuntimeError,'local Gossip identity'):
+                transport.report(self.store,self.run['id'],'worker',data)
+            state.write_text(json.dumps({'gossip':'room','nickname':'worker','pubkey':'key'}))
+            with patch.object(transport,'verify_graph',side_effect=RuntimeError('Graph identity changed')):
+                with self.assertRaisesRegex(RuntimeError,'Graph identity changed'):
+                    transport.report(self.store,self.run['id'],'worker',data)
+            send.assert_not_called()
 
     def test_native_identity_loss_blocks_report_even_from_pinned_gossip_key(self):
         self.run['tasks']['task'].update(gossip_task='native-task',state='working')

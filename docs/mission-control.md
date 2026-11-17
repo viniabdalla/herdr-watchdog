@@ -78,6 +78,12 @@ a clarification is not authority to broaden the original allowed files.
 Progress shows “Guidance sent; waiting for the agent” after a follow-up. The full
 instruction and its delivery status remain in the task's `guidance` history,
 available through `mission inspect`, including uncertain deliveries.
+Participants must use the absolute controller report command in their bootstrap,
+so fixes remain available even when their checkout is pinned to an older base.
+Publishing checks report structure and the assigned local Gossip key/graph;
+the receiving host independently verifies native identity before accepting any
+evidence. Publishing never requires visibility of host processes inside a tool
+sandbox and never changes authoritative task state directly.
 
 The main checks and integrates commits into its feature branch. For multiple
 selected tasks, accept the returned result for sequencing, then dispatch the

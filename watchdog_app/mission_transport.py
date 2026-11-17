@@ -317,9 +317,23 @@ def review(store, identity, candidate):
         return run
 
 
+def verify_publisher(store, run, role):
+    """Verify the local Gossip signer; only the receiving host checks native PIDs."""
+    part=run['participants'][role]
+    if not part.get('pubkey') or not part.get('native'):
+        raise RuntimeError('Publisher has no registered participant identity')
+    state=json.loads((store.root/run['id']/(role+'-gossip.json')).read_text())
+    if (state.get('gossip')!=run['transport']['gossip'] or state.get('nickname')!=part['nickname'] or
+            state.get('pubkey')!=part['pubkey']):
+        raise RuntimeError('Publisher local Gossip identity differs from its assignment')
+    verify_graph(run,role)
+
+
 def report(store, identity, role, data):
     run=store.load(identity)
-    native=verify_participant(run,role)
+    if role not in ('worker','qa') or role not in run['participants']:
+        raise RuntimeError('Report requires an assigned worker or QA role')
+    if not isinstance(data,dict):raise RuntimeError('Report must be a JSON object')
     if data.get('run_id') != identity:raise RuntimeError('Report belongs to another run')
     part=run['participants'][role]
     from .mission import require_summary
@@ -339,5 +353,6 @@ def report(store, identity, role, data):
         # Main must learn that the old attempt ended so it can safely request
         # a new exact candidate. The receiving reducer still rejects approval.
         pass
+    verify_publisher(store,run,role)
     args=['a2a','artifact'] if data['status'] in ('result','qa') else ['a2a','status','--state','input-required' if data['status']=='blocked' else 'working']
     return Gossip(run['transport'],part['nickname']).invoke(*args,'--task-id',task_id,'--text',json.dumps(data))

@@ -273,6 +273,7 @@ def participant(store, identity, role):
         'global config edits or server stops. Poll Gossip for your directed assignment before doing work. '
         'Use --long --max-secs 40, never --bell. Keep the same Gossip task ID on follow-ups. '
         'No source changes before receiving a task. Return structured JSON via the Watchdog report command.\n'
+        'Always use the absolute controller report command below; it receives fixes independently of your assigned checkout.\n'
         f"Run: {identity}\nRole: {role}\nWorktree: {part['worktree']}\n"
         f"Graph identity: {json.dumps(run.get('graph',{}))}\n"
         'Watchdog publishes your graph entry only after verifying your native account/thread and Gossip key.\n'
