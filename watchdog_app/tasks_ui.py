@@ -116,11 +116,18 @@ class TasksUI:
             offer = self.pending
             title = {'done': 'Confirm completion', 'send': 'Confirm send',
                      'queue': 'Conversation is working — confirm queue',
+                     'orchestrate': 'Confirm orchestration',
                      'apply': 'Confirm reviewed changes'}[offer['kind']]
             rows.append((title, 'In progress', None))
             rows.append((self.session.label, None, None))
-            if offer['kind'] in ('send', 'queue') and self.session.binding:
+            if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
+            if offer['kind'] == 'orchestrate':
+                rows.extend([(str(self.repo), None, None),
+                    ('Main conversation: ' + self.session.binding.session, None, None),
+                    ('Team: one Codex worker + one Codex QA', None, None),
+                    ('One new execution tab; each agent gets an isolated worktree.', None, None),
+                    ('Main prepares the brief and coordinates. TODO stays open.', None, None)])
             if offer['kind'] == 'apply':
                 for index in sorted(offer['indices']):
                     action = offer['result']['actions'][index]
@@ -193,7 +200,7 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         else:
-            buttons = [('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
+            buttons = [('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
             hint = 'Space: select · j/k: move · PgUp/PgDn'
         packed, x, line = [], 0, 0
@@ -243,7 +250,7 @@ class TasksUI:
 
     def confirm(self, kind):
         self.require_selection()
-        if kind == 'send':
+        if kind in ('send', 'orchestrate'):
             self.session.verify()
         self.pending = {'kind': kind, 'snapshot': self.snapshot, 'ids': set(self.selected)}
         self.mode, self.scroll = 'confirm', 0
@@ -260,6 +267,10 @@ class TasksUI:
                     return
                 raise RuntimeError('The conversation is working; wait until idle. Selection kept.') from error
             self.notice = 'Queued selected tasks to this Codex thread; they remain open.'
+        elif offer['kind'] == 'orchestrate':
+            from .mission import request
+            run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True)
+            self.notice = 'Coordination requested · ' + run['id'][:8] + ' · see Progress'
         elif offer['kind'] == 'done':
             change(offer['snapshot'], [{'kind': 'done', 'id': key} for key in sorted(offer['ids'])])
             self.notice = f"Marked {len(offer['ids'])} task done" if len(offer['ids']) == 1 else f"Marked {len(offer['ids'])} tasks done"
@@ -324,6 +335,8 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif key == 'o':
+            self.confirm('orchestrate')
         elif key == 's':
             self.confirm('send')
         elif key == 'd':
