@@ -38,8 +38,23 @@ actors and panes stay intact.
 
 A queue receipt means delivery only. A correlated **completed native successor
 reply** must confirm operation/token, checkpoint, continuation digest and actual
-ai-memory handoff receipt (the exact hook-supplied handoff, or
-`memory_handoff_list` followed by `memory_handoff_accept` for that ID). Then the
+ai-memory handoff receipt. Already-consumed SessionStart content is sufficient
+when it includes this unique operation UUID and matches the supplied project and
+bounded continuation, even if the hook does not display the handoff ID. Do not
+call list/accept again to rediscover that consumed matching hook handoff.
+
+Receipts carry explicit `memory_receipt` evidence. `method: session_start_hook`
+names the operation/project and quotes a bounded `operation_excerpt` from the hook
+containing the UUID; it does **not** claim a tool accept or independently displayed
+handoff ID. The top-level `memory_handoff_id` remains the supplied predecessor
+reference. If there is no matching hook content, use `memory_handoff_list` followed
+by `memory_handoff_accept` for the exact supplied ID and report
+`method: exact_id_tool_accept` with that actual `accepted_handoff_id`. Without
+either matching hook operation content or exact-ID tool acceptance, block. Backend
+checks the explicit method, operation/project, hook excerpt or accepted ID, plus
+the existing token/checkpoint/context/native gates, and preserves the evidence.
+These remain receiver attestations, not an independent audit of service state.
+Then the
 predecessor receives an explicit release request, replies with the exact
 operation/checkpoint/successor and parks. Only after both real completed replies
 and final idle/native/Git checks does Store relinquish old ownership and activate

@@ -96,7 +96,9 @@ class CleanSessionsTests(unittest.TestCase):
         return self.tick() # native verification and bounded continuation delivery
     def receive(self):
         op=clean.load(self.store,self.op['operation_id'])
-        self.reply(self.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],memory_handoff_id=op['preparation']['memory_handoff_id'])
+        self.reply(self.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],memory_handoff_id=op['preparation']['memory_handoff_id'],
+                   memory_receipt={'method':'exact_id_tool_accept','operation_id':op['operation_id'],'project':str(self.repo),
+                                   'accepted_handoff_id':op['preparation']['memory_handoff_id']})
         return self.tick()
 
     def test_requires_explicit_confirmation_and_requests_exact_current_leader(self):
@@ -377,3 +379,58 @@ class CleanSessionsTests(unittest.TestCase):
         self.assertEqual(op['stage'],'launch',op.get('problem'))
         self.assertEqual(git(self.repo,'show','HEAD:'+name),'authorized literal filename')
         self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'old')
+
+    def test_idless_sessionstart_hook_receipt_is_correlated_by_operation_and_preserved(self):
+        op=self.to_receipt()
+        evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(self.repo),
+                  'operation_excerpt':'Saved ai-memory handoff for Clean sessions operation '+op['operation_id']+'; preserve unfinished tasks.'}
+        self.reply(self.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
+                   memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=evidence)
+        op=self.tick();self.assertEqual(op['state'],'received',op.get('problem'))
+        self.assertEqual(op['receiver_receipt']['value']['memory_receipt'],evidence)
+        self.assertNotIn('accepted_handoff_id',op['receiver_receipt']['value']['memory_receipt'],'Hook receipt must not claim tool acceptance')
+        self.assertEqual(op['receiver_receipt']['value']['memory_handoff_id'],op['preparation']['memory_handoff_id'],'ID is the predecessor reference, not a claimed hook display')
+        self.reply(self.old,'released',checkpoint=op['checkpoint'],successor=self.new.session)
+        self.assertEqual(self.tick()['state'],'released')
+
+    def test_hook_receipt_requires_matching_operation_excerpt_and_project(self):
+        bad_cases=[{'operation_id':str(uuid.uuid4())},{'operation_id':None},{'operation_excerpt':'unrelated hook content'},
+                   {'operation_excerpt':'Operation '+str(uuid.uuid4())},
+                   {'operation_excerpt':None},{'project':'/foreign/project'}]
+        for bad in bad_cases:
+            with self.subTest(bad=bad):
+                f=CleanSessionsTests();f.setUp()
+                try:
+                    op=f.to_receipt()
+                    evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(f.repo),
+                              'operation_excerpt':'Clean sessions '+op['operation_id']}
+                    evidence.update(bad)
+                    if bad.get('operation_id',1) is None:evidence.pop('operation_id')
+                    f.reply(f.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
+                            memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=evidence)
+                    result=f.tick();self.assertEqual(result['state'],'partial');self.assertIn('memory',result['problem'].lower())
+                    self.assertNotIn('release',result['effects']);self.assertEqual(json.loads(f.file.read_text())['binding'],asdict(f.old))
+                finally:f.doCleanups()
+
+    def test_exact_tool_accept_receipt_requires_explicit_matching_acceptance_evidence(self):
+        for evidence in (None,{'method':'exact_id_tool_accept','accepted_handoff_id':'wrong-id'},
+                         {'method':'unknown'}, {'method':'session_start_hook','accepted_handoff_id':'invented'}):
+            with self.subTest(evidence=evidence):
+                f=CleanSessionsTests();f.setUp()
+                try:
+                    op=f.to_receipt();value=None if evidence is None else {'operation_id':op['operation_id'],'project':str(f.repo),**evidence}
+                    f.reply(f.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
+                            memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=value)
+                    result=f.tick();self.assertEqual(result['state'],'partial');self.assertNotIn('release',result['effects'])
+                finally:f.doCleanups()
+
+    def test_continuation_instructs_matching_idless_hook_before_single_use_tool_lookup(self):
+        op=self.to_receipt();message=self.runtime.deliveries[-1][1]
+        self.assertIn('even if it does not display the handoff ID',message)
+        self.assertIn('Do NOT call list/accept again',message)
+        self.assertIn('memory_receipt',message);self.assertIn('session_start_hook',message)
+        self.assertIn('exact_id_tool_accept',message);self.assertIn(op['operation_id'],message)
+        self.receive();op=clean.load(self.store,self.op['operation_id'])
+        evidence=op['receiver_receipt']['value']['memory_receipt']
+        self.assertEqual(evidence['method'],'exact_id_tool_accept')
+        self.assertEqual(evidence['accepted_handoff_id'],op['preparation']['memory_handoff_id'])

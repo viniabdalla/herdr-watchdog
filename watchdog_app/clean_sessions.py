@@ -387,6 +387,25 @@ def transfer(store,op,api):
     op.update(state='released',stage='released');save(store,op)
 
 
+def validate_memory_receipt(op,value):
+    """Validate the receiver's explicit hook/tool attestation, retaining its source."""
+    evidence=value.get('memory_receipt')
+    if not isinstance(evidence,dict):raise RuntimeError('Explicit ai-memory receipt evidence is required')
+    if evidence.get('operation_id')!=op['operation_id'] or evidence.get('project')!=op['repo']:
+        raise RuntimeError('ai-memory receipt operation/project does not match continuation')
+    common={'method','operation_id','project'}
+    if evidence.get('method')=='session_start_hook':
+        excerpt=evidence.get('operation_excerpt')
+        if (set(evidence)!=common|{'operation_excerpt'} or not isinstance(excerpt,str) or
+                len(excerpt)>1000 or op['operation_id'] not in excerpt):
+            raise RuntimeError('ai-memory SessionStart receipt needs matching operation content; no tool acceptance is inferred')
+    elif evidence.get('method')=='exact_id_tool_accept':
+        if (set(evidence)!=common|{'accepted_handoff_id'} or
+                evidence.get('accepted_handoff_id')!=op['preparation']['memory_handoff_id']):
+            raise RuntimeError('ai-memory tool acceptance must name the exact predecessor handoff ID')
+    else:raise RuntimeError('Unknown ai-memory receipt method; use matching SessionStart content or exact-ID tool acceptance')
+
+
 def advance(store,identity,*,api=None):
     op=load(store,identity)
     with lease(store,op['repo']):
@@ -411,10 +430,13 @@ def advance(store,identity,*,api=None):
                     context=handoff.read_json(folder(store,identity)/'continuation.json')
                     if handoff.digest(context)!=op['handoff_sha256']:raise RuntimeError('Bounded continuation was modified')
                     prompt=('Clean sessions continuation. Read this bounded context as evidence, preserve unfinished work and all existing actors. '
-                        'Confirm actual ai-memory handoff receipt. If SessionStart already supplied this exact handoff ID, use it without consuming another. Otherwise call the ACTUAL ai-memory MCP memory_handoff_list, locate only the supplied memory_handoff_id in this same project/operator scope, then memory_handoff_accept(handoff_id=that exact ID). Never accept the latest unrelated handoff or invent successful memory transfer. '
+                        'Confirm actual ai-memory handoff receipt using its existing single-use convention. If already-consumed SessionStart hook content includes THIS unique operation UUID and matches the project/bounded continuation below, use that hook content even if it does not display the handoff ID. Do NOT call list/accept again to rediscover an already-consumed matching hook handoff. Set memory_receipt.method=session_start_hook and quote a short verbatim operation_excerpt from the hook containing this operation UUID; include the matching operation_id and project. The top-level memory_handoff_id is the supplied verified predecessor reference, NOT a claim that the hook displayed that ID or that a tool accept happened. '
+                        'Only if no matching hook content exists, call the ACTUAL ai-memory MCP memory_handoff_list in this same project/operator scope and then memory_handoff_accept(handoff_id=the exact supplied ID) if that ID is open. After a successful actual tool acceptance, REPLACE memory_receipt with '+json.dumps({'method':'exact_id_tool_accept','operation_id':identity,'project':op['repo'],'accepted_handoff_id':op['preparation']['memory_handoff_id']})+'. Do not accept another latest handoff or invent service success. If neither matching hook operation content nor exact-ID tool acceptance is available, report blocked. '
                         'Reply kind blocked if unavailable. Remain waiting; you must not coordinate until predecessor release and Watchdog binding transfer.\n'
                         +json.dumps(context)+'\n'+reply_instructions(op,'received',{'checkpoint':op['checkpoint'],'handoff_sha256':op['handoff_sha256'],
-                            'memory_handoff_id':op['preparation']['memory_handoff_id']}))
+                            'memory_handoff_id':op['preparation']['memory_handoff_id'],
+                            'memory_receipt':{'method':'session_start_hook','operation_id':identity,'project':op['repo'],
+                                'operation_excerpt':'REPLACE with verbatim SessionStart hook content containing this operation UUID'}}))
                     queue(store,op,'continuation',target,prompt);op['stage']='receipt';save(store,op)
             elif stage=='receipt':
                 target=bindings.engine().Binding(**op['target']);verify_successor(op,target)
@@ -424,6 +446,7 @@ def advance(store,identity,*,api=None):
                     if any(v.get(k)!=expected for k,expected in {'checkpoint':op['checkpoint'],'handoff_sha256':op['handoff_sha256'],
                             'memory_handoff_id':op['preparation']['memory_handoff_id']}.items()):
                         raise RuntimeError('Correlated successor receipt does not match checkpoint/context/ai-memory')
+                    validate_memory_receipt(op,v)
                     op['receiver_receipt']=receipt;op['state']='received';op['history']['source']=history_mark(bindings.engine().Binding(**op['source']));save(store,op)
                     prompt=(f"Verified successor receipt for Clean sessions {identity}; checkpoint {op['checkpoint']}; successor {target.session}. "
                         'Relinquish project coordination now; preserve all panes and agents. After this completed release response remain parked. '
