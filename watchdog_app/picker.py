@@ -1,14 +1,14 @@
 """Terminal selectors. Escape returns before any layout mutation."""
 import curses
 from .layouts import PRESETS
-from .accounts import account_labels
+from .accounts import account_labels, printable_text
 
 
 def text(screen, row, col, value, attr=0):
     h, w = screen.getmaxyx()
     if not 0 <= row < h or col >= w - 1:
         return
-    value = ''.join(c if c.isprintable() else ' ' for c in str(value))
+    value = printable_text(value)
     try:
         screen.addnstr(row, col, value, max(0, w - col - 1), attr)
     except curses.error:

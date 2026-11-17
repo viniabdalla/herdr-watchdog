@@ -70,6 +70,27 @@ class PickerAccountTests(unittest.TestCase):
         self.assertIn('Office    Name', row)
         self.assertTrue(all(char.isprintable() for char in row))
 
+    def labels(self, accounts):
+        return [row.split(' · ')[2] for row in self.rows(accounts)]
+
+    def test_printable_basename_collisions_use_distinct_parents(self):
+        labels = self.labels(['/alpha/Office\nName', '/beta/Office\tName'])
+        self.assertEqual(labels, ['alpha/Office Name', 'beta/Office Name'])
+
+    def test_custom_default_account_name_cannot_impersonate_canonical_account(self):
+        labels = self.labels([Path.home() / '.codex', '/profiles/Default account',
+                              Path.home() / '.claude', '/profiles/Default account'])
+        self.assertEqual(labels, ['Default account', 'profiles/Default account',
+                                  'Default account', 'profiles/Default account'])
+
+    def test_identical_printable_full_paths_get_stable_distinct_labels(self):
+        accounts = ['/same\nparent/Office\nName', '/same\tparent/Office\tName']
+        labels = self.labels(accounts + [accounts[0]])
+        self.assertNotEqual(labels[0], labels[1])
+        self.assertEqual(labels[0], labels[2])
+        self.assertTrue(all('Office Name' in label for label in labels))
+        self.assertEqual(self.labels(list(reversed(accounts))), list(reversed(labels[:2])))
+
     def test_keyboard_selection_preserves_original_object_and_identities(self):
         choices = [binding('/profiles/one'), binding('/profiles/two', 1)]
         original = [vars(choice).copy() for choice in choices]
