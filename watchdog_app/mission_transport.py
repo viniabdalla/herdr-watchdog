@@ -233,11 +233,24 @@ def tick(store, identity):
         register(run,store,peers)
         for event in gossip.poll(run.get('cursor',0)):
             try:
+                body=event.get('body')
+                acknowledgement=(event.get('kind')=='status-update' and event.get('state')=='working' and
+                    (body is None or isinstance(body,str) and not body.strip()))
+                owner=next(((role,p) for role,p in run['participants'].items() if
+                    p.get('pubkey')==event.get('pubkey') and p['nickname']==event.get('author')),None)
+                correlated=(event.get('task_id') is not None and
+                    (owner and owner[0]=='qa' and event.get('task_id')==run.get('qa_task') or
+                     owner and owner[0]=='worker' and any(t.get('gossip_task')==event.get('task_id') for t in run['tasks'].values())))
+                if (event.get('event')=='task' and event.get('kind') in ('status-update','artifact','artifact-update')
+                        and correlated and not acknowledgement and
+                        (not owner[1].get('native') or not owner[1].get('available'))):
+                    raise RuntimeError('Participant native identity or contact unavailable; report retained for inspection')
                 accept_event(run,event)
             except RuntimeError as error:
                 # A correlated malformed report stays visible and cannot imply completion.
                 run.setdefault('report_errors',{})[event.get('task_id','unknown')]=str(error)
                 run['events'][event['id']]={'delivery':'pending','received':time.time(),
+                    'rejected':{key:event.get(key) for key in ('author','pubkey','task_id','body')},
                     'report':{'status':'blocked','summary':str(error),'task_id':event.get('task_id')}}
             run['cursor']=max(run.get('cursor',0),event.get('seq',0))
         run['monitor_updated']=time.time();store.save(run)
