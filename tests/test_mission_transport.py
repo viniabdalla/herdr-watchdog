@@ -46,7 +46,7 @@ class TransportTests(unittest.TestCase):
         self.store.save(self.run)
         calls=[]
         guidance='Use /tmp/wd-test-fixture/input.json.\nRun WATCHDOG_GOSSIP_TEST=1 python -m unittest; preserve sandbox settings.'
-        with patch.object(transport.Gossip,'call',side_effect=lambda *a,**k:calls.append((a,k)) or 'existing'), patch.object(transport,'verify_participant'):
+        with patch.object(transport.Gossip,'call',side_effect=lambda *a,**k:calls.append((a,k)) or 'existing'), patch.object(transport,'verify_participant'),patch.object(transport,'wake_participant'):
             transport.followup(self.store,self.run['id'],'task',guidance)
         self.assertEqual(calls[0][1]['task_id'],'existing')
         self.assertEqual(json.loads(calls[0][0][1])['clarification'],guidance)

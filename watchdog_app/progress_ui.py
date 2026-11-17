@@ -18,6 +18,10 @@ def rows(repo, store=None):
         if run.get('monitor_problem'):result.append(('Monitoring unavailable: '+run['monitor_problem'],'blocked',run))
         for message in run.get('report_errors',{}).values():
             result.append(('Report needs attention: '+message,'blocked',run))
+        for wake in run.get('wakes',{}).values():
+            if wake['delivery']!='queued':
+                result.append(('Agent notification '+wake['delivery']+' · '+wake['role']+
+                    ': inspect the exact conversation queue before retrying. '+wake.get('problem',''),'blocked',run))
         for key in run['tasks']:
             task=task_view(run,key)
             result.append((task['label']+' · '+task['title'],task['color'],run))

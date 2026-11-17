@@ -120,6 +120,20 @@ It never reads full participant transcripts. `mission poll --run RUN_UUID`
 performs one monitor pass; `mission watch --run RUN_UUID` restarts monitoring
 without launching new terminals. Only one monitor can own a run at once.
 
+Each confirmed assignment, follow-up and QA request also queues one short native
+Codex notification to the verified participant account and full thread UUID.
+It asks the participant to poll its existing Gossip task, ignore already handled
+messages and avoid duplicating work. It works while the actor is idle or busy;
+the contract and result correlation remain in Gossip. A queued notification is
+not proof that the model has consumed the message.
+
+The run's `wakes` history records the recipient, intent, receipt and delivery
+status. An identity failure leaves notification pending; an enqueue failure
+leaves it uncertain. Progress shows that attention is needed. Inspect the exact
+conversation queue before reconciling manually; Watchdog never retries these
+notifications automatically or substitutes pane input. Further follow-ups are
+blocked while an earlier worker notification remains unconfirmed.
+
 ## Interrupted work and limits
 
 Intent is persisted before creating worktrees, tabs, terminals or sending a
