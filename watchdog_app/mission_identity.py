@@ -26,6 +26,8 @@ def bootstrap(store, identity, role, child, *, timeout=45):
     Gossip itself checks that the wrapper may bind the independently verified PID.
     """
     run=store.load(identity);part=run['participants'][role];pane=run['resources'][role]
+    from . import mission_native
+    if mission_native.enabled(run):return mission_native.bootstrap(store,identity,role,child,timeout=timeout)
     owned_worktree(run,role)
     deadline=time.monotonic()+timeout
     while time.monotonic()<deadline:
@@ -71,6 +73,8 @@ def enroll(store, identity, role):
     if proof.get('broker'):
         from .mission_broker import request
         return request(store,identity,role,'enroll')
+    if run.get('transport',{}).get('kind')=='native':
+        raise RuntimeError('Native enrollment requires its authenticated host bridge')
     native=proof['native'];context=json.loads(command(['agent-gossip','context','show']))
     check_context(context,native)
     if context!=proof['context']:
@@ -107,6 +111,8 @@ def recover_role(store, identity, role, *, confirmed=False, api=None):
         run=store.load(identity);main_session(run);source_current(run)
         if role not in ('worker','qa') or run['phase']!='active':
             raise RuntimeError('Only an active run participant can be recovered')
+        if run.get('transport',{}).get('kind')=='native':
+            raise RuntimeError('Native actor transition requires a verified idle host wrapper; no automatic restart')
         if any(t.get('delivery') or t.get('gossip_task') for t in run['tasks'].values()) or run.get('qa_task'):
             raise RuntimeError('Recovery refuses dispatched work; inspect its exact task first')
         part=run['participants'][role]
@@ -191,6 +197,8 @@ def recover_unstarted(store,identity,role,*,confirmed=False,api=None):
         part=run['participants'][role];recovery=part.get('identity_recovery',{})
         if recovery.get('state')!='started' or recovery.get('terminal_repair') not in (None,'sent'):
             raise RuntimeError('No unstarted recovery is eligible; inspect its intent')
+        if run.get('transport',{}).get('kind')=='native':
+            raise RuntimeError('Native actor transition requires a verified idle host wrapper; no automatic restart')
         if any(t.get('delivery') or t.get('gossip_task') for t in run['tasks'].values()) or run.get('qa_task'):
             raise RuntimeError('Recovery refuses dispatched work')
         folder=store.root/identity

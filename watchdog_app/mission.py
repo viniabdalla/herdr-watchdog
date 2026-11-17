@@ -67,7 +67,8 @@ def request(session, snapshot, ids, *, confirmed=False, store=None):
             if previous['phase'] != 'done' and set(previous['tasks']) & set(ids):
                 raise RuntimeError('These tasks already have a run: ' + previous['id'] + '. Inspect Progress.')
         now = time.time()
-        run = {'version': 1, 'id': str(uuid.uuid4()), 'repo': str(snapshot.repo),
+        from .mission_native import boot_id
+        run = {'transport': {'kind':'native','boot_id':boot_id()}, 'version': 1, 'id': str(uuid.uuid4()), 'repo': str(snapshot.repo),
                'created': now, 'main': asdict(session.binding), 'binding_file': str(session.file.resolve()),
                'source_digest': snapshot.digest, 'phase': 'requested', 'request_delivery': 'sending',
                'participants': {}, 'resources': {}, 'events': {}, 'cursor': 0, 'candidate': None, 'qa': None,
@@ -107,12 +108,20 @@ def accept_event(run, event, *, now=None):
     event_id = event.get('id')
     if not event_id or event_id in run['events'] or event.get('event') != 'task':
         return False
-    role = next((role for role, p in run['participants'].items()
-                 if p.get('pubkey') == event.get('pubkey') and p['nickname'] == event.get('author')), None)
+    native = run.get('transport', {}).get('kind') == 'native'
+    if native:
+        role = event.get('role')
+        part = run['participants'].get(role, {})
+        if (event.get('transport') != 'native' or not part.get('enrolled') or
+                event.get('actor') != part.get('native') or not part.get('generation') or
+                event.get('generation') != part['generation']): return False
+    else:
+        role = next((role for role, p in run['participants'].items()
+                     if p.get('pubkey') == event.get('pubkey') and p['nickname'] == event.get('author')), None)
     if role is None:
         return False
     native_id = event.get('task_id')
-    task_id = next((key for key, task in run['tasks'].items() if task.get('gossip_task') == native_id), None)
+    task_id = next((key for key, task in run['tasks'].items() if task.get('attempt_id' if native else 'gossip_task') == native_id), None)
     qa_event = role == 'qa' and native_id == run.get('qa_task') and native_id is not None
     if not qa_event and (role != 'worker' or task_id is None):
         return False
@@ -129,6 +138,8 @@ def accept_event(run, event, *, now=None):
     if not isinstance(report, dict) or report.get('run_id') != run['id']:
         raise RuntimeError('Report run identity differs')
     require_summary(report)
+    if native and (not native_id or report.get('attempt_id') != native_id or report.get('event_id') != event_id):
+        raise RuntimeError('Native report attempt or event identity differs')
     now = time.time() if now is None else now
     if qa_event:
         contract = run.get('review_contract') or {}
@@ -139,17 +150,17 @@ def accept_event(run, event, *, now=None):
         if report.get('status') == 'qa':
             if report.get('verdict') not in ('pass', 'fail') or not report.get('tests'):
                 raise RuntimeError('QA requires a verdict and test evidence')
-        elif report.get('status') != 'blocked':
+        elif report.get('status') != 'blocked' and not (native and report.get('status') == 'working'):
             raise RuntimeError('QA reports must contain qa or blocked status')
         if contract.get('version') != run.get('result_version', 0):
             run['qa_finished'] = True
             raise SupersededReview('QA review was superseded by newer implementation evidence')
         if report.get('status') == 'qa':
             run['qa'] = report
-        run['qa_finished'] = True
+        run['qa_finished'] = report.get('status') != 'working'
         for task in run['tasks'].values():
             if task['state'] != 'done':
-                task.update(state='review' if report.get('verdict') == 'pass' else 'blocked',
+                task.update(state='review' if report.get('verdict') == 'pass' or report.get('status') == 'working' else 'blocked',
                             summary=report['summary'], agent='qa', updated=now)
     else:
         if report.get('task_id') != task_id:
@@ -175,6 +186,7 @@ def accept_event(run, event, *, now=None):
                     agent='worker', updated=now)
     run.get('report_errors', {}).pop(native_id, None)
     run['events'][event_id] = {'report': report, 'delivery': 'pending', 'received': now}
+    if native: run['events'][event_id].update(role=role, generation=event['generation'], actor=event['actor'])
     return True
 
 

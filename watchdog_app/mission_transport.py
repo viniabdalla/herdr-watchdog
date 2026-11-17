@@ -7,6 +7,7 @@ import time
 import uuid
 
 from . import bindings
+from . import mission_native as native_backend
 from .mission import accept_event, contact, SupersededReview
 from .mission_launch import command, git, main_session, source_current, owned_worktree, ROOT
 import shlex
@@ -90,6 +91,7 @@ def verify_graph(run, role, *, gossip=None):
 
 
 def verify_participant(run, role):
+    if native_backend.enabled(run): return native_backend.verify_participant(run, role)
     part = run['participants'][role]
     native = part.get('native')
     if not native or not part.get('pubkey') or not part.get('available'):
@@ -159,7 +161,7 @@ def assignment(run, task_id):
     part = run['participants']['worker']
     return json.dumps({'run_id': run['id'], 'task_id': task_id, 'title': run['tasks'][task_id]['title'],
         'repo':run['repo'], 'worktree':part['worktree'], 'base_sha':part.get('base_sha',run['brief']['base_sha']),
-        **contract, 'return_to': {'main':run['main'] if 'main' in run else {}, 'gossip':run['transport']},
+        **contract, 'return_to': {'main':run.get('main',{}), ('transport' if native_backend.enabled(run) else 'gossip'):run['transport']},
         'instructions':'Implement only this contract. Report concrete blockers. Return ordered commit SHAs and tests. '
             'No additional agents, global changes, target branch merges or pushes. Keep task ID for follow-ups. '
             'Result waits for independent QA and main approval; TODO remains unchanged.',
@@ -205,6 +207,7 @@ def wake_participant(store, run, role, task_id, sent):
 
 
 def dispatch(store, identity, task_id):
+    if native_backend.enabled(store.load(identity)): return native_backend.dispatch(store, identity, task_id)
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run)
         if run['phase'] != 'active':raise RuntimeError('Run is not active')
@@ -238,6 +241,7 @@ def dispatch(store, identity, task_id):
 
 
 def followup(store, identity, task_id, text):
+    if native_backend.enabled(store.load(identity)): return native_backend.followup(store, identity, task_id, text)
     if not text.strip():raise RuntimeError('Follow-up text is required')
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run);verify_participant(run,'worker')
@@ -286,6 +290,7 @@ def forward(store, run):
 
 
 def tick(store, identity):
+    if native_backend.enabled(store.load(identity)): return native_backend.tick(store, identity)
     with store.lock(identity):
         run=store.load(identity)
         if run['phase'] not in ('active','blocked'):return run
@@ -339,6 +344,7 @@ def verify_result_commits(run, candidate):
 
 
 def review(store, identity, candidate, context=None):
+    if native_backend.enabled(store.load(identity)): return native_backend.review(store, identity, candidate, context)
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run);verify_participant(run,'qa')
         owned_worktree(run,'qa')
@@ -393,6 +399,9 @@ def verify_publisher(store, run, role):
 
 def report(store, identity, role, data, *, via_broker=True):
     run=store.load(identity)
+    if native_backend.enabled(run):
+        from .mission_broker import request
+        return request(store,identity,role,'report',report=data)
     if role not in ('worker','qa') or role not in run['participants']:
         raise RuntimeError('Report requires an assigned worker or QA role')
     if not isinstance(data,dict):raise RuntimeError('Report must be a JSON object')

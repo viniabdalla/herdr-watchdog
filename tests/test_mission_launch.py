@@ -64,7 +64,7 @@ class LaunchTests(unittest.TestCase):
         self.store.save(self.run)
         self.session = SimpleNamespace(binding=binding,verify=lambda:{'agent_status':'idle'})
         self.api = NativeHerdr()
-        self.brief = {'run_id':self.run_id,'repo':str(self.repo),'base_sha':self.base,
+        self.brief = {'transport':'gossip','run_id':self.run_id,'repo':str(self.repo),'base_sha':self.base,
             'participants':{role:{'account':str(self.root),'executable':'/usr/bin/true','model':'gpt-6.1-sol','effort':'medium'} for role in ('worker','qa')},
             'tasks':[{ 'id':t.id,'allowed_files':['a.py'],'acceptance':['Output is correct'],
                       'tests':['python a.py'],'dependencies':[]} for t in snapshot.tasks]}

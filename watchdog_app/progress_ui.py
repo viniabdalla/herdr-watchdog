@@ -41,6 +41,16 @@ def rows(repo, store=None, *, progress=None, width=80):
             if wake['delivery']!='queued':
                 result.append(('Agent notification '+wake['delivery']+' · '+wake['role']+
                     ': inspect the exact conversation queue before retrying. '+wake.get('problem',''),'blocked',run))
+        if run.get('transport',{}).get('kind')=='native':
+            for delivery in run.get('deliveries',{}).values():
+                if delivery['state']=='uncertain':
+                    result.append(('Native delivery uncertain · '+delivery['role']+
+                        ': inspect the exact thread queue before recovery. '+delivery.get('problem',''),'blocked',run))
+            for event in run['events'].values():
+                if event['delivery']!='sent':
+                    result.append(('Main notification '+event['delivery']+' · '+
+                        event.get('notification_problem','Evidence is retained in the run ledger'),
+                        'blocked' if event['delivery']=='uncertain' else 'working',run))
         for key in run['tasks']:
             task=task_view(run,key)
             result.append((task['label']+' · '+task['title'],task['color'],run))

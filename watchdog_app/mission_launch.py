@@ -235,10 +235,16 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
         clean_base(run, brief)
         if resume:
             resumable_worktrees(run, store, brief)
-        contexts = {r: role_context(r, run['repo']) for r in ('worker', 'qa')}
+        from .mission_native import boot_id
+        mode = brief.get('transport', run.get('transport', {}).get('kind', 'native'))
+        if mode not in ('native', 'gossip'): raise RuntimeError('Unknown mission transport')
+        if resume and mode != 'gossip': raise RuntimeError('Legacy startup resume requires its original Gossip adapter')
+        contexts = {r: (role_context(r, run['repo']) if mode == 'gossip' else
+            'You are the assigned '+r+'. Accept only explicit coordinator contracts. '
+            'No extra agents, user questions, target merges, pushes or TODO edits.') for r in ('worker', 'qa')}
         api = api or Herdr(run.get('herdr_session'))
         run['brief'] = brief
-        run['identity_protocol'] = 2
+        run['identity_protocol'] = 3 if mode == 'native' else 2
         folder = store.root / identity;folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         def intent(operation):
             main_session(run)
@@ -257,8 +263,12 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
                 git(run['repo'], *args, str(worktree), brief['base_sha'])
                 run['participants'][role]['base_sha'] = brief['base_sha']
                 store.save(run)
-            intent('create gossip')
-            run['transport'] = create_gossip(run, store)
+            if mode == 'gossip':
+                intent('create gossip')
+                run['transport'] = create_gossip(run, store)
+            else:
+                run['transport'] = {'kind':'native','boot_id':boot_id()}
+                store.save(run)
             intent('create execution tab')
             pane = api.call('tab', 'create', '--workspace', run['main']['workspace'], '--cwd',
                             run['participants']['worker']['worktree'], '--label',
@@ -343,14 +353,18 @@ def participant(store, identity, role):
         f"Report: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'report', '--run', identity, '--role', role, '--state-dir', str(store.root), '--file', '/tmp/watchdog-' + role + '-' + identity + '-report.json'])}\n"
         'Report schema will be included with the assignment. The launcher is not a planner. '
         'Do not contact or recruit unrelated peers. Do not close a task before main approves it.')
+    if transport.get('kind') == 'native':
+        from .mission_native import participant_prompt
+        prompt = participant_prompt(store, run, role)
     env = {k:v for k,v in os.environ.items() if not k.startswith(('CODEX_', 'AI_MEMORY_', 'OPENAI_', 'ANTHROPIC_', 'CLAUDE_CODE_')) and k != 'CLAUDECODE'}
     env['CODEX_HOME'] = part['account']
     runtime_dir = '/tmp/agent-gossip-' + str(os.getuid())
     argv = [part['executable'], '-C', part['worktree'], '--model', part['model'],
-            '--sandbox', 'workspace-write', '--ask-for-approval', 'never', '--add-dir', runtime_dir,
+            '--sandbox', 'workspace-write', '--ask-for-approval', 'never',
             '--add-dir', str(store.root), '--add-dir', git(run['repo'], 'rev-parse', '--path-format=absolute', '--git-common-dir'),
             '-c', 'sandbox_workspace_write.network_access=true',
             '-c', 'model_reasoning_effort=' + json.dumps(part['effort'])]
+    if transport.get('kind') != 'native': argv += ['--add-dir', runtime_dir]
     if part.get('resume_session'):
         argv += ['resume',part['resume_session']]
     argv.append(prompt)

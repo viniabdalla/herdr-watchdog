@@ -114,8 +114,11 @@ overrides; Progress displays those choices.
 
 The initial team is exactly one worker and one QA. Both terminals share one new
 tab; each has its own worktree. All tasks use the one worker sequentially. The
-first independent task is dispatched once native account/thread and Gossip
-identity are verified. Main reviews each result before dispatching the next
+first independent task is dispatched once the exact native Codex identity and
+role enrollment are verified. New runs use the Codex queue and durable local
+reports by default; Gossip is an explicit legacy adapter. Existing runs retain
+their transport. See [Native transport](docs/native-transport.md) for delivery
+receipts, identity boundaries and the safe idle test path. Main reviews each result before dispatching the next
 contract. QA reviews the complete integrated candidate at its full commit SHA.
 The main/user approves completion separately. No command merges or pushes code.
 

@@ -1,4 +1,4 @@
-"""Typed, frontend-scoped host bridge for a Codex sandbox's own Gossip peer.
+"""Typed, frontend-scoped host bridge for a Codex sandbox's own run role; native and optional legacy Gossip.
 
 This trusts the local user/runtime, not hostile code with unrestricted same-UID
 host access. A shared app-server ancestor alone is NEVER sufficient identity.
@@ -130,6 +130,12 @@ class Broker:
         native=self.proof['native']
         client_started=authorize(pid,uid,native,message['session'])
         bindings.verify(bindings.engine().Binding(**native))
+        if self.proof.get('transport') == 'native':
+            from .mission_native import handle
+            def recheck():
+                if self.child.poll() is not None or authorize(pid,uid,native,message['session']) != client_started:
+                    raise RuntimeError('Broker caller exited or its PID was recycled')
+            return handle(self.store,self.identity,self.role,self.proof,message['method'],message['data'],recheck=recheck)
         with context_lease(self.proof):
             # Revalidate the pinned generation after acquiring the very same
             # lock used by Gossip bind, and hold it through the finite command.
