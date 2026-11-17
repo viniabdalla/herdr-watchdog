@@ -101,6 +101,10 @@ Progress now reads the run ledger: **Ready to start** (blue), **Working** (yello
 reason and execution-tab navigation with Enter/click. Project TODO counts are a
 separate section. Actual colors follow the terminal palette.
 
+Each launch records an explicit model and reasoning effort. The brief template
+uses gpt-6.1-sol with medium effort for worker and routine QA, with actual CLI
+overrides; Progress displays those choices.
+
 The initial team is exactly one worker and one QA. Both terminals share one new
 tab; each has its own worktree. All tasks use the one worker sequentially. The
 first independent task is dispatched once native account/thread and Gossip

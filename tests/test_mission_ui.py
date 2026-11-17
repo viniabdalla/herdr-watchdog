@@ -36,7 +36,7 @@ class OrchestrateUITests(unittest.TestCase):
     def test_progress_uses_real_run_and_project_counts_without_preview_file(self):
         self.terminal.close()
         run={'id':'d6b97491-3dc1-4018-afb7-ce263032e5e2','repo':str(self.repo),'created':1,
-             'phase':'active','participants':{},'tasks':{'x':{'title':'Actual selected task',
+             'phase':'active','participants':{'worker':{'model':'gpt-6.1-sol','effort':'medium'}},'tasks':{'x':{'title':'Actual selected task',
                 'state':'blocked','agent':'main','summary':'Missing approved fixture','updated':1}}}
         RunStore(self.repo/'state'/'runs').save(run)
         terminal=Terminal(['python3',str(SCRIPT),'progress','--repo',str(self.repo)],
@@ -44,6 +44,8 @@ class OrchestrateUITests(unittest.TestCase):
         self.addCleanup(terminal.close)
         self.assertTrue(terminal.wait_for('Needs help'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('Missing approved fixture'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('gpt-6.1-sol'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('medium'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('PROJECT'),terminal.output.decode(errors='replace'))
         self.assertIn(b'91m',terminal.output)
 

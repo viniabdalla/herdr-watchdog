@@ -64,7 +64,7 @@ class LaunchTests(unittest.TestCase):
         self.session = SimpleNamespace(binding=binding,verify=lambda:{'agent_status':'idle'})
         self.api = NativeHerdr()
         self.brief = {'run_id':self.run_id,'repo':str(self.repo),'base_sha':self.base,
-            'participants':{role:{'account':str(self.root),'executable':'/usr/bin/true','model':'gpt-6.1-sol'} for role in ('worker','qa')},
+            'participants':{role:{'account':str(self.root),'executable':'/usr/bin/true','model':'gpt-6.1-sol','effort':'medium'} for role in ('worker','qa')},
             'tasks':[{ 'id':t.id,'allowed_files':['a.py'],'acceptance':['Output is correct'],
                       'tests':['python a.py'],'dependencies':[]} for t in snapshot.tasks]}
         self.patches = [patch.object(launch,'Session',return_value=self.session),
@@ -153,3 +153,25 @@ class LaunchTests(unittest.TestCase):
         foreign=self.root/'foreign';foreign.mkdir();git(foreign,'init','-q')
         with patch.dict(os.environ,{'GIT_DIR':str(foreign/'.git'),'GIT_WORK_TREE':str(foreign)}):
             self.assertEqual(launch.git(self.repo,'rev-parse','HEAD'),self.base)
+
+    def test_launch_contract_requires_explicit_effort(self):
+        del self.brief['participants']['worker']['effort']
+        with self.assertRaisesRegex(RuntimeError,'effort'):
+            self.start()
+        self.assertFalse(self.api.calls)
+
+    def test_participant_cli_overrides_model_effort_and_inherited_thread(self):
+        self.brief['participants']['worker'].update(model='gpt-6.1-sol',effort='medium')
+        run=self.start()
+        self.assertEqual(run['participants']['worker']['effort'],'medium')
+        env={'HERDR_PANE_ID':run['resources']['worker']['pane_id'],'CODEX_THREAD_ID':'foreign-thread',
+             'CODEX_MODEL':'gpt-6-astra','CODEX_MODEL_REASONING_EFFORT':'xhigh'}
+        with patch.dict(os.environ,env),patch.object(launch,'Herdr',return_value=self.api),patch.object(launch,'command',return_value=''),patch.object(launch.subprocess,'Popen') as popen:
+            popen.return_value.wait.return_value=0;popen.return_value.returncode=0
+            launch.participant(self.store,self.run_id,'worker')
+            argv=popen.call_args.args[0]
+            self.assertEqual(argv[argv.index('--model')+1],'gpt-6.1-sol')
+            overrides=[argv[i+1] for i,item in enumerate(argv) if item=='-c']
+            self.assertIn('model_reasoning_effort="medium"',overrides)
+            self.assertNotIn('CODEX_THREAD_ID',popen.call_args.kwargs['env'])
+            self.assertNotIn('CODEX_MODEL_REASONING_EFFORT',popen.call_args.kwargs['env'])

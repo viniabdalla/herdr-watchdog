@@ -23,6 +23,8 @@ def rows(repo, store=None):
             result.append((task['agent']+' · '+stamp,task['color'],run))
             result.append((task['summary'],task['color'],run))
         for role,part in run.get('participants',{}).items():
+            result.append((role+' · '+part.get('model','Model unavailable')+' · '+
+                           part.get('effort','Effort unavailable'),None,run))
             if part.get('problem'):result.append((role+': '+part['problem'],'blocked',run))
         result.append(('Enter: open execution tab' if run.get('tab') else 'Waiting for execution tab',None,run))
         result.append(('',None,None))

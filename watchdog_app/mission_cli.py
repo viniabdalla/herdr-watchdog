@@ -15,7 +15,7 @@ def template(run):
     return {'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
         'participants':{role:{'account':run['main']['account'],
             'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
-            'model':'gpt-6.1-sol'} for role in ('worker','qa')},
+            'model':'gpt-6.1-sol','effort':'medium'} for role in ('worker','qa')},
         'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]}
                  for key in run['tasks']]}
 

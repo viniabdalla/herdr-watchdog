@@ -61,6 +61,8 @@ def validate_brief(run, brief):
             raise RuntimeError('Approved account or executable is unavailable')
         if not isinstance(participant.get('model'), str) or not participant['model'].strip():
             raise RuntimeError('An explicit participant model is required')
+        if participant.get('effort') not in ('low', 'medium', 'high', 'xhigh'):
+            raise RuntimeError('An explicit reasoning effort is required: low, medium, high or xhigh')
     tasks = brief.get('tasks')
     if not isinstance(tasks, list) or len(tasks) != len(run['tasks']) or {t.get('id') for t in tasks} != set(run['tasks']):
         raise RuntimeError('Brief must cover exactly the confirmed task snapshot')
@@ -265,7 +267,8 @@ def participant(store, identity, role):
     argv = [part['executable'], '-C', part['worktree'], '--model', part['model'],
             '--sandbox', 'workspace-write', '--ask-for-approval', 'never', '--add-dir', runtime_dir,
             '--add-dir', str(store.root), '--add-dir', git(run['repo'], 'rev-parse', '--path-format=absolute', '--git-common-dir'),
-            '-c', 'sandbox_workspace_write.network_access=true', prompt]
+            '-c', 'sandbox_workspace_write.network_access=true',
+            '-c', 'model_reasoning_effort=' + json.dumps(part['effort']), prompt]
     child = subprocess.Popen(argv, env=env)
     try:
         return child.wait()

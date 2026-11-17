@@ -22,7 +22,13 @@ watchdog mission open --run RUN_UUID
 A brief contains `run_id`, the exact `repo`, a full `base_sha`, and exactly
 `participants.worker` and `participants.qa`. Each participant specifies absolute
 `account` (Codex account directory), absolute `executable`, and an explicit
-`model`. The template proposes the current main account and local Codex binary;
+`model` and `effort` (`low`, `medium`, `high` or `xhigh`). Both are required.
+The template uses `gpt-6.1-sol` with `medium` for worker and routine QA;
+higher effort is an explicit choice for a concrete harder problem. The launcher
+passes both `--model` and `-c model_reasoning_effort=...`, so a local Astra/xhigh
+configuration cannot silently override these choices. Progress shows each
+participant's model and effort as secondary details.
+The template proposes the current main account and local Codex binary;
 verify these before launch. No credentials are copied or read by Watchdog.
 
 Every task contract contains its existing stable `id`, a nonempty `allowed_files`
