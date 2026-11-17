@@ -16,6 +16,7 @@ import test_mission_launch as launch_tests
 from test_mission_launch import git
 from watchdog_app import mission, mission_launch as launch, mission_native as native
 from watchdog_app import mission_transport as transport, mission_cli, mission_handoff as handoff, bindings
+from watchdog_app.actions import Session
 from watchdog_app.todo import Snapshot
 
 
@@ -34,13 +35,16 @@ class ScopeTests(unittest.TestCase):
             self.calls.append((binding, text))
             return str(uuid.uuid4())
         self.runtime = SimpleNamespace(Binding=FakeBinding, verify=lambda b: {'agent_status':'idle'}, queue=queue)
-        self.session = SimpleNamespace(binding=FakeBinding(session=str(uuid.uuid4()),account=str(fixture.root)), file=fixture.root/'binding.json',
-                                       verify=lambda: {}, runtime=self.runtime)
-        p = patch.dict('os.environ', {'WATCHDOG_STATE_DIR':str(fixture.root/'state')})
-        p.start(); self.addCleanup(p.stop)
+        binding = FakeBinding(session=str(uuid.uuid4()),account=str(fixture.root))
+        binding_file = fixture.root/'binding.json'
+        binding_file.write_text(json.dumps({'repo':str(self.repo),'binding':asdict(binding)}))
+        for p in (patch.dict('os.environ', {'WATCHDOG_STATE_DIR':str(fixture.root/'state')}),
+                  patch.object(bindings,'engine',return_value=self.runtime),
+                  patch.object(bindings,'project_for',return_value=self.repo)):
+            p.start(); self.addCleanup(p.stop)
+        self.session = Session(binding_file,self.repo)
         p = patch.object(launch,'Session',return_value=self.session)
         p.start(); self.addCleanup(p.stop)
-        self.session.file.write_text(json.dumps({'repo':str(self.repo),'binding':asdict(self.session.binding)}))
 
     def write(self, text):
         (self.repo/'TODO.md').write_text(text)
