@@ -111,9 +111,22 @@ and Tasks controls (including a curses PTY), with explicitly **simulated** model
 ai-memory replies, native registry/queue, frontend child and Herdr boundaries.
 Tests cover UI request through receipt/release and existing Orchestrate routing,
 owned commit/approved integration/push and failure injection without resend.
-No production model sessions or leadership transfer were executed by these tests;
-a live end-to-end demonstration with the actual ai-memory service and fresh
-native frontend remains an operator acceptance step.
+On 2026-11-17, the controller observed live operator acceptance on the user's
+explicit request: operation `fa243926-f110-4082-bdb5-85b14d00de76` reached
+`released` using actual scoped ai-memory begin/list, matching SessionStart hook
+content, a fresh native frontend, correlated receipt and predecessor release.
+The backend committed only the fixture's owned TODO change and verified its push;
+pending tasks, all panel terminals, Artifacts, Yazi client and layout were preserved.
+The existing Orchestrate confirmation targeted the exact successor thread; the
+controller cancelled it without dispatching a new run/team. Both leaders were done.
+See the [controller acceptance result](/home/tropico/.local/state/herdr-watchdog/runs/1e823d47-aa30-4c9d-bfe3-6337b5b35e4d/live-acceptance-result.json)
+and [successor confirmation](/home/tropico/.local/state/herdr-watchdog/manual-tests/b5b5309c-8d75-48b2-8efe-a90bf0fbe051/orchestrate-successor-confirmation.txt).
+
+The live push used a local bare remote, not GitHub. Approved-branch fast-forward
+integration is covered by actual isolated Git automated tests, not that live model
+trial. No new independent QA review occurred after the original failed QA review;
+operator acceptance is not fresh QA approval. No target merge or deployment is
+claimed by this evidence.
 
 ## Existing run capsule CLI
 
