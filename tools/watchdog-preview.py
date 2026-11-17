@@ -67,23 +67,9 @@ def contents(repo, mode, width):
                 rows.append(('  None', None))
             rows.append(('', None))
         return rows
-    session = json.loads((repo / 'docs/preview-session.json').read_text())
-    steps = session['steps']
-    count = sum(s['status'] == 'done' for s in steps)
-    rows = [('SESSION · preview setup', None), (session['title'], None),
-            (bar(count, len(steps), width), None), ('', None)]
-    for step in steps:
-        icon = {'done': '[x]', 'in_progress': '[>]', 'pending': '[ ]'}.get(step['status'], '[?]')
-        rows.append((f"{icon} {step['text']}", None))
-    rows.extend([('', None), ('PROJECT · currently listed tasks', None),
-                 (bar(done, len(tasks), width), None),
-                 (f"{len(groups['In progress'])} active · {len(groups['Next'])} next · "
-                  f"{len(groups['Blocked'])} blocked", None),
-                 ('Scope changes and pruning Done change this ratio.', None),
-                 ('', None), ('CURATOR · Tasks panel', None),
-                 ('Codex / gpt-6-luna / low effort', None),
-                 ('Reviews replies; task changes need confirmation.', None)])
-    return rows
+    # Progress is native and bound; the manual preview checklist is retired.
+    from watchdog_app.progress_ui import rows
+    return [(text, None) for text, _, _ in rows(repo, width=width)]
 
 
 def draw_text(screen, y, x, text, attr=0):
@@ -195,7 +181,7 @@ def main():
         return
     if args.mode == 'progress':
         from watchdog_app.progress_ui import run
-        run(args.repo.resolve())
+        run(args.repo.resolve(), args.binding_file)
         return
     curses.wrapper(panel, args.repo.resolve(), args.mode, args.yazi_client_id)
 
