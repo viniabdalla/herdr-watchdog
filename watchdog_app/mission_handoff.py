@@ -85,6 +85,15 @@ def owned_git(run):
     return {role:git_identity(part['worktree']) for role,part in run.get('participants',{}).items() if part.get('worktree')}
 
 
+def source_boundary(run, info):
+    """Only a versioned run's source TODO may be dirty, never owned code."""
+    source_current(run)
+    if info.get('error') or (not info.get('clean') and (
+            'scope' not in run or git(run['repo'],'status','--porcelain','--untracked-files=all',
+                                      '--','.',':(top,exclude)TODO.md'))):
+        raise RuntimeError('Project Git tree is dirty/unavailable beyond the selected run scope')
+
+
 def native_identity(value):
     return {key:value[key] for key in ('kind','session','account','pane','terminal','workspace','pid','started','history') if key in value}
 
@@ -250,11 +259,11 @@ def validate(store,identity,file,binding_file):
     boundary(run)
     if run['transport'].get('boot_id')!=native.boot_id():raise RuntimeError('Native run belongs to another boot')
     current_git=git_identity(run['repo']);worktrees=owned_git(run)
-    for info in [current_git,*worktrees.values()]:
+    source_boundary(run,current_git)
+    for info in worktrees.values():
         if info.get('error') or not info.get('clean'):raise RuntimeError('Git tree is dirty/unavailable; wait for a clean committed boundary')
     if current_git!=value['project_git'] or worktrees!=value['owned_git']:
         raise RuntimeError('Git identity/head changed since export')
-    source_current(run)
     for role in run['participants']:
         owned_worktree(run,role);native.verify_participant(run,role)
     for ref in [value['binding_source'],value.get('context_source'),*value['attachments']]:
@@ -310,9 +319,10 @@ def adopt(store,identity,file,binding_file,offer_id,*,confirmed=False):
             if any(session.verify().get('agent_status') not in ('idle','done') for session in (old,new)):
                 raise RuntimeError('Native main became busy; wait for an idle adoption boundary')
             for role in run['participants']:native.verify_participant(run,role)
-            if git_identity(run['repo'])!=value['project_git'] or owned_git(run)!=value['owned_git']:
+            current_git=git_identity(run['repo'])
+            if current_git!=value['project_git'] or owned_git(run)!=value['owned_git']:
                 raise RuntimeError('Git identity/head changed before ownership commit')
-            source_current(run)
+            source_boundary(run,current_git)
             if reference(binding_file)!=target_ref or reference(run['binding_file'])!=value['binding_source']:
                 raise RuntimeError('Native binding source changed before ownership commit')
             if min(value['expires'],offer['expires'])<time.time():

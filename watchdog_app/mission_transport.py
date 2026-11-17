@@ -295,6 +295,7 @@ def tick(store, identity):
         run=store.load(identity)
         if run['phase'] not in ('active','blocked'):return run
         main_session(run)
+        source_current(run)
         gossip=Gossip(run['transport']);peers=gossip.peers()
         run.pop('monitor_problem',None)
         contact(run,{p['pubkey'] for p in peers if not p.get('quiet')})
@@ -402,6 +403,7 @@ def report(store, identity, role, data, *, via_broker=True):
     if native_backend.enabled(run):
         from .mission_broker import request
         return request(store,identity,role,'report',report=data)
+    source_current(run)
     if role not in ('worker','qa') or role not in run['participants']:
         raise RuntimeError('Report requires an assigned worker or QA role')
     if not isinstance(data,dict):raise RuntimeError('Report must be a JSON object')

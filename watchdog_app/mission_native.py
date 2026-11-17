@@ -86,6 +86,7 @@ def deliver(store, run, role, attempt, payload):
     from . import mission_transport as transport
     binding = verify_participant(run, role)
     transport.main_session(run)
+    transport.source_current(run)
     message = 'Watchdog native assignment\n'+json.dumps(payload, ensure_ascii=False)
     if len(message.encode()) > LIMIT: raise RuntimeError('Native assignment exceeds the bounded message size')
     record = {'role':role, 'attempt_id':attempt, 'recipient':asdict(binding),
@@ -254,6 +255,7 @@ def tick(store, identity):
         run=store.load(identity)
         if run['phase'] not in ('active','blocked'):return run
         transport.main_session(run)
+        transport.source_current(run)
         register(run,store)
         reconcile_intents(run)
         for event in run['events'].values():
@@ -264,12 +266,14 @@ def tick(store, identity):
 
 def handle(store, identity, role, proof, method, data, *, recheck=None):
     """Host broker only: its immutable proof and live caller ancestry precede this."""
+    from . import mission_transport as transport
     with store.lock(identity):
         run=store.load(identity);check_proof(run,role,proof)
         if recheck is not None:recheck()
         part=run['participants'][role]
         part.update(available=True,last_seen=time.time());run['observed']=time.time()
         if not isinstance(data,dict):raise RuntimeError('Native operation data must be an object')
+        if method != 'report':transport.source_current(run)
         if method=='enroll' and not data:
             part.update(enrolled=True,available=True);store.save(run)
             return {'published':True,'transport':'native','role':role,'session':part['native']['session']}
@@ -291,6 +295,7 @@ def handle(store, identity, role, proof, method, data, *, recheck=None):
             if (previous['report']!=report or previous.get('role')!=role or
                     previous.get('generation')!=proof['generation']):raise RuntimeError('Event identity was reused for different evidence')
             return {'event_id':event_id,'persisted':True,'duplicate':True,'notification':previous['delivery']}
+        transport.source_current(run)
         delivery=run.get('deliveries',{}).get(report.get('attempt_id'),{})
         if (delivery.get('role')!=role or delivery.get('generation')!=proof['generation'] or
                 delivery.get('recipient')!=proof['native']):
@@ -371,8 +376,9 @@ def participant_prompt(store, run, role):
 
 
 def bootstrap(store, identity, role, child, *, timeout=45):
-    from .mission_launch import owned_worktree
+    from .mission_launch import owned_worktree, source_current
     run=store.load(identity);part=run['participants'][role];pane=run['resources'][role]
+    source_current(run)
     owned_worktree(run,role)
     deadline=time.monotonic()+timeout
     while time.monotonic()<deadline:
@@ -393,6 +399,7 @@ def bootstrap(store, identity, role, child, *, timeout=45):
     with store.lock(identity):
         run=store.load(identity)
         if not enabled(run):raise RuntimeError('Transport changed during bootstrap')
+        source_current(run)
         part=run['participants'][role]
         if part.get('generation'):raise RuntimeError('Native actor already bootstrapped; inspect its existing proof')
         part.update(native=proof['native'],generation=proof['generation'],boot_id=proof['boot_id'],bridge_owner=proof['bridge_owner'],

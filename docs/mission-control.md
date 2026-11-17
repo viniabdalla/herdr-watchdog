@@ -39,6 +39,60 @@ Cycles, unknown dependencies, extra participants and incomplete contracts fail
 before resources are created. Allowed paths and test commands are instructions
 for the worker, not a filesystem sandbox enforcement mechanism.
 
+## Selected scope for new runs
+
+New confirmed requests store `scope.version: 1` alongside the existing ledger
+version. `scope.tasks` maps each original selected ID to its exact raw TODO task
+block and canonical section. A block is the checkbox line and its immediately
+following indented notes, as parsed by `Snapshot`; whitespace and line endings
+are preserved. `source_digest` remains the original whole-file evidence and is
+never rewritten. Nothing adds hidden TODO markers or changes existing task IDs.
+
+Confirmation still checks the entire selection snapshot before queueing. Launch
+still requires a clean committed source repository at the approved base SHA.
+The later explicit brief must cover exactly those selected IDs; dependencies
+must name other selected IDs, are saved with the approved contracts, and retain
+their original IDs and accepted-result sequencing when TODO rows move.
+
+After launch, new ideas above selected tasks, changes to unselected tasks,
+unselected completion, and unrelated headings or notes may change the source
+TODO without blocking active work. Unchanged selected blocks may move or reorder
+within the same semantic section. Dispatch, follow-ups, monitor/recovery,
+new report acceptance, result acceptance, QA and approval check the selected
+blocks instead of the whole-file digest. Every selected block must still have
+exactly one occurrence in the parsed TODO, remain open, and keep its section.
+An identical block in another section also counts as ambiguous. A selected
+deletion, title/notes/whitespace edit, completion, or section change blocks work
+and requires a new explicit contract; a follow-up cannot authorize that change.
+There is no fuzzy title matching, guessed row selection, or automatic migration.
+Re-requesting an active selected block is rejected even if its current row ID
+changed. For duplicate-request protection only, legacy recorded display text is
+also treated conservatively as overlap evidence; it never resolves legacy tasks.
+
+Source TODO may remain dirty after launch. Worker and QA worktrees must still
+pass their original ownership, clean-tree, base/head and exact-candidate checks.
+Native leader handoff permits only this source TODO exception: all other source
+changes and dirty owned worktrees still block adoption. Capsule seals, Git
+identity/head, actor identity and single-use checks remain in force; export a
+fresh capsule if its Git evidence changes. A persisted native report replay
+remains idempotent; new reports are checked against current selected scope.
+
+Runs without `scope` keep whole-TODO digest validation. Existing runs are never
+upgraded, their original digests/IDs remain unchanged, and unknown or malformed
+scope versions fail closed. This applies independently of the chosen transport;
+historical Gossip exports stay historical. Run scope does not implement cleanup,
+checkpoint commits, a Plan reader, or actor provisioning. If a selected block
+needs editing, stop using its old contract and obtain a newly confirmed one;
+there is no in-place scope editor or automatic reconciliation.
+
+`tests/test_mission_scope.py` exercises new requests with real temporary Git
+repositories, TODO files and RunStores through dispatch, unrelated edits,
+follow-up, result acceptance, exact-candidate QA and approval. Native identity,
+queue delivery and the Herdr launch API are controlled fixtures, not live model
+sessions or proof that a model consumed a message.
+
+## Transport and results
+
 Launch retains worktrees under the run directory, creates a new local Gossip
 room, creates one Herdr tab and two panes, loads the Agent Graph
 `tropico-coding-team/worker` and `/qa` role context, then starts their Codex
