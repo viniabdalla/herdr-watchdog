@@ -285,3 +285,86 @@ class HandoffTests(unittest.TestCase):
         result=self.fixture.record(report);self.assertTrue(result['persisted'])
         self.assertEqual(self.queues[-1][0],self.new.session)
         self.assertEqual(len(self.store.load(self.identity)['events']),1)
+
+    def fresh_actor(self,role,run,*,purpose=None):
+        binding=copy.deepcopy(self.fixture.bindings[role])
+        binding.session=str(uuid.uuid4());binding.pid+=2000
+        self.registry[binding.session]=asdict(binding)
+        run['participants'][role].update(native=asdict(binding),generation=str(uuid.uuid4()))
+        if purpose:run['participants'][role]['purpose']=purpose
+        return binding
+
+    def test_each_later_task_requires_new_executor_at_preceding_accepted_commit(self):
+        first=self.fixture.task;second=next(k for k in self.store.load(self.identity)['tasks'] if k!=first)
+        transport.dispatch(self.store,self.identity,first)
+        worker=Path(self.store.load(self.identity)['participants']['worker']['worktree'])
+        (worker/'a.py').write_text('print(2)\n');git(worker,'add','a.py');git(worker,'commit','-qm','accepted predecessor')
+        accepted=git(worker,'rev-parse','HEAD')
+        self.fixture.record(self.fixture.report('result',commits=[accepted],tests=['Observed fixture check']))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(mission_cli.main(['accept-result','--run',self.identity,'--state-dir',str(self.store.root),
+                                              '--task',first,'--confirm']),0)
+        count=len(self.queues)
+        with self.assertRaisesRegex(RuntimeError,'fresh|conversation|session'):
+            transport.dispatch(self.store,self.identity,second)
+        self.assertEqual(len(self.queues),count)
+        run=self.store.load(self.identity);fresh=self.fresh_actor('worker',run);self.store.save(run)
+        transport.dispatch(self.store,self.identity,second)
+        self.assertEqual(self.queues[-1][0],fresh.session)
+        self.assertEqual(self.queues[-1][1]['base_sha'],accepted)
+        self.assertEqual(self.queues[-1][1]['session_policy']['executor'],'one task per conversation')
+
+    def test_each_review_requires_new_qa_conversation_even_at_same_candidate(self):
+        run=self.fixture._single_task_review();self.fixture.record(self.fixture._qa_report(run),'qa')
+        count=len(self.queues)
+        with self.assertRaisesRegex(RuntimeError,'fresh|conversation|session'):
+            transport.review(self.store,self.identity,self.fixture.base)
+        self.assertEqual(len(self.queues),count)
+        run=self.store.load(self.identity);fresh=self.fresh_actor('qa',run);self.store.save(run)
+        reviewed=transport.review(self.store,self.identity,self.fixture.base)
+        self.assertEqual(self.queues[-1][0],fresh.session)
+        self.assertNotEqual(reviewed['review_contract']['id'],run['review_contract']['id'])
+
+    def test_probes_need_shared_registry_and_dedicated_disposable_conversation(self):
+        from watchdog_app.mission import RunStore
+        transport.dispatch(self.store,self.identity,self.fixture.task)
+        probe_store=RunStore(self.folder/'probe-runs');probe=copy.deepcopy(self.store.load(self.identity))
+        probe['id']=str(uuid.uuid4());probe.pop('worker_head',None);probe['events']={};probe['deliveries']={}
+        probe['tasks']={self.fixture.task:{'title':'Probe fixture','state':'ready','summary':'','agent':'main','updated':0}}
+        probe['brief']['tasks']=[dict(probe['brief']['tasks'][0],purpose='probe')]
+        probe['participants']['worker']['purpose']='probe';probe_store.save(probe)
+        with self.assertRaisesRegex(RuntimeError,'shared'):transport.dispatch(probe_store,probe['id'],self.fixture.task)
+        probe['session_policy']={'registry_dir':str(probe_store.root/'isolated-policy')};probe_store.save(probe)
+        with self.assertRaisesRegex(RuntimeError,'shared'):transport.dispatch(probe_store,probe['id'],self.fixture.task)
+        probe['session_policy']={'registry_dir':str(self.store.root/'session-policy')};probe_store.save(probe)
+        count=len(self.queues)
+        with self.assertRaisesRegex(RuntimeError,'fresh|purpose|conversation'):
+            transport.dispatch(probe_store,probe['id'],self.fixture.task)
+        self.assertEqual(len(self.queues),count)
+        fresh=self.fresh_actor('worker',probe,purpose='probe')
+        fresh.pane='probe-pane';fresh.terminal='probe-terminal';self.registry[fresh.session]=asdict(fresh)
+        path=self.folder/'probe-worktree';git(self.repo,'worktree','add','-b','probe-only',str(path),self.fixture.base)
+        probe['participants']['worker'].update(native=asdict(fresh),worktree=str(path),branch='probe-only')
+        probe['resources']['worker'].update(pane_id=fresh.pane,terminal_id=fresh.terminal)
+        probe_store.save(probe);transport.dispatch(probe_store,probe['id'],self.fixture.task)
+        self.assertEqual(self.queues[-1][0],fresh.session)
+        reused=copy.deepcopy(probe);reused['id']=str(uuid.uuid4())
+        reused['participants']['worker']['purpose']='implementation';reused['brief']['tasks'][0]['purpose']='implementation'
+        probe_store.save(reused)
+        with self.assertRaisesRegex(RuntimeError,'fresh|purpose|conversation'):
+            transport.dispatch(probe_store,reused['id'],self.fixture.task)
+
+    def test_capsule_from_old_reuse_policy_is_stale_even_with_its_valid_old_seal(self):
+        value=self.export();value.pop('session_policy',None)
+        self.capsule_file.write_text(json.dumps(value))
+        seal_path=handoff.record_path(self.store,self.identity,value['handoff_id'])
+        seal=json.loads(seal_path.read_text());seal['capsule_sha256']=handoff.digest(value);seal_path.write_text(json.dumps(seal))
+        with self.assertRaisesRegex(RuntimeError,'policy|fresh'):self.preview()
+
+    def test_executor_cannot_be_declared_as_a_qa_review_actor(self):
+        run=self.store.load(self.identity)
+        run['participants']['worker']['purpose']='qa';run['brief']['tasks'][0]['purpose']='qa'
+        self.store.save(run)
+        with self.assertRaisesRegex(RuntimeError,'role|purpose'):
+            transport.dispatch(self.store,self.identity,self.fixture.task)
+        self.assertFalse(self.queues)

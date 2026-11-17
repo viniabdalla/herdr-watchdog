@@ -113,7 +113,10 @@ uses gpt-6.1-sol with medium effort for worker and routine QA, with actual CLI
 overrides; Progress displays those choices.
 
 The initial team is exactly one worker and one QA. Both terminals share one new
-tab; each has its own worktree. All tasks use the one worker sequentially. The
+tab; each has its own worktree. Each later implementation task requires a NEW
+executor conversation at the preceding accepted commit; every review requires a
+NEW QA conversation. Probes require dedicated disposable conversations and must
+never use real-task executors. Main supplies those actors; no automatic reuse. The
 first independent task is dispatched once the exact native Codex identity and
 role enrollment are verified. New runs use the Codex queue and durable local
 reports by default; Gossip is an explicit legacy adapter. Existing runs retain
@@ -134,7 +137,13 @@ source snapshots, assignments, results and owned resource mappings.
 Git. It references selected-task evidence and explicit sidecars without reading
 raw conversations or treating sidecars as completed TODO work. Legacy runs are
 export-only. Native runs support an explicit verified preview and confirmed
-adoption of an operator-supplied fresh main, preserving the existing team and
-its exact attempts/results/QA. No actor, panel, binding file or queue is
+adoption of an operator-supplied fresh main, preserving current attempts and
+exact results/QA. Current actors finish only their current assignment; later
+tasks and reviews require fresh conversations. No actor, panel, binding file or queue is
 restarted or silently redirected. See [Leader handoff](docs/leader-handoff.md)
 for the conservative idle/clean boundary and single-use CLI flow.
+
+The clean-session policy supersedes older transport-probe examples: never use a
+real-task executor for a probe. The current grandfathered worker finishes only
+Leader handoff. Native policy claims reject known executor/QA/probe reuse;
+separate probe RunStores must explicitly share the main session-policy registry.

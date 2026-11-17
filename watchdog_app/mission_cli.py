@@ -15,7 +15,7 @@ def template(run):
     return {'transport':run.get('transport',{}).get('kind','native'),'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
         'participants':{role:{'account':run['main']['account'],
             'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
-            'model':'gpt-6.1-sol','effort':'medium'} for role in ('worker','qa')},
+            'model':'gpt-6.1-sol','effort':'medium','purpose':'qa' if role=='qa' else 'implementation'} for role in ('worker','qa')},
         'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]}
                  for key in run['tasks']]}
 
@@ -31,7 +31,7 @@ def watch(store, identity):
                 run=transport.tick(store,identity)
                 if run['phase']=='done':return
                 # Only the first independent task is automatic. Main accepts its
-                # result and explicitly dispatches later contracts to the same worker.
+                # result and supplies a fresh verified executor for every later task.
                 if run['phase']=='active' and not any(t.get('delivery') for t in run['tasks'].values()):
                     if run['participants']['worker'].get('native') and run['participants']['worker'].get('available'):
                         first=next(t['id'] for t in run['brief']['tasks'] if not t['dependencies'])

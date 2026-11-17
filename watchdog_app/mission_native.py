@@ -122,6 +122,8 @@ def dispatch(store, identity, task_id):
         if head != run.get('worker_head', run['brief']['base_sha']): raise RuntimeError('Worker base changed')
         run['participants']['worker']['base_sha'] = head
         attempt = str(uuid.uuid4()); payload = contract(run, task_id, attempt)
+        from .mission_handoff import claim_session
+        payload['session_policy']=claim_session(store,run,'worker',task_id,head,purpose=item.get('purpose','implementation'))
         task.update(attempt_id=attempt, delivery='sending'); store.save(run)
         try: deliver(store, run, 'worker', attempt, payload)
         except Exception:
@@ -141,6 +143,8 @@ def followup(store, identity, task_id, text):
         if task.get('delivery')!='sent':raise RuntimeError('Previous delivery is uncertain; inspect it before a follow-up')
         transport.owned_worktree(run,'worker');verify_participant(run,'worker')
         attempt=str(uuid.uuid4());payload=contract(run,task_id,attempt);payload['clarification']=text
+        from .mission_handoff import claim_session
+        payload['session_policy']=claim_session(store,run,'worker',task_id,payload['base_sha'],purpose=payload.get('purpose','implementation'))
         task.setdefault('attempt_history',[]).append(task['attempt_id'])
         task.update(attempt_id=attempt,delivery='sending')
         task.pop('result',None);task.pop('accepted_result',None);run['qa']=None
@@ -321,16 +325,19 @@ def review(store, identity, candidate, context=None):
         transport.verify_result_commits(run,candidate)
         path=run['participants']['qa']['worktree']
         if transport.git(path,'status','--porcelain'):raise RuntimeError('QA worktree is not clean')
+        from .mission_handoff import claim_session
+        review_id=str(uuid.uuid4())
+        policy=claim_session(store,run,'qa',review_id,candidate)
         run['operation']='checkout QA candidate';store.save(run)
         transport.git(path,'checkout','--detach',candidate)
         attempt=str(uuid.uuid4())
         run.update(candidate=candidate,qa=None,qa_finished=False,qa_delivery='sending',qa_task=attempt)
-        run['review_contract']={'id':str(uuid.uuid4()),'candidate':candidate,'base_sha':run['brief']['base_sha'],
+        run['review_contract']={'id':review_id,'candidate':candidate,'base_sha':run['brief']['base_sha'],
             'context':context,'version':run.get('result_version',0),'verified_commits':True}
         payload={'run_id':identity,'attempt_id':attempt,'review_id':run['review_contract']['id'],
             'candidate':candidate,'base_sha':run['brief']['base_sha'],'repo':run['repo'],'worktree':path,
             'tasks':run['brief']['tasks'],'results':{k:t['result'] for k,t in run['tasks'].items()},
-            'context':context,'instructions':'Review the complete integrated candidate at exactly this SHA. Do not write source.',
+            'session_policy':policy,'context':context,'instructions':'Review the complete integrated candidate at exactly this SHA. Do not write source.',
             'report_schema':{'run_id':identity,'attempt_id':attempt,'review_id':run['review_contract']['id'],
                 'event_id':'Stable UUID per report','candidate':candidate,'status':'qa | blocked | working',
                 'verdict':'pass | fail for qa','summary':'Findings and limitations','tests':['Observed evidence']}}
@@ -358,6 +365,7 @@ def participant_prompt(store, run, role):
         'Enroll: '+shlex.join(command+['enroll']+scope)+'\n'
         'Receive: '+shlex.join(command+['receive']+scope)+' --after 0\n'
         'Report: '+shlex.join(command+['report']+scope+['--file','/tmp/watchdog-'+role+'-'+identity+'-report.json'])+'\n'
+        'One executor conversation handles only one logical task and its corrections. Main supplies a NEW executor for every later task at the preceding accepted commit, a NEW QA conversation for each review, and dedicated disposable conversations for probes, never real task executors. Never transfer a full transcript or create actors yourself. '
         'Use the scoped host bridge. Read only new native messages when notified; do not spin or repeat work. '
         'Do not close tasks or edit source outside the assigned contract.')
 

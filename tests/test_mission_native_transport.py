@@ -350,6 +350,13 @@ class NativeTransportTests(unittest.TestCase):
         if stage=='followup':
             transport.dispatch(self.store,self.identity,self.task)
         elif stage=='qa':
+            # Each subcase is a distinct review attempt: provide a fresh QA
+            # identity in this isolated fixture rather than reusing old context.
+            run=self.store.load(self.identity)
+            run['participants']['qa']['native']['session']=str(uuid.uuid4())
+            run['participants']['qa']['native']['pid']+=2000
+            run['participants']['qa']['generation']=str(uuid.uuid4())
+            self.store.save(run)
             transport.dispatch(self.store,self.identity,self.task)
             self.record(self.report('result',commits=[self.base],tests=['Observed fixture check']))
             run=self.store.load(self.identity)

@@ -1,7 +1,7 @@
 # Leader handoff / Clean sessions
 
-This CLI-first MVP prepares a fresh leader to coordinate the **existing** worker
-and QA. It does not start a conversation, clear an actor's context, move/focus a
+This CLI-first MVP prepares a fresh leader to coordinate current assignments
+and supply clean conversations for subsequent work. It does not start a conversation, clear an actor's context, move/focus a
 tab or restart anything. An actual new main must be supplied explicitly by the
 operator. No production leadership switch is implied by exporting a capsule or
 by the automated tests.
@@ -135,8 +135,65 @@ claimed for an operator changing those resources during adoption.
 
 A capsule and attached result file are **evidence**, not approval. The new leader
 checks actual commits, test logs and exact independent QA before accepting work,
-coordinates existing actors, and preserves uncompleted tasks. Run approval,
+preserves uncompleted tasks and current assignments, and delegates every later
+task to a NEW executor and every review to a NEW QA conversation. Run approval,
 TODO completion and target merge remain separate. No actual new main was
 supplied for this implementation task; real export is safe, while replacement
 is demonstrated only with isolated Git/RunStore fixtures and substituted native
 identity boundaries.
+
+
+## One task per executor; fresh QA and disposable probes
+
+This is the explicit policy correction, superseding earlier instructions to
+reuse the worker/QA. The current executor is grandfathered **only** to finish
+Leader handoff and its corrections. It must decline later implementation or
+probe assignments in this conversation. Main coordinates future sessions;
+this feature does not spawn them.
+
+Every subsequent implementation task uses a NEW executor conversation, starting
+from the preceding accepted commit with only its bounded task brief. Corrections
+within the same logical task may use its current executor. Every QA review,
+including a recheck at the same candidate, uses a NEW QA conversation. Transport
+probes require their own declared disposable conversation, never a real-task
+executor. Never transfer a full transcript to any new actor.
+
+Native dispatch/followup/review reserve an account/thread claim before sending.
+The default private registry is `RunStore/session-policy`; a claim permits only
+one run/project and one logical implementation/probe task, or one QA review ID.
+Known pre-policy delivery records in that run are checked too. Failed/uncertain
+sends retain the claim rather than quietly assigning unrelated work. Policy
+rejections do not enqueue anything. Existing native identity, account, boot,
+role, clean owned-worktree and exact-head gates still run. The next executor's
+head must match `worker_head` set by verified result acceptance (or the initial
+explicit brief base); the assignment carries that exact accepted base.
+
+Separate disposable probe stores MUST explicitly set
+`session_policy.registry_dir` to the same main registry **outside** the probe's
+own isolated RunStore, and declare `participants.worker.purpose: probe` plus
+`purpose: probe` on the probe task contract. Real executor and QA purposes are
+`implementation` and `qa`. A fresh isolated registry is not permission to reuse
+an executor. A native launch brief may supply the shared registry path; there
+is no environment/focus guess. Registry metadata is bounded scope/identity data,
+not conversation content, and it is kept outside Git/worktrees. Use one canonical
+registry across the operator's related runs; do not remove claims to bypass the
+policy. Probes and implementation can never exchange their claimed conversation.
+
+The trusted host operator must actually supply unused, verified conversations.
+The code checks registered claims and the current run's known delivery history;
+it does not scrape unrelated projects or transcripts to infer arbitrary earlier
+use outside Watchdog. It cannot protect against a trusted operator deliberately
+choosing unrelated registries or falsifying provisioning. This is the same
+explicit host/runtime trust boundary as native transport, not a claim of hostile
+same-UID isolation.
+
+Capsules contain the versioned session rules and registry reference; capsules
+from the old reuse policy cannot be adopted, even if their old seal still
+matches. Current actors/results/attempts remain historical/current evidence, not
+permission to assign those conversations new work. Supplying fresh participants
+is a main/operator lifecycle action: this task adds guards, not automatic
+participant rotation, actor restart or a new-session launcher. If a fresh
+verified participant has not been supplied, dispatch/review blocks with a reason.
+The original whole-selected-task gate is unchanged; later Run scope work remains
+separate. Tests exercise these policies in isolated fixtures with new logical
+bindings only; no real executor, QA or disposable probe actor was created here.

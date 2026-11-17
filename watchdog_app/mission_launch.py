@@ -244,6 +244,8 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
             'No extra agents, user questions, target merges, pushes or TODO edits.') for r in ('worker', 'qa')}
         api = api or Herdr(run.get('herdr_session'))
         run['brief'] = brief
+        if mode=='native' and brief.get('session_policy'):
+            run['session_policy']=brief['session_policy']
         run['identity_protocol'] = 3 if mode == 'native' else 2
         folder = store.root / identity;folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         def intent(operation):
