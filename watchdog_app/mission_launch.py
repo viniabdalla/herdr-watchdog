@@ -138,6 +138,21 @@ def create_gossip(run, store):
         run['graph']={'name':'tropico-coding-team','hash':digest,'instance':run['id']}
     folder = store.root / run['id'];folder.mkdir(mode=0o700, exist_ok=True)
     path = folder / 'gossip.json'
+    try:
+        context = json.loads(command(['agent-gossip', 'context', 'show']))
+    except RuntimeError as error:
+        if 'no native task context;' not in str(error):
+            raise
+        context = None
+    if context is not None:
+        main = run['main']
+        if (context.get('owner_pid') != main['pid'] or
+                context.get('session_id') != main['session'] or
+                str(context.get('owner_start')) != str(main['started'])):
+            raise RuntimeError('Gossip context identity differs from the approved main')
+        path = Path(context['state_file'])
+        if not path.is_absolute():
+            raise RuntimeError('Gossip context state path must be absolute')
     nick = 'wd-main-' + run['id'][:8]
     command(['agent-gossip', 'create', '--name', 'wd-' + run['id'][:8], '--nickname', nick,
              '--lookup', 'mdns', '--transport', 'udp', '--owner-pid', str(run['main']['pid']),

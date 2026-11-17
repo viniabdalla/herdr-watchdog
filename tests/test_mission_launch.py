@@ -205,3 +205,45 @@ class LaunchTests(unittest.TestCase):
         candidate=git(self.repo,'rev-parse','HEAD')
         self.assertNotEqual(candidate,worker_sha)
         verify_result_commits(run,candidate)
+
+
+class GossipContextTests(unittest.TestCase):
+    def exercise(self, context):
+        with tempfile.TemporaryDirectory() as folder:
+            store = RunStore(Path(folder)/'runs');store.root.mkdir()
+            run = {'id':'context-test','main':{'pid':123,'session':'native-session','started':'456'},
+                   'graph':{'hash':'a'*64}}
+            fallback = store.root/run['id']/'gossip.json'
+            selected = Path(context['state_file']) if context else fallback
+            def invoke(argv, **kwargs):
+                if argv[:3] == ['agent-gossip','context','show']:
+                    if context is None:raise RuntimeError('no native task context; standalone CLI may use --session-pid')
+                    return json.dumps(context)
+                self.assertEqual(argv[1], 'create')
+                self.assertEqual(Path(argv[argv.index('--state-file')+1]), selected)
+                selected.parent.mkdir(parents=True,exist_ok=True)
+                selected.write_text(json.dumps({'ready':True,'gossip':'room','pubkey':'key'}))
+                return ''
+            with patch.object(launch,'command',side_effect=invoke), patch('watchdog_app.mission_transport.publish_identity'):
+                result=launch.create_gossip(run,store)
+            self.assertEqual(result['gossip'],'room')
+    def test_uses_verified_native_context_state_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.exercise({'state_file':str(Path(folder)/'native.json'), 'owner_pid':123,
+                           'session_id':'native-session','owner_start':456})
+    def test_no_native_context_uses_run_state(self):
+        self.exercise(None)
+    def test_mismatched_context_refuses_create(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run={'id':'context-test','main':{'pid':123,'session':'native-session','started':'456'},'graph':{}}
+            with patch.object(launch,'command',return_value=json.dumps({'owner_pid':999,'session_id':'other','owner_start':456,'state_file':'/tmp/unused'})) as command:
+                with self.assertRaisesRegex(RuntimeError,'context.*identity'):
+                    launch.create_gossip(run,RunStore(Path(folder)))
+                self.assertEqual(command.call_count,1)
+    def test_invalid_context_is_not_treated_as_absent(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run={'id':'context-test','main':{'pid':123},'graph':{}}
+            with patch.object(launch,'command',side_effect=RuntimeError('context owner is no longer live')) as command:
+                with self.assertRaisesRegex(RuntimeError,'owner is no longer live'):
+                    launch.create_gossip(run,RunStore(Path(folder)))
+                self.assertEqual(command.call_count,1)
