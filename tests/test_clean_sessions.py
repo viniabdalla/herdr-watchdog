@@ -297,3 +297,83 @@ class CleanSessionsTests(unittest.TestCase):
         self.op=self.request();value={'operation_id':self.op['operation_id'],'token':self.op['tokens']['prepared'],'kind':'blocked','reason':'ai-memory MCP unavailable'}
         with Path(self.old.history).open('a') as f:f.write(json.dumps({'type':'event_msg','payload':{'type':'task_complete','last_agent_message':clean.PREFIX+json.dumps(value)}})+'\n')
         op=self.tick();self.assertEqual(op['state'],'blocked');self.assertIn('ai-memory',op['problem']);self.assertFalse(self.api.calls)
+
+    def test_unowned_index_masked_by_restored_worktree_is_rejected_before_any_git_mutation(self):
+        unowned=self.repo/'unowned.txt';unowned.write_text('base\n')
+        git(self.repo,'add','unowned.txt');git(self.repo,'commit','-m','fixture tracked unowned');git(self.repo,'push','origin','main')
+        unowned.write_text('unapproved staged content\n');git(self.repo,'add','unowned.txt');unowned.write_text('base\n')
+        (self.repo/'owned.py').write_text('authorized work\n')
+        self.op=self.request();head=git(self.repo,'rev-parse','HEAD')
+        index=subprocess.check_output(['git','-C',str(self.repo),'ls-files','--stage','-z'])
+        index_file=self.repo/git(self.repo,'rev-parse','--git-path','index');index_bytes=index_file.read_bytes()
+        remote=git(self.remote,'rev-parse','main');self.prepared();op=self.tick()
+        self.assertEqual(op['state'],'partial');self.assertIn('unowned',op['problem'])
+        self.assertEqual(git(self.repo,'rev-parse','HEAD'),head,'Rejection must precede any commit')
+        self.assertEqual(subprocess.check_output(['git','-C',str(self.repo),'ls-files','--stage','-z']),index,'Index must remain byte-identical')
+        self.assertEqual(index_file.read_bytes(),index_bytes,'Ownership rejection must not write index metadata either')
+        self.assertEqual(git(self.remote,'rev-parse','main'),remote)
+        self.assertEqual(set(op['effects']),{'prepare'});self.assertEqual(self.api.calls,[])
+        self.assertEqual(unowned.read_text(),'base\n')
+
+    def test_owned_staged_and_unstaged_edits_commit_only_authorized_worktree_content(self):
+        file=self.repo/'owned.py';file.write_text('owned staged\n');git(self.repo,'add','owned.py');file.write_text('owned final\n')
+        self.op=self.request();self.prepared();op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
+        self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'owned final')
+        self.assertEqual(git(self.repo,'status','--porcelain'),'')
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['checkpoint'])
+
+    def test_owned_deletion_and_filename_whitespace_are_committed_exactly(self):
+        for name in (' spaced name.txt','line\nbreak.txt'):
+            (self.repo/name).write_text('old\n')
+        git(self.repo,'add','.');git(self.repo,'commit','-m','fixture unusual filenames');git(self.repo,'push','origin','main')
+        for name in (' spaced name.txt','line\nbreak.txt'):
+            (self.repo/name).write_text('new\n');self.policy['owned_paths'].append(name)
+        git(self.repo,'add','--',' spaced name.txt')
+        (self.repo/'owned.py').unlink()
+        self.op=self.request();self.prepared();op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
+        for name in (' spaced name.txt','line\nbreak.txt'):self.assertEqual(git(self.repo,'show','HEAD:'+name),'new')
+        self.assertFalse((self.repo/'owned.py').exists());self.assertEqual(git(self.repo,'status','--porcelain'),'')
+
+    def test_commit_excludes_an_unowned_index_entry_added_after_the_ownership_check(self):
+        unowned=self.repo/'unowned.txt';unowned.write_text('base\n')
+        git(self.repo,'add','unowned.txt');git(self.repo,'commit','-m','fixture foreign file');git(self.repo,'push','origin','main')
+        (self.repo/'owned.py').write_text('authorized edit\n');self.op=self.request();self.prepared()
+        real_effect=clean.effect
+        def inject(store,op,name,action):
+            result=real_effect(store,op,name,action)
+            if name=='stage-owned':
+                unowned.write_text('late foreign index\n');git(self.repo,'add','unowned.txt');unowned.write_text('base\n')
+            return result
+        with patch.object(clean,'effect',side_effect=inject):op=self.tick()
+        self.assertEqual(op['state'],'partial')
+        self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base','Bounded commit must never include unrelated index entries')
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['base_sha'])
+        self.assertEqual(self.api.calls,[])
+
+    def test_bounded_commit_excludes_foreign_index_change_racing_the_commit_itself(self):
+        unowned=self.repo/'unowned.txt';unowned.write_text('base\n')
+        git(self.repo,'add','unowned.txt');git(self.repo,'commit','-m','fixture foreign file');git(self.repo,'push','origin','main')
+        (self.repo/'owned.py').write_text('authorized final\n');self.op=self.request();self.prepared()
+        real_effect=clean.effect
+        def inject(store,op,name,action):
+            if name=='commit-owned':
+                def raced():
+                    unowned.write_text('foreign racing commit\n');git(self.repo,'add','unowned.txt');unowned.write_text('base\n')
+                    return action()
+                return real_effect(store,op,name,raced)
+            return real_effect(store,op,name,action)
+        with patch.object(clean,'effect',side_effect=inject):op=self.tick()
+        self.assertEqual(op['state'],'partial');self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base')
+        self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'authorized final')
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['base_sha']);self.assertEqual(self.api.calls,[])
+
+    def test_owned_filename_that_looks_like_git_pathspec_is_treated_literally(self):
+        name=':(glob)owned*.py';file=self.repo/name;file.write_text('old\n')
+        git(self.repo,'--literal-pathspecs','add','--',name);git(self.repo,'commit','-m','fixture literal pathspec name');git(self.repo,'push','origin','main')
+        file.write_text('authorized literal filename\n');self.policy['owned_paths'].append(name)
+        self.op=self.request();self.prepared();op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
+        self.assertEqual(git(self.repo,'show','HEAD:'+name),'authorized literal filename')
+        self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'old')

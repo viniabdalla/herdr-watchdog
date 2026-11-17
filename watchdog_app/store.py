@@ -108,9 +108,14 @@ class Store:
             successor.update(binding=asdict(new), binding_file=str(target), ownership='active',
                              transfer_operation=operation_id, predecessor_binding=asdict(old))
             successor['panes'].pop('left_undone', None)
+            successor.pop('outgoing_transfer_operation', None)
+            successor.pop('successor_binding_file', None)
             # Preserve all other resource/layout/client fields exactly. LU stays
             # with its original owner and is outside this product's write scope.
-            state.update(ownership='transferring', transfer_operation=operation_id)
+            # transfer_operation/predecessor_binding describe the immutable
+            # incoming hop. A later transfer has a separate outgoing seal so
+            # panels launched with any earlier binding can still verify it.
+            state.update(ownership='transferring', outgoing_transfer_operation=operation_id)
             state['panes'] = {k:v for k,v in state['panes'].items() if k=='left_undone'}
             atomic(source_file, state)
             self.save(new, successor)

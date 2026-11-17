@@ -48,3 +48,79 @@ class StoreTests(unittest.TestCase):
             store.save(binding, state)
             with self.assertRaisesRegex(RuntimeError, 'project'):
                 store.load(binding, Path('/another/project'))
+
+
+class PanelTransferTests(unittest.TestCase):
+    """Real Store redirects; native/Herdr boundaries explicitly simulated."""
+    def setUp(self):
+        import test_clean_sessions as fixtures
+        from dataclasses import asdict
+        import uuid
+        self.fixtures=fixtures
+        self.f=fixtures.CleanSessionsTests();self.f.setUp();self.addCleanup(self.f.doCleanups)
+        f=self.f
+        f.runtime.actors[f.new.session]=asdict(f.new)
+        self.first=str(uuid.uuid4());self.second=str(uuid.uuid4())
+        self.middle=Path(f.store.transfer(f.file,f.old,f.new,f.repo,self.first,api=f.api))
+        from watchdog_app.actions import Session
+        self.lagging_middle=Session(self.middle,f.repo)
+        self.third=fixtures.Binding(session=str(uuid.uuid4()),account=f.new.account,
+            history=str(f.root/'third.jsonl'),pane='project:third',terminal='third-terminal',pid=999,started='999')
+        Path(self.third.history).touch();f.runtime.actors[self.third.session]=asdict(self.third)
+        self.final=Path(f.store.transfer(self.middle,f.new,self.third,f.repo,self.second,api=f.api))
+
+    def test_original_and_lagging_panels_reopen_after_two_transfers(self):
+        from watchdog_app.actions import Session
+        f=self.f
+        self.assertEqual(Session.for_panel(f.file,f.repo).binding.session,self.third.session)
+        self.assertEqual(f.session.successor_file(),self.final)
+        self.assertEqual(self.lagging_middle.successor_file(),self.final)
+        middle=json.loads(self.middle.read_text());last=json.loads(self.final.read_text())
+        self.assertEqual(middle['transfer_operation'],self.first,'Incoming hop must remain immutable')
+        self.assertEqual(middle['outgoing_transfer_operation'],self.second)
+        self.assertEqual(last['transfer_operation'],self.second)
+        self.assertNotIn('outgoing_transfer_operation',last)
+        self.assertEqual(last['panes'],f.panes);self.assertEqual(last['layout'],2);self.assertEqual(last['yazi_client_id'],'keep-client')
+        self.assertEqual(json.loads(f.file.read_text())['panes'],{});self.assertEqual(middle['panes'],{})
+
+    def test_each_hop_rejects_tampered_operation_or_predecessor(self):
+        from watchdog_app.actions import Session
+        import uuid
+        f=self.f;files=(f.file,self.middle,self.final);originals={p:p.read_bytes() for p in files}
+        cases=((f.file,'outgoing_transfer_operation',str(uuid.uuid4())),
+               (self.middle,'transfer_operation',str(uuid.uuid4())),
+               (self.middle,'predecessor_binding',{}),
+               (self.middle,'outgoing_transfer_operation',str(uuid.uuid4())),
+               (self.final,'transfer_operation',str(uuid.uuid4())),
+               (self.final,'predecessor_binding',{}))
+        for file,key,value in cases:
+            with self.subTest(file=file.name,key=key):
+                for p,raw in originals.items():p.write_bytes(raw)
+                data=json.loads(file.read_text());data[key]=value;file.write_text(json.dumps(data))
+                with self.assertRaisesRegex(RuntimeError,'correlation'):Session.for_panel(f.file,f.repo)
+                with self.assertRaisesRegex(RuntimeError,'correlation'):f.session.successor_file()
+
+    def test_cross_project_and_symlink_targets_are_rejected(self):
+        from watchdog_app.actions import Session
+        f=self.f;data=json.loads(self.final.read_text());data['repo']=str(f.root/'foreign-project');self.final.write_text(json.dumps(data))
+        with self.assertRaisesRegex(RuntimeError,'project'):Session.for_panel(f.file,f.repo)
+        # The first pointer must reject symlinks even when they contain a valid hop.
+        moved=self.middle.with_suffix('.saved');self.middle.rename(moved);self.middle.symlink_to(moved)
+        with self.assertRaisesRegex(RuntimeError,'Watchdog state'):Session.for_panel(f.file,f.repo)
+        with self.assertRaisesRegex(RuntimeError,'Watchdog state'):f.session.successor_file()
+
+    def test_cycle_and_final_native_or_project_changes_are_rejected(self):
+        from dataclasses import asdict
+        from watchdog_app.actions import Session
+        from watchdog_app import bindings
+        from unittest.mock import patch
+        f=self.f
+        with patch.object(bindings,'project_for',side_effect=lambda b:f.root/'foreign' if b.session==self.third.session else f.repo):
+            with self.assertRaisesRegex(RuntimeError,'project'):Session.for_panel(f.file,f.repo)
+        f.runtime.actors[self.third.session]['started']='recycled'
+        with self.assertRaisesRegex(RuntimeError,'identity'):Session.for_panel(f.file,f.repo)
+        f.runtime.actors[self.third.session]=asdict(self.third)
+        data=json.loads(self.final.read_text());data.update(ownership='released',successor_binding_file=str(self.final),
+            outgoing_transfer_operation=data['transfer_operation'],predecessor_binding=asdict(self.third))
+        self.final.write_text(json.dumps(data))
+        with self.assertRaisesRegex(RuntimeError,'cyclic|too long'):Session.for_panel(self.final,f.repo)

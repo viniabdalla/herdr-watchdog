@@ -65,8 +65,9 @@ class Session:
             if target.is_symlink() or target.parent.resolve() != current.parent.resolve():
                 raise RuntimeError('Successor binding must stay in Watchdog state')
             value = json.loads(target.read_text())
-            if (not data.get('transfer_operation') or
-                    value.get('transfer_operation') != data['transfer_operation'] or
+            outgoing = data.get('outgoing_transfer_operation', data.get('transfer_operation'))
+            if (not outgoing or
+                    value.get('transfer_operation') != outgoing or
                     value.get('predecessor_binding') != data['binding']):
                 raise RuntimeError('Successor panel transfer correlation changed')
             current = target
@@ -84,7 +85,8 @@ class Session:
         if path.is_symlink() or path.parent.resolve() != self.file.parent.resolve():
             raise RuntimeError('Successor binding must stay in Watchdog state')
         value = json.loads(path.read_text())
-        if (value.get('transfer_operation') != data.get('transfer_operation') or
+        outgoing = data.get('outgoing_transfer_operation', data.get('transfer_operation'))
+        if (not outgoing or value.get('transfer_operation') != outgoing or
                 value.get('predecessor_binding') != asdict(self.binding)):
             raise RuntimeError('Successor panel transfer correlation changed')
         return Session.for_panel(path, self.repo).file

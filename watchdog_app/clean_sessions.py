@@ -247,6 +247,29 @@ def effect(store,op,name,action):
     return result
 
 
+def git_names(repo,*args):
+    """Read NUL-separated names without trimming filename whitespace."""
+    try:
+        result=subprocess.run(['git','-C',str(repo),*args],capture_output=True,
+            timeout=20,env={k:v for k,v in os.environ.items() if not k.startswith('GIT_')})
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError('Git ownership inspection timed out; no retry') from error
+    if result.returncode:
+        raise RuntimeError(result.stderr.decode(errors='replace').strip() or 'Git ownership inspection failed')
+    return {os.fsdecode(name) for name in result.stdout.split(b'\0') if name}
+
+
+def owned_changes(repo,allowed):
+    # Compare HEAD/index and index/worktree independently. A restored worktree
+    # can hide an unowned staged entry from a single worktree-versus-HEAD diff.
+    changed=git_names(repo,'diff','--cached','--name-only','--no-renames','-z','HEAD')
+    changed.update(git_names(repo,'diff','--name-only','--no-renames','-z'))
+    changed.update(git_names(repo,'ls-files','--others','--exclude-standard','-z'))
+    unowned=changed-set(allowed)
+    if unowned:raise RuntimeError('Dirty unowned files block cleanup: '+', '.join(sorted(unowned)))
+    return changed
+
+
 def prepare_checkpoint(store,op,receipt):
     v=receipt['value']
     if not v.get('memory_handoff_id') or v['memory_handoff_id']=='ACTUAL_ID':
@@ -262,19 +285,19 @@ def prepare_checkpoint(store,op,receipt):
     references=[handoff.reference(p) for p in refs]
     repo=Path(op['repo']);policy=op['policy'];checkpoint_current(op)
     if git(repo,'rev-parse','HEAD')!=op['base_sha']:raise RuntimeError('Preparation base changed before Git authorization')
-    # -z avoids quote parsing and filenames with spaces. Both index and working
-    # tree changes (including deletions/untracked) must be explicitly owned.
-    changed=set(filter(None,git(repo,'-c','core.quotepath=false','diff','--name-only','-z','HEAD').split('\0')))
-    changed.update(filter(None,git(repo,'ls-files','--others','--exclude-standard','-z').split('\0')))
-    if changed-set(policy['owned_paths']):raise RuntimeError('Dirty unowned files block cleanup: '+', '.join(sorted(changed-set(policy['owned_paths']))))
+    changed=owned_changes(repo,policy['owned_paths'])
     for name in changed:
         p=repo/name
         if p.is_symlink() or not p.resolve().is_relative_to(repo):raise RuntimeError('Owned file path was replaced')
     op['preparation']={k:v[k] for k in ('summary','memory_handoff_id','open_questions','unfinished_tasks','next_steps')}
     op['preparation_receipt']=receipt;save(store,op)
     if changed:
-        effect(store,op,'stage-owned',lambda:git(repo,'add','--',*sorted(changed)))
-        effect(store,op,'commit-owned',lambda:git(repo,'commit','-m','Clean sessions: reconcile owned project checkpoint'))
+        effect(store,op,'stage-owned',lambda:git(repo,'--literal-pathspecs','add','--',*sorted(changed)))
+        # Recheck after staging, then constrain Git's commit pathspec as well:
+        # a concurrent unrelated index entry must never enter this commit.
+        owned_changes(repo,policy['owned_paths'])
+        effect(store,op,'commit-owned',lambda:git(repo,'--literal-pathspecs','commit','--only','-m',
+            'Clean sessions: reconcile owned project checkpoint','--',*sorted(changed)))
     for ref,sha in policy['integration_heads'].items():
         if git(repo,'rev-parse','--verify',ref+'^{commit}')!=sha:raise RuntimeError('Approved integration branch changed')
         effect(store,op,'integrate:'+ref,lambda:git(repo,'merge','--ff-only',sha))

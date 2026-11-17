@@ -97,3 +97,16 @@ class CleanSessionsUITests(unittest.TestCase):
         self.addCleanup(reopened.job.close)
         self.assertIsNotNone(reopened.session.binding)
         self.assertEqual(reopened.session.binding.session,self.f.new.session)
+
+    def test_reopened_and_lagging_tasks_follow_original_arguments_after_two_transfers(self):
+        self.f.to_receipt();self.f.receive();op=fixture.clean.load(self.f.store,self.f.op['operation_id'])
+        self.f.reply(self.f.old,'released',checkpoint=op['checkpoint'],successor=self.f.new.session);op=self.f.tick()
+        third=fixture.Binding(session=str(fixture.uuid.uuid4()),account=self.f.new.account,
+            history=str(self.f.root/'third.jsonl'),pane='project:third',terminal='third-terminal',pid=999,started='999')
+        fixture.Path(third.history).touch();self.f.runtime.actors[third.session]=fixture.asdict(third)
+        self.f.store.transfer(op['new_binding_file'],self.f.new,third,self.f.repo,str(fixture.uuid.uuid4()),api=self.f.api)
+        with patch.object(tasks_ui,'colors',return_value={}):reopened=tasks_ui.TasksUI(Screen(),self.f.repo,self.f.file)
+        self.addCleanup(reopened.job.close)
+        self.assertEqual(reopened.session.binding.session,third.session)
+        with patch.object(tasks_ui,'latest_reply',return_value=None):self.ui.refresh()
+        self.assertEqual(self.ui.session.binding.session,third.session)
