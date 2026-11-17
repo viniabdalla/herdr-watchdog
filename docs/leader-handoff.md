@@ -14,7 +14,21 @@ leader reconciles TODO honestly and must call the **actual ai-memory MCP
 `memory_handoff_begin`** with a concise summary, questions, unfinished work and
 next steps. The request supplies the exact tool/argument conventions and response
 format. Semantic TODO reconciliation and memory save/accept are **leader
-attestations**, not deterministic semantic checks or a new memory backend. Missing
+attestations**, not deterministic semantic checks or a new memory backend.
+Every actual `memory_handoff_begin` call must include explicit `workspace` and
+`project`, followed immediately by read-only `memory_handoff_list` with the same
+arguments to verify the returned exact ID. Scope uses the nearest
+`.ai-memory.toml` declaring both names, otherwise workspace `default` and the
+normalized full hosted `upstream`/`origin` repository path without its host;
+local filesystem remotes fall back to the repository folder basename. Python 3.10
+uses a bounded stdlib fallback for unique top-level string assignments and
+comments; unsupported/ambiguous TOML blocks clearly without breaking imports. Never
+rely on the MCP server's current project or guess client session awareness.
+The prepared reply carries `memory_scope` and `memory_handoff_list_verified`;
+these attest an actual MCP response, not an independent service audit. Backend
+validates/persists the scope; successor list/accept instructions and receipt
+evidence must use that saved explicit scope verbatim. Missing or mismatched
+scope blocks the transfer. Missing
 ai-memory produces a visible blocker; a handwritten replacement file is not
 memory transfer. The bounded continuation JSON is transport/checkpoint evidence
 referencing that real handoff, never an independent memory service.

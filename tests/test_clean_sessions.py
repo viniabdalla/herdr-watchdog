@@ -87,7 +87,8 @@ class CleanSessionsTests(unittest.TestCase):
         with Path(binding.history).open('a') as f:
             f.write(json.dumps({'type':'event_msg','payload':{'type':'task_complete','turn_id':str(uuid.uuid4()),'last_agent_message':'WATCHDOG_CLEAN '+json.dumps(payload)}})+'\n')
     def prepared(self):
-        self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=str(uuid.uuid4()),summary='Continue pending work',open_questions=['Question'],unfinished_tasks=['Unfinished'],next_steps=['Next'],references=[])
+        self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=str(uuid.uuid4()),
+                   memory_scope=clean.load(self.store,self.op['operation_id'])['memory_scope'],memory_handoff_list_verified=True,summary='Continue pending work',open_questions=['Question'],unfinished_tasks=['Unfinished'],next_steps=['Next'],references=[])
     def to_receipt(self):
         self.op=self.request();self.prepared();self.tick() # verified preparation, commit/integrate/push checkpoint
         self.tick() # split and startup command
@@ -97,7 +98,7 @@ class CleanSessionsTests(unittest.TestCase):
     def receive(self):
         op=clean.load(self.store,self.op['operation_id'])
         self.reply(self.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],memory_handoff_id=op['preparation']['memory_handoff_id'],
-                   memory_receipt={'method':'exact_id_tool_accept','operation_id':op['operation_id'],'project':str(self.repo),
+                   memory_receipt={'method':'exact_id_tool_accept','operation_id':op['operation_id'],'project':str(self.repo),'memory_scope':op['preparation']['memory_scope'],
                                    'accepted_handoff_id':op['preparation']['memory_handoff_id']})
         return self.tick()
 
@@ -382,7 +383,7 @@ class CleanSessionsTests(unittest.TestCase):
 
     def test_idless_sessionstart_hook_receipt_is_correlated_by_operation_and_preserved(self):
         op=self.to_receipt()
-        evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(self.repo),
+        evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(self.repo),'memory_scope':op['preparation']['memory_scope'],
                   'operation_excerpt':'Saved ai-memory handoff for Clean sessions operation '+op['operation_id']+'; preserve unfinished tasks.'}
         self.reply(self.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
                    memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=evidence)
@@ -402,7 +403,7 @@ class CleanSessionsTests(unittest.TestCase):
                 f=CleanSessionsTests();f.setUp()
                 try:
                     op=f.to_receipt()
-                    evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(f.repo),
+                    evidence={'method':'session_start_hook','operation_id':op['operation_id'],'project':str(f.repo),'memory_scope':op['preparation']['memory_scope'],
                               'operation_excerpt':'Clean sessions '+op['operation_id']}
                     evidence.update(bad)
                     if bad.get('operation_id',1) is None:evidence.pop('operation_id')
@@ -418,7 +419,7 @@ class CleanSessionsTests(unittest.TestCase):
             with self.subTest(evidence=evidence):
                 f=CleanSessionsTests();f.setUp()
                 try:
-                    op=f.to_receipt();value=None if evidence is None else {'operation_id':op['operation_id'],'project':str(f.repo),**evidence}
+                    op=f.to_receipt();value=None if evidence is None else {'operation_id':op['operation_id'],'project':str(f.repo),'memory_scope':op['preparation']['memory_scope'],**evidence}
                     f.reply(f.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
                             memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=value)
                     result=f.tick();self.assertEqual(result['state'],'partial');self.assertNotIn('release',result['effects'])
@@ -442,3 +443,85 @@ class CleanSessionsTests(unittest.TestCase):
             self.assertIn(guidance,message)
         self.assertIn(json.dumps(str(self.repo/'TODO.md')),message)
         self.assertNotIn(str(self.repo/'TODO.md')+':',message)
+
+    def test_preparation_pins_explicit_memory_scope_and_exact_id_list_verification(self):
+        self.op=self.request();message=self.runtime.deliveries[0][1]
+        self.assertEqual(self.op.get('memory_scope'),{'workspace':'default','project':self.repo.name})
+        self.assertIn('memory_handoff_begin with explicit workspace+project',message)
+        self.assertIn('memory_handoff_list with the SAME explicit workspace+project',message)
+        self.assertIn('returned exact handoff ID',message)
+        self.assertIn(json.dumps(self.op['memory_scope'],sort_keys=True),message)
+        self.assertNotIn('Session-aware clients omit scope',message)
+
+    def test_prepared_memory_scope_must_exist_match_and_attest_list_verification(self):
+        for changes in ({'memory_scope':None},{'memory_scope':{'workspace':'default','project':'foreign'}},
+                        {'memory_handoff_list_verified':False}):
+            with self.subTest(changes=changes):
+                f=CleanSessionsTests();f.setUp()
+                try:
+                    f.op=f.request()
+                    value=dict(todo_reconciled=True,memory_handoff_id=str(uuid.uuid4()),summary='Continue',
+                               open_questions=[],unfinished_tasks=[],next_steps=[],references=[],
+                               memory_scope={'workspace':'default','project':f.repo.name},memory_handoff_list_verified=True)
+                    value.update(changes);f.reply(f.old,'prepared',**value);result=f.tick()
+                    self.assertEqual(result['state'],'partial');self.assertIn('scope',result['problem'])
+                    self.assertNotIn('push',result['effects']);self.assertFalse(f.api.calls)
+                finally:f.doCleanups()
+
+    def test_memory_scope_uses_nearest_marker_hosted_upstream_origin_and_local_fallback(self):
+        marker=self.root/'.ai-memory.toml';marker.write_text('workspace="parent"\nproject="parent-project"\n')
+        nearest=self.repo/'.ai-memory.toml';nearest.write_text('workspace="nearest"\nproject="exact-project"\n')
+        self.assertEqual(clean.memory_scope(self.repo),{'workspace':'nearest','project':'exact-project'})
+        nearest.unlink();self.assertEqual(clean.memory_scope(self.repo),{'workspace':'parent','project':'parent-project'});marker.unlink()
+        git(self.repo,'remote','set-url','origin','git@GitHub.com:Owner/Group/Repo.git')
+        self.assertEqual(clean.memory_scope(self.repo),{'workspace':'default','project':'owner-group-repo'})
+        git(self.repo,'remote','add','upstream',str(self.remote))
+        self.assertEqual(clean.memory_scope(self.repo),{'workspace':'default','project':'owner-group-repo'})
+        git(self.repo,'remote','set-url','upstream','ssh://git@code.example:2222/Org/Primary.git')
+        self.assertEqual(clean.memory_scope(self.repo),{'workspace':'default','project':'org-primary'})
+        git(self.repo,'remote','set-url','upstream',self.remote.as_uri());git(self.repo,'remote','set-url','origin',str(self.remote))
+        self.assertEqual(clean.memory_scope(self.repo),{'workspace':'default','project':self.repo.name})
+
+    def test_continuation_uses_saved_scope_verbatim_and_never_rederives_it(self):
+        marker=self.root/'.ai-memory.toml';saved={'workspace':'explicit-workspace','project':'saved-project'}
+        marker.write_text('workspace="explicit-workspace"\nproject="saved-project"\n')
+        self.op=self.request();self.prepared();self.tick();self.tick()
+        marker.write_text('workspace="other"\nproject="unrelated"\n')
+        self.runtime.actors[self.new.session]=asdict(self.new)
+        clean.atomic(clean.folder(self.store,self.op['operation_id'])/'leader-proof.json',{'native':asdict(self.new)})
+        op=self.tick();self.assertEqual(op['stage'],'receipt',op.get('problem'))
+        self.assertEqual(op['preparation']['memory_scope'],saved)
+        context=clean.handoff.read_json(clean.folder(self.store,self.op['operation_id'])/'continuation.json')
+        self.assertEqual(context['context']['memory_scope'],saved)
+        self.assertIn(json.dumps(saved,sort_keys=True),self.runtime.deliveries[-1][1]);self.assertIn('SAME explicit workspace+project',self.runtime.deliveries[-1][1])
+        self.receive();op=clean.load(self.store,self.op['operation_id'])
+        self.assertEqual(op['receiver_receipt']['value']['memory_receipt']['memory_scope'],saved)
+
+    def test_receiver_missing_or_foreign_memory_scope_cannot_release(self):
+        for scope in (None,{}, {'workspace':'default','project':'foreign'}):
+            with self.subTest(scope=scope):
+                f=CleanSessionsTests();f.setUp()
+                try:
+                    op=f.to_receipt()
+                    evidence={'method':'exact_id_tool_accept','operation_id':op['operation_id'],'project':str(f.repo),
+                              'memory_scope':scope,'accepted_handoff_id':op['preparation']['memory_handoff_id']}
+                    f.reply(f.new,'received',checkpoint=op['checkpoint'],handoff_sha256=op['handoff_sha256'],
+                            memory_handoff_id=op['preparation']['memory_handoff_id'],memory_receipt=evidence)
+                    result=f.tick();self.assertEqual(result['state'],'partial');self.assertIn('scope',result['problem']);self.assertNotIn('release',result['effects'])
+                finally:f.doCleanups()
+
+    def test_scope_marker_fallback_when_tomllib_is_unavailable(self):
+        import importlib.util,sys
+        spec=importlib.util.spec_from_file_location('watchdog_app.clean_sessions_py310',clean.__file__)
+        module=importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules,{'tomllib':None}):
+            try:spec.loader.exec_module(module)
+            except ImportError as error:self.fail('Python 3.10 must import Clean sessions without tomllib: '+str(error))
+        marker=self.repo/'.ai-memory.toml'
+        marker.write_text('# scoped marker\nworkspace = "test-workspace" # explicit\nproject = \'literal-project\'\n')
+        self.assertEqual(module.memory_scope(self.repo),{'workspace':'test-workspace','project':'literal-project'})
+        for text in ('workspace="one"\nworkspace="two"\nproject="p"\n',
+                     '[scope]\nworkspace="w"\nproject="p"\n',
+                     'workspace="""multiline"""\nproject="p"\n'):
+            marker.write_text(text)
+            with self.assertRaisesRegex(RuntimeError,'unsupported|ambiguous|Python 3.10'):module.memory_scope(self.repo)

@@ -17,6 +17,11 @@ import shlex
 import subprocess
 import sys
 import time
+try:
+    import tomllib
+except ImportError:  # Python 3.10 remains supported without extra dependencies.
+    tomllib=None
+from urllib.parse import urlsplit
 import uuid
 
 from . import bindings, mission_handoff as handoff
@@ -144,6 +149,64 @@ def reply_instructions(op,kind,fields):
             '\nIf blocked use this same operation/token with kind blocked and a concrete reason: '+PREFIX+json.dumps(blocked))
 
 
+def validate_memory_scope(value):
+    if (not isinstance(value,dict) or set(value)!={'workspace','project'} or
+            any(not isinstance(v,str) or not v or v!=v.strip() or len(v)>128 or
+                not all(c.isprintable() for c in v) for v in value.values())):
+        raise RuntimeError('ai-memory scope needs bounded nonempty workspace and project names')
+    return dict(value)
+
+
+def scope_marker(raw):
+    text=raw.decode('utf-8-sig')
+    if tomllib is not None:return tomllib.loads(text)
+    # Deliberately only the common two top-level strings on Python 3.10.
+    # Reject tables/multiline/duplicate keys instead of guessing TOML context.
+    values={}
+    pattern=r'''(workspace|project)\s*=\s*("(?:[^"\\\r\n]|\\(?:["\\bfnrt]|u[0-9a-fA-F]{4}))*"|'[^'\r\n]*')\s*(?:#.*)?'''
+    for line in text.splitlines():
+        line=line.strip()
+        if not line or line.startswith('#'):continue
+        match=re.fullmatch(pattern,line)
+        if not match or match[1] in values:
+            raise RuntimeError('Python 3.10 scope marker has unsupported or ambiguous TOML; use unique top-level workspace/project strings')
+        values[match[1]]=json.loads(match[2]) if match[2].startswith('"') else match[2][1:-1]
+    return values
+
+
+def memory_scope(repo):
+    """Existing ai-memory routing convention, made explicit for the static MCP."""
+    repo=Path(repo).resolve()
+    for parent in (repo,*repo.parents):
+        marker=parent/'.ai-memory.toml'
+        if not marker.exists():continue
+        if marker.is_symlink():raise RuntimeError('ai-memory scope marker must be a regular file')
+        with marker.open('rb') as stream:raw=stream.read(16385)
+        if len(raw)>16384:raise RuntimeError('ai-memory scope marker exceeds bounds')
+        data=scope_marker(raw)
+        if 'workspace' in data and 'project' in data:
+            return validate_memory_scope({k:data[k] for k in ('workspace','project')})
+        break
+    for remote in ('upstream','origin'):
+        try:url=git(repo,'remote','get-url',remote)
+        except RuntimeError:continue
+        path=None
+        if '://' in url:
+            try:
+                parsed=urlsplit(url)
+                if parsed.scheme in ('https','http','ssh','git') and parsed.hostname:path=parsed.path
+            except ValueError:pass
+        else:
+            match=re.fullmatch(r'(?:[^/@:]+@)?([^/:]{2,}):([^\\]+)',url)
+            if match:path=match[2]
+        if not path:continue  # Local filesystem/bare remotes are not hosted identity.
+        path=path.strip('/').lower()
+        if path.endswith('.git'):path=path[:-4]
+        project=re.sub('-+','-',''.join(c if c.isalnum() or c in '-_.' else '-' for c in path)).strip('-')
+        if project:return validate_memory_scope({'workspace':'default','project':project})
+    return validate_memory_scope({'workspace':'default','project':repo.name.lower()})
+
+
 def request(session,policy,*,confirmed=False,store=None):
     if not confirmed:raise RuntimeError('Explicit cleanup confirmation is required')
     store=store or Store();session.verify()
@@ -162,7 +225,7 @@ def request(session,policy,*,confirmed=False,store=None):
         native_boundary(store,session.repo)
         approved=policy_for(session,policy)
         op={'version':1,'operation_id':str(uuid.uuid4()),'repo':str(session.repo),'binding_file':str(session.file),
-            'source':asdict(session.binding),'base_sha':git(session.repo,'rev-parse','HEAD'),'policy':approved,
+            'source':asdict(session.binding),'memory_scope':memory_scope(session.repo),'base_sha':git(session.repo,'rev-parse','HEAD'),'policy':approved,
             'state':'pending','stage':'preparation','effects':{},'created':time.time(),
             'boot_id':__import__('watchdog_app.mission_native',fromlist=['boot_id']).boot_id(),
             'tokens':{k:str(uuid.uuid4()) for k in ('prepared','received','released')},
@@ -175,13 +238,14 @@ def request(session,policy,*,confirmed=False,store=None):
             'Do NOT commit, merge or push yourself: the backend performs only the exact authorized Git plan below after your reply. '
             'Do not create actors or close panes. Wait for the later explicit release request.\n'
             'Authorized Git/startup scope: '+json.dumps(approved)+'\n'
-            'Call the ACTUAL ai-memory MCP tool memory_handoff_begin now, using summary (2–3 sentences), open_questions (short strings), next_steps (unfinished tasks and next actions), and files_touched (owned file hints). Include this operation ID in the summary and bounded evidence paths in next_steps. Keep sharing at its existing operator default. Session-aware clients omit scope for this repo; static clients pass workspace+project from .ai-memory.toml or the normalized upstream/origin identity, never the last active project. '
+            'Call the ACTUAL ai-memory MCP tool memory_handoff_begin with explicit workspace+project '+json.dumps(op['memory_scope'],sort_keys=True)+', plus summary (2–3 sentences), open_questions (short strings), next_steps (unfinished tasks/next actions) and files_touched. Include this operation UUID in the saved summary. Immediately call the read-only memory_handoff_list with the SAME explicit workspace+project and verify the returned exact handoff ID is present in that scope. Only then attest memory_handoff_list_verified=true and copy this exact memory_scope in the prepared reply. These are your attestations of actual MCP responses, not an independent service audit. Never omit scope, guess whether this client is session-aware, or use the server current/last active project. Keep operator sharing default; if explicit-scope verification fails, report blocked. '
             'If ai-memory or preparation is unavailable, report kind blocked with reason instead; do not invent a handoff ID. '
             'For references, supply at most 8 existing ABSOLUTE regular-file paths: no :line/#line citations, no directories, no duplicate references. Verify each path first; use [] if no verified paths are available. Exact absolute file-path example for this project: '+json.dumps(str(session.repo/'TODO.md'))+'. Do not append a line number or fragment. '
             'No full transcripts. This is a project baton transfer; legacy runs remain historical export-only. '
             'The backend commits authorized owned files, fast-forwards only listed pinned branches, pushes to the explicit destination, verifies a checkpoint, and opens a fresh dedicated leader. '
             'You remain leader until actual successor receipt and your explicit release.\n'
-            +reply_instructions(op,'prepared',{'todo_reconciled':True,'memory_handoff_id':'ACTUAL_ID','summary':'Concise continuation',
+            +reply_instructions(op,'prepared',{'todo_reconciled':True,'memory_handoff_id':'ACTUAL_ID','memory_scope':op['memory_scope'],
+                'memory_handoff_list_verified':True,'summary':'Concise continuation',
                 'open_questions':[],'unfinished_tasks':[],'next_steps':[],'references':[]}))
         try:queue(store,op,'prepare',session.binding,prompt)
         except Exception as error:op.update(state='partial',problem='Preparation delivery uncertain: '+str(error));save(store,op)
@@ -275,6 +339,9 @@ def prepare_checkpoint(store,op,receipt):
     v=receipt['value']
     if not v.get('memory_handoff_id') or v['memory_handoff_id']=='ACTUAL_ID':
         raise RuntimeError('ai-memory handoff unavailable; memory was not transferred')
+    scope=validate_memory_scope(v.get('memory_scope'))
+    if scope!=op['memory_scope'] or v.get('memory_handoff_list_verified') is not True:
+        raise RuntimeError('ai-memory scope must match the explicit request and have exact-ID list verification attested')
     if v.get('todo_reconciled') is not True:raise RuntimeError('Leader has not attested honest TODO reconciliation')
     for key in ('summary','memory_handoff_id'):
         if not isinstance(v.get(key),str) or not v[key].strip() or len(v[key])>1000:raise RuntimeError('Bounded '+key+' required')
@@ -290,7 +357,7 @@ def prepare_checkpoint(store,op,receipt):
     for name in changed:
         p=repo/name
         if p.is_symlink() or not p.resolve().is_relative_to(repo):raise RuntimeError('Owned file path was replaced')
-    op['preparation']={k:v[k] for k in ('summary','memory_handoff_id','open_questions','unfinished_tasks','next_steps')}
+    op['preparation']={k:v[k] for k in ('summary','memory_handoff_id','memory_scope','memory_handoff_list_verified','open_questions','unfinished_tasks','next_steps')}
     op['preparation_receipt']=receipt;save(store,op)
     if changed:
         effect(store,op,'stage-owned',lambda:git(repo,'--literal-pathspecs','add','--',*sorted(changed)))
@@ -394,7 +461,9 @@ def validate_memory_receipt(op,value):
     if not isinstance(evidence,dict):raise RuntimeError('Explicit ai-memory receipt evidence is required')
     if evidence.get('operation_id')!=op['operation_id'] or evidence.get('project')!=op['repo']:
         raise RuntimeError('ai-memory receipt operation/project does not match continuation')
-    common={'method','operation_id','project'}
+    if validate_memory_scope(evidence.get('memory_scope'))!=op['preparation']['memory_scope']:
+        raise RuntimeError('ai-memory receipt scope differs from the saved predecessor scope')
+    common={'method','operation_id','project','memory_scope'}
     if evidence.get('method')=='session_start_hook':
         excerpt=evidence.get('operation_excerpt')
         if (set(evidence)!=common|{'operation_excerpt'} or not isinstance(excerpt,str) or
@@ -432,11 +501,12 @@ def advance(store,identity,*,api=None):
                     if handoff.digest(context)!=op['handoff_sha256']:raise RuntimeError('Bounded continuation was modified')
                     prompt=('Clean sessions continuation. Read this bounded context as evidence, preserve unfinished work and all existing actors. '
                         'Confirm actual ai-memory handoff receipt using its existing single-use convention. If already-consumed SessionStart hook content includes THIS unique operation UUID and matches the project/bounded continuation below, use that hook content even if it does not display the handoff ID. Do NOT call list/accept again to rediscover an already-consumed matching hook handoff. Set memory_receipt.method=session_start_hook and quote a short verbatim operation_excerpt from the hook containing this operation UUID; include the matching operation_id and project. The top-level memory_handoff_id is the supplied verified predecessor reference, NOT a claim that the hook displayed that ID or that a tool accept happened. '
-                        'Only if no matching hook content exists, call the ACTUAL ai-memory MCP memory_handoff_list in this same project/operator scope and then memory_handoff_accept(handoff_id=the exact supplied ID) if that ID is open. After a successful actual tool acceptance, REPLACE memory_receipt with '+json.dumps({'method':'exact_id_tool_accept','operation_id':identity,'project':op['repo'],'accepted_handoff_id':op['preparation']['memory_handoff_id']})+'. Do not accept another latest handoff or invent service success. If neither matching hook operation content nor exact-ID tool acceptance is available, report blocked. '
+                        'Use the saved explicit memory_scope verbatim: '+json.dumps(op['preparation']['memory_scope'],sort_keys=True)+'. Never derive another scope or rely on server defaults. Only if no matching hook content exists, call the ACTUAL ai-memory MCP memory_handoff_list with those explicit workspace+project arguments, then memory_handoff_accept with those SAME explicit workspace+project and handoff_id=the exact supplied ID if open. After actual tool acceptance, REPLACE memory_receipt with '+json.dumps({'method':'exact_id_tool_accept','operation_id':identity,'project':op['repo'],'memory_scope':op['preparation']['memory_scope'],'accepted_handoff_id':op['preparation']['memory_handoff_id']})+'. Do not accept another latest handoff or invent service success. If neither matching hook operation content nor exact-ID tool acceptance is available, report blocked. '
                         'Reply kind blocked if unavailable. Remain waiting; you must not coordinate until predecessor release and Watchdog binding transfer.\n'
                         +json.dumps(context)+'\n'+reply_instructions(op,'received',{'checkpoint':op['checkpoint'],'handoff_sha256':op['handoff_sha256'],
                             'memory_handoff_id':op['preparation']['memory_handoff_id'],
                             'memory_receipt':{'method':'session_start_hook','operation_id':identity,'project':op['repo'],
+                                'memory_scope':op['preparation']['memory_scope'],
                                 'operation_excerpt':'REPLACE with verbatim SessionStart hook content containing this operation UUID'}}))
                     queue(store,op,'continuation',target,prompt);op['stage']='receipt';save(store,op)
             elif stage=='receipt':
