@@ -13,6 +13,7 @@ from .actions import Session
 from .herdr import Herdr
 from .store import atomic
 from .todo import Snapshot
+from .mission_scope import resolve
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,8 +99,7 @@ def validate_brief(run, brief):
 
 
 def source_current(run):
-    if Snapshot.read(run['repo']).digest != run['source_digest']:
-        raise RuntimeError('Task list changed; request a fresh contract')
+    resolve(run)
 
 
 def owned_worktree(run, role):
@@ -121,9 +121,9 @@ def owned_worktree(run, role):
 
 def clean_base(run, brief):
     snapshot = Snapshot.read(run['repo'])
-    if snapshot.digest != run['source_digest']:
-        raise RuntimeError('Task list changed; request a fresh contract')
-    snapshot.selected(run['tasks'])
+    resolve(run, snapshot)
+    if 'scope' not in run:
+        snapshot.selected(run['tasks'])
     if git(run['repo'], 'status', '--porcelain'):
         raise RuntimeError('Launch requires a clean committed repository')
     if git(run['repo'], 'rev-parse', 'HEAD') != brief['base_sha']:
@@ -325,6 +325,7 @@ def open_run(run, api=None):
 
 def participant(store, identity, role):
     run = store.load(identity);part = run['participants'][role]
+    source_current(run)
     pane = run['resources'][role]
     if os.environ.get('HERDR_PANE_ID') != pane['pane_id']:
         raise RuntimeError('Participant started in the wrong pane')

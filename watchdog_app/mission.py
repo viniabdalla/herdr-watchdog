@@ -9,6 +9,7 @@ import uuid
 
 from .store import atomic, state_root
 from .todo import locked
+from .mission_scope import capture, overlaps
 
 LABELS = {'ready': 'Ready to start', 'working': 'Working', 'blocked': 'Needs help',
           'review': 'Checking the result', 'done': 'Done', 'unavailable': 'Unavailable'}
@@ -60,20 +61,22 @@ def request(session, snapshot, ids, *, confirmed=False, store=None):
     with locked(snapshot.repo):
         snapshot.assert_current()
         tasks = snapshot.selected(ids)
+        scope = capture(snapshot, tasks)
         session.verify()
         if session.binding.kind != 'codex':
             raise RuntimeError('Orchestrate needs an exact Codex thread')
         for previous in store.list(snapshot.repo):
-            if previous['phase'] != 'done' and set(previous['tasks']) & set(ids):
+            if previous['phase'] != 'done' and overlaps(previous, scope, tasks):
                 raise RuntimeError('These tasks already have a run: ' + previous['id'] + '. Inspect Progress.')
         now = time.time()
         from .mission_native import boot_id
         run = {'transport': {'kind':'native','boot_id':boot_id()}, 'version': 1, 'id': str(uuid.uuid4()), 'repo': str(snapshot.repo),
                'created': now, 'main': asdict(session.binding), 'binding_file': str(session.file.resolve()),
-               'source_digest': snapshot.digest, 'phase': 'requested', 'request_delivery': 'sending',
+               'source_digest': snapshot.digest, 'scope': scope, 'phase': 'requested', 'request_delivery': 'sending',
                'participants': {}, 'resources': {}, 'events': {}, 'cursor': 0, 'candidate': None, 'qa': None,
                'tasks': {t.id: {'title': t.text, 'state': 'ready', 'agent': 'main', 'updated': now,
                                 'summary': 'Waiting for the main conversation to prepare the brief'} for t in tasks}}
+        snapshot.assert_current()
         store.save(run)
         message = (f"Watchdog Mission Control run {run['id']} was explicitly confirmed.\n"
                    f"Project: {run['repo']}\nMain: {session.binding.session}\n"

@@ -102,6 +102,14 @@ exact Codex thread. Send keeps its existing current-conversation behavior. The
 main prepares the task contracts; the launcher does not invent a plan. Neither
 requesting work nor approving a run edits TODO.md.
 
+New requests pin versioned selected task blocks and sections. After a clean
+launch, unrelated TODO edits and new ideas may shift rows without blocking the
+run; selected content, notes, completion and section changes require a new
+contract. Ambiguous duplicate blocks are rejected. Recorded task IDs and exact
+candidate QA remain pinned. Existing runs retain whole-TODO digest validation
+and are never migrated. See [selected run scope](docs/mission-control.md#selected-scope-for-new-runs)
+for compatibility, strict matching and Git boundary details.
+
 Progress now reads the run ledger: **Ready to start** (blue), **Working** (yellow),
 **Needs help** (red), **Checking the result** (purple), **Done** (green), and
 **Unavailable** when contact cannot be verified. It shows task, agent, last update,
