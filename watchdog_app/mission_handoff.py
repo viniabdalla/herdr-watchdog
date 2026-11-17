@@ -5,6 +5,7 @@ export/preview seals live in Watchdog-owned state. Ownership and consumption are
 one atomic RunStore update; no panel, binding file, actor or queue is changed.
 """
 from collections import Counter
+from contextlib import contextmanager
 import copy
 import fcntl
 from dataclasses import asdict
@@ -274,6 +275,9 @@ def validate(store,identity,file,binding_file):
     if any(live.get('agent_status') not in ('idle','done') for live in (old_live,new_live)):
         raise RuntimeError('Both old and new main must be idle at the explicit host adoption boundary')
     if reference(binding_file)!=target_ref:raise RuntimeError('New binding source changed during verification')
+    with session_leases(store,run,[run['main'],asdict(new.binding)]) as slots:
+        reserve_current_main(run,slots)
+        fresh_main(run,asdict(new.binding),slots)
     return run,value,old,new,target_ref
 
 
@@ -300,30 +304,35 @@ def adopt(store,identity,file,binding_file,offer_id,*,confirmed=False):
                 offer['old_main']!=asdict(old.binding) or offer['capsule_sha256']!=digest(value) or
                 offer['snapshot_sha256']!=snapshot(run) or offer['leader_generation']!=run.get('leader_generation',0)):
             raise RuntimeError('Preview target/source or snapshot changed; preview the explicit target again')
-        if any(session.verify().get('agent_status') not in ('idle','done') for session in (old,new)):
-            raise RuntimeError('Native main became busy; wait for an idle adoption boundary')
-        for role in run['participants']:native.verify_participant(run,role)
-        if git_identity(run['repo'])!=value['project_git'] or owned_git(run)!=value['owned_git']:
-            raise RuntimeError('Git identity/head changed before ownership commit')
-        source_current(run)
-        if reference(binding_file)!=target_ref or reference(run['binding_file'])!=value['binding_source']:
-            raise RuntimeError('Native binding source changed before ownership commit')
-        if min(value['expires'],offer['expires'])<time.time():
-            raise RuntimeError('Handoff capsule or preview offer expired during verification')
-        generation=run.get('leader_generation',0)+1
-        history={'handoff_id':value['handoff_id'],'offer_id':offer_id,'at':time.time(),
-            'from':run['main'],'from_binding_file':run['binding_file'],
-            'to':asdict(new.binding),'to_binding_file':target_ref['path'],'generation':generation,
-            'capsule_sha256':digest(value),'snapshot_sha256':value['snapshot_sha256']}
-        run.update(main=asdict(new.binding),binding_file=target_ref['path'],leader_generation=generation)
-        run.setdefault('leader_handoffs',[]).append(history)
-        store.save(run)  # Ownership and single-use consumption are the same atomic record.
-        with store.path(identity).open('rb') as stream:os.fsync(stream.fileno())
-        fd=os.open(store.root,os.O_RDONLY|os.O_DIRECTORY)
-        try:os.fsync(fd)
-        finally:os.close(fd)
-        return {'run_id':identity,'handoff_id':value['handoff_id'],'offer_id':offer_id,
-                'main':run['main'],'leader_generation':generation,'adopted':True}
+        with session_leases(store,run,[run['main'],asdict(new.binding)]) as slots:
+            reserve_current_main(run,slots)
+            fresh_main(run,asdict(new.binding),slots)
+            if any(session.verify().get('agent_status') not in ('idle','done') for session in (old,new)):
+                raise RuntimeError('Native main became busy; wait for an idle adoption boundary')
+            for role in run['participants']:native.verify_participant(run,role)
+            if git_identity(run['repo'])!=value['project_git'] or owned_git(run)!=value['owned_git']:
+                raise RuntimeError('Git identity/head changed before ownership commit')
+            source_current(run)
+            if reference(binding_file)!=target_ref or reference(run['binding_file'])!=value['binding_source']:
+                raise RuntimeError('Native binding source changed before ownership commit')
+            if min(value['expires'],offer['expires'])<time.time():
+                raise RuntimeError('Handoff capsule or preview offer expired during verification')
+            fresh_main(run,asdict(new.binding),slots)
+            write_claim(slots,asdict(new.binding),main_claim(run))
+            generation=run.get('leader_generation',0)+1
+            history={'handoff_id':value['handoff_id'],'offer_id':offer_id,'at':time.time(),
+                'from':run['main'],'from_binding_file':run['binding_file'],
+                'to':asdict(new.binding),'to_binding_file':target_ref['path'],'generation':generation,
+                'capsule_sha256':digest(value),'snapshot_sha256':value['snapshot_sha256']}
+            run.update(main=asdict(new.binding),binding_file=target_ref['path'],leader_generation=generation)
+            run.setdefault('leader_handoffs',[]).append(history)
+            store.save(run)  # Ownership and single-use consumption are the same atomic record.
+            with store.path(identity).open('rb') as stream:os.fsync(stream.fileno())
+            fd=os.open(store.root,os.O_RDONLY|os.O_DIRECTORY)
+            try:os.fsync(fd)
+            finally:os.close(fd)
+            return {'run_id':identity,'handoff_id':value['handoff_id'],'offer_id':offer_id,
+                    'main':run['main'],'leader_generation':generation,'adopted':True}
 
 
 def registry_path(store,run):
@@ -338,7 +347,7 @@ def registry_path(store,run):
 
 
 def session_rules(store,run):
-    return {'version':1,'executor':'one task per conversation','qa':'one review per conversation',
+    return {'version':2,'main':'fresh conversation; lifetime main purpose; no prior leaders or role usage','executor':'one task per conversation','qa':'one review per conversation',
         'probe':'dedicated disposable conversation; never a real-task executor',
         'next_base':'preceding accepted commit; clean owned worktree and exact existing Git checks',
         'provisioning':'Main supplies new verified conversations; no automatic actors or full transcript transfer',
@@ -361,30 +370,87 @@ def claim_session(store,run,role,scope,base_sha,*,purpose=None):
             registry_path(store,run).is_relative_to(store.root.resolve())):
         raise RuntimeError('Probe requires an explicit shared session-policy registry, not an isolated history bypass')
     actor=run['participants'][role]['native']
-    root=registry_path(store,run);root.mkdir(parents=True,exist_ok=True,mode=0o700)
-    key=hashlib.sha256((actor['account']+'\0'+actor['session']).encode()).hexdigest()
-    fd=os.open(root/(key+'.lock'),os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
-    try:
-        try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError as error:raise RuntimeError('Session-policy claim is busy; no assignment was sent') from error
-        path=root/(key+'.json')
-        previous=read_json(path,16384) if path.exists() else None
+    with session_leases(store,run,[run['main'],actor]) as slots:
+        reserve_current_main(run,slots)
+        if any(same_session(actor,leader) for leader in leaders(run)):
+            raise RuntimeError('Known main/leader conversation cannot change purpose; supply a fresh conversation')
+        previous=slots[session_key(actor)]['claim']
         current={'purpose':purpose,'scope':scope,'run_id':run['id'],'project':str(Path(run['repo']).resolve())}
-        # Recognize pre-policy assignments in this run as well; do not silently
-        # grandfather an executor or QA into unrelated new work after upgrade.
-        known=[]
-        if previous:known.append(previous)
-        for record in run.get('deliveries',{}).values():
-            recipient=record.get('recipient',{})
-            if (recipient.get('account'),recipient.get('session'))!=(actor['account'],actor['session']):continue
-            payload=record.get('payload',{})
-            kind='qa' if record.get('role')=='qa' else payload.get('purpose','implementation')
-            known.append({'purpose':kind,'scope':payload.get('review_id') if kind=='qa' else payload.get('task_id'),
-                          'run_id':run['id'],'project':str(Path(run['repo']).resolve())})
+        known=delivery_claims(run,actor)
+        if previous is not None:known.append(previous)
         if any(any(entry.get(k)!=v for k,v in current.items()) for entry in known):
             raise RuntimeError('Conversation already reserved/used for another task, review or purpose; main must supply a fresh conversation')
-        if previous is None:
-            atomic(path,{**current,'account':actor['account'],'session':actor['session'],
-                         'base_sha':base_sha,'native':native_identity(actor),'created':time.time()})
+        if previous is None:write_claim(slots,actor,{**current,'base_sha':base_sha})
         return session_rules(store,run)
+
+
+def session_key(actor):
+    return hashlib.sha256((actor['account']+'\0'+actor['session']).encode()).hexdigest()
+
+
+def same_session(left,right):
+    return (left.get('account'),left.get('session'))==(right.get('account'),right.get('session'))
+
+
+def leaders(run):
+    return [run['main'],*[h[side] for h in run.get('leader_handoffs',[]) for side in ('from','to')]]
+
+
+def delivery_claims(run,actor):
+    known=[]
+    for record in run.get('deliveries',{}).values():
+        if not same_session(record.get('recipient',{}),actor):continue
+        payload=record.get('payload',{})
+        kind='qa' if record.get('role')=='qa' else payload.get('purpose','implementation')
+        known.append({'purpose':kind,'scope':payload.get('review_id') if kind=='qa' else payload.get('task_id'),
+                      'run_id':run['id'],'project':str(Path(run['repo']).resolve())})
+    return known
+
+
+@contextmanager
+def session_leases(store,run,actors):
+    """Serialize role claims and ownership commits across shared RunStores."""
+    root=registry_path(store,run);root.mkdir(parents=True,exist_ok=True,mode=0o700)
+    fds=[];slots={}
+    try:
+        for key in sorted({session_key(actor) for actor in actors}):
+            fd=os.open(root/(key+'.lock'),os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600);fds.append(fd)
+            try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError as error:raise RuntimeError('Session-policy reservation is busy; no assignment or adoption committed') from error
+            path=root/(key+'.json')
+            slots[key]={'path':path,'claim':read_json(path,16384) if path.exists() else None}
+        yield slots
+    finally:
+        for fd in reversed(fds):os.close(fd)
+
+
+def write_claim(slots,actor,claim):
+    slot=slots[session_key(actor)]
+    value={**claim,'account':actor['account'],'session':actor['session'],
+           'native':native_identity(actor),'created':time.time()}
+    atomic(slot['path'],value)
+    # A crash must not leave a committed owner without its purpose reservation.
+    with slot['path'].open('rb') as stream:os.fsync(stream.fileno())
+    fd=os.open(slot['path'].parent,os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(fd)
     finally:os.close(fd)
+    slot['claim']=value
+
+
+def main_claim(run):
+    return {'purpose':'main','project':str(Path(run['repo']).resolve()),'run_id':run['id']}
+
+
+def reserve_current_main(run,slots):
+    actor=run['main'];previous=slots[session_key(actor)]['claim']
+    if delivery_claims(run,actor) or (previous is not None and
+            (previous.get('purpose')!='main' or previous.get('project')!=main_claim(run)['project'])):
+        raise RuntimeError('Current main has incompatible prior purpose history; inspect ownership and supply a fresh conversation')
+    if previous is None:write_claim(slots,actor,main_claim(run))
+
+
+def fresh_main(run,actor,slots):
+    if any(same_session(actor,leader) for leader in leaders(run)):
+        raise RuntimeError('Known prior leader history requires a fresh main conversation')
+    if delivery_claims(run,actor) or slots[session_key(actor)]['claim'] is not None:
+        raise RuntimeError('Main target has prior purpose history or a reservation; supply a fresh conversation')

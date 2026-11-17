@@ -368,3 +368,118 @@ class HandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'role|purpose'):
             transport.dispatch(self.store,self.identity,self.fixture.task)
         self.assertFalse(self.queues)
+
+    def claim_path(self,binding,run=None):
+        import hashlib
+        run=run or self.store.load(self.identity)
+        key=hashlib.sha256((binding.account+'\0'+binding.session).encode()).hexdigest()
+        return handoff.registry_path(self.store,run)/(key+'.json')
+
+    def test_replaced_completed_qa_history_rejects_main_even_without_its_claim_file(self):
+        run=self.store.load(self.identity);run['participants']['qa']['native']=asdict(self.new)
+        run['resources']['qa'].update(pane_id=self.new.pane,terminal_id=self.new.terminal);self.store.save(run)
+        reviewed=self.fixture._single_task_review();self.fixture.record(self.fixture._qa_report(reviewed),'qa')
+        run=self.store.load(self.identity);fresh=self.fresh_actor('qa',run)
+        fresh.pane='replacement-qa';fresh.terminal='replacement-qa-terminal'
+        self.registry[fresh.session]=asdict(fresh);run['participants']['qa']['native']=asdict(fresh)
+        run['resources']['qa'].update(pane_id=fresh.pane,terminal_id=fresh.terminal);self.store.save(run)
+        path=self.claim_path(self.new);self.assertTrue(path.exists());path.unlink()  # pre-registry retained history
+        self.export()
+        with self.assertRaisesRegex(RuntimeError,'history|purpose|fresh'):self.preview()
+        self.assertEqual(self.store.load(self.identity)['qa']['verdict'],'pass')
+        self.assertEqual(self.store.load(self.identity)['main'],asdict(self.old))
+
+    def test_prior_qa_claim_between_preview_and_commit_blocks_adoption_and_new_preview(self):
+        self.export();offer=self.preview()
+        other=copy.deepcopy(self.store.load(self.identity));other['participants']['qa']['native']=asdict(self.new)
+        handoff.claim_session(self.store,other,'qa','another-review',self.fixture.base)
+        with self.assertRaisesRegex(RuntimeError,'purpose|claim|fresh'):self.adopt(offer,confirmed=True)
+        with self.assertRaisesRegex(RuntimeError,'purpose|claim|fresh'):self.preview()
+        self.assertEqual(self.store.load(self.identity)['main'],asdict(self.old))
+
+    def test_A_to_B_to_A_is_rejected_by_retained_leader_history(self):
+        self.export();self.adopt(self.preview(),confirmed=True)
+        path=self.claim_path(self.old)
+        if path.exists():path.unlink()  # prove the authoritative ownership audit is checked too
+        self.export()
+        with self.assertRaisesRegex(RuntimeError,'leader|history|fresh'):
+            handoff.preview(self.store,self.identity,self.capsule_file,self.old_file)
+        run=self.store.load(self.identity);self.assertEqual(run['main'],asdict(self.new))
+        self.assertEqual(run['leader_generation'],1)
+
+    def assert_main_purpose_not_reused(self,purpose):
+        from watchdog_app.mission import RunStore
+        self.export();self.adopt(self.preview(),confirmed=True)
+        other=copy.deepcopy(self.store.load(self.identity));other['id']=str(uuid.uuid4())
+        other['leader_handoffs']=[];other['deliveries']={}
+        distinct=copy.deepcopy(self.old);distinct.session=str(uuid.uuid4());distinct.pid+=5000
+        other['main']=asdict(distinct)
+        role='qa' if purpose=='qa' else 'worker'
+        other['participants'][role].update(native=asdict(self.new),purpose=purpose)
+        other['session_policy']={'registry_dir':str(self.store.root/'session-policy')}
+        store=RunStore(self.folder/('repurpose-'+purpose))
+        with self.assertRaisesRegex(RuntimeError,'main|purpose|fresh|conversation'):
+            handoff.claim_session(store,other,role,str(uuid.uuid4()),self.fixture.base,purpose=purpose)
+        self.assertEqual(json.loads(self.claim_path(self.new).read_text())['purpose'],'main')
+
+    def test_adopted_main_cannot_become_worker_in_shared_registry(self):
+        self.assert_main_purpose_not_reused('implementation')
+
+    def test_adopted_main_cannot_become_qa_in_shared_registry(self):
+        self.assert_main_purpose_not_reused('qa')
+
+    def test_adopted_main_cannot_become_probe_in_shared_registry(self):
+        self.assert_main_purpose_not_reused('probe')
+
+    def test_final_main_reservation_locks_out_a_competing_role_claim(self):
+        self.export();offer=self.preview();verify=Session.verify;calls=[0]
+        competing=copy.deepcopy(self.store.load(self.identity));competing['participants']['qa']['native']=asdict(self.new)
+        def race(session):
+            live=verify(session)
+            if session.binding.session==self.new.session:
+                calls[0]+=1
+                if calls[0]==3:
+                    with self.assertRaisesRegex(RuntimeError,'busy|reserved|main'):
+                        handoff.claim_session(self.store,competing,'qa','racing-review',self.fixture.base)
+            return live
+        with patch.object(Session,'verify',race):self.adopt(offer,confirmed=True)
+        self.assertEqual(calls[0],3)
+        self.assertEqual(self.store.load(self.identity)['main'],asdict(self.new))
+        self.assertEqual(json.loads(self.claim_path(self.new).read_text())['purpose'],'main')
+
+    def test_precommit_crash_reserves_main_and_fails_closed_without_owner_change(self):
+        self.export();offer=self.preview()
+        with patch.object(self.store,'save',side_effect=SystemExit('before ownership save')):
+            with self.assertRaises(SystemExit):self.adopt(offer,confirmed=True)
+        self.assertEqual(self.store.load(self.identity)['main'],asdict(self.old))
+        self.assertEqual(json.loads(self.claim_path(self.new).read_text())['purpose'],'main')
+        with self.assertRaisesRegex(RuntimeError,'reserved|main|purpose|fresh'):self.adopt(offer,confirmed=True)
+
+    def test_current_main_is_reserved_before_task_delivery_and_cannot_change_purpose(self):
+        transport.dispatch(self.store,self.identity,self.fixture.task)
+        self.assertEqual(json.loads(self.claim_path(self.old).read_text())['purpose'],'main')
+        other=copy.deepcopy(self.store.load(self.identity));other['participants']['qa']['native']=asdict(self.old)
+        with self.assertRaisesRegex(RuntimeError,'main|leader|purpose|fresh'):
+            handoff.claim_session(self.store,other,'qa','illegal-main-review',self.fixture.base)
+
+
+    def test_worker_and_probe_registry_claims_reject_main_before_offer(self):
+        for purpose in ('implementation','probe'):
+            with self.subTest(purpose=purpose):
+                other=copy.deepcopy(self.store.load(self.identity))
+                other['participants']['worker'].update(native=asdict(self.new),purpose=purpose)
+                # Explicit canonical registry is outside this fixture's isolated store.
+                from watchdog_app.mission import RunStore
+                separate=RunStore(self.folder/('prior-'+purpose))
+                other['session_policy']={'registry_dir':str(self.store.root/'session-policy')}
+                handoff.claim_session(separate,other,'worker','prior-task',self.fixture.base,purpose=purpose)
+                self.export()
+                with self.assertRaisesRegex(RuntimeError,'purpose|fresh'):self.preview()
+                self.claim_path(self.new).unlink()  # independent fixture subcase
+
+    def test_old_session_policy_version_cannot_be_resealed_into_current_adoption(self):
+        value=self.export();value['session_policy']['version']=1
+        handoff.atomic(self.capsule_file,value)
+        seal=handoff.record_path(self.store,self.identity,value['handoff_id'])
+        record=json.loads(seal.read_text());record['capsule_sha256']=handoff.digest(value);handoff.atomic(seal,record)
+        with self.assertRaisesRegex(RuntimeError,'policy.*stale'):self.preview()

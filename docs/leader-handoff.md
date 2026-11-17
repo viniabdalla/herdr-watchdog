@@ -68,8 +68,8 @@ python3 /absolute/controller/watchdog mission handoff-adopt \
   --binding-file /explicit/new-main-binding.json --offer OFFER_UUID --confirm
 ```
 
-Preview checks live identities and writes only a private offer, not run
-ownership. Confirmation must name that exact target file and offer. Capsule
+Preview checks live identities, reserves the known current main’s purpose,
+and writes a private offer without changing run ownership. Confirmation must name that exact target file and offer. Capsule
 content, source snapshot, target file bytes and full native identity must match
 the issued records. Export seals expire after 15 minutes; preview offers expire
 after at most five minutes. Modified, expired, stale, consumed or mismatched
@@ -197,3 +197,30 @@ verified participant has not been supplied, dispatch/review blocks with a reason
 The original whole-selected-task gate is unchanged; later Run scope work remains
 separate. Tests exercise these policies in isolated fixtures with new logical
 bindings only; no real executor, QA or disposable probe actor was created here.
+
+
+## Main purpose and interrupted reservations
+
+Preview and final adoption reject any target with a shared registry claim,
+retained current-run worker/QA/probe delivery, or retained leader identity.
+Rotating a participant does not erase its history. A → B → A is refused;
+supply a fresh conversation C. Both the initial main (before assignment) and
+adopted mains receive a lifetime `main` purpose claim. They cannot later become
+executors, QA or probes in any run sharing the canonical registry.
+
+Role claims and adoption acquire the same per-conversation nonblocking locks
+in deterministic order. Final adoption holds those locks through its native,
+Git and expiry rechecks, durable target reservation and atomic ownership save.
+A role claim arriving after preview therefore blocks adoption; one arriving
+during the final boundary receives busy and sends nothing. No transcript is
+read to make these decisions. Version 2 session rules invalidate older capsules.
+
+The target main reservation is durably written **before** ownership is saved.
+A crash before that save leaves the old owner intact and the target reserved;
+a reservation alone never proves adoption. Inspect the canonical run’s main,
+generation and leader history, then supply another fresh target. Do not delete
+claims or automatically retry with the reserved conversation. A crash after the
+ownership save leaves the new owner and consumed transfer recorded; the same
+offer cannot execute twice. This deliberately fails closed instead of rolling
+back a lifetime purpose claim after an uncertain crash. The initial main’s
+reservation is also kept if a subsequent assignment is rejected.
