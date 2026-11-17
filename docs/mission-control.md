@@ -104,6 +104,9 @@ version. New worker evidence invalidates that review, including delayed passes
 for the same candidate. Before QA starts, every returned commit must be present
 in the candidate or have an equivalent cherry-picked patch. Earlier QA cannot
 approve a later result or candidate.
+The QA assignment always includes the approved `base_sha` and exact candidate.
+Main may add `--text 'Review context'` to `mission review`; that context is saved
+in the review contract and delivered to QA without changing the task file scope.
 
 ```sh
 watchdog mission approve --run RUN_UUID --candidate FULL_INTEGRATED_SHA --confirm

@@ -321,7 +321,7 @@ def verify_result_commits(run, candidate):
                 raise RuntimeError('Candidate does not contain worker result commit ' + sha)
 
 
-def review(store, identity, candidate):
+def review(store, identity, candidate, context=None):
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run);verify_participant(run,'qa')
         owned_worktree(run,'qa')
@@ -341,9 +341,11 @@ def review(store, identity, candidate):
         git(part['worktree'],'checkout','--detach',candidate)
         run['candidate']=candidate;run['qa']=None;run['qa_finished']=False;run['qa_delivery']='sending'
         run['review_contract']={'id':str(uuid.uuid4()),'candidate':candidate,
+            'base_sha':run['brief']['base_sha'],'context':context,
             'version':run.get('result_version',0),'verified_commits':True}
         store.save(run)
-        text=json.dumps({'run_id':identity,'review_id':run['review_contract']['id'],'candidate':candidate,'repo':run['repo'],'worktree':part['worktree'],
+        text=json.dumps({'run_id':identity,'review_id':run['review_contract']['id'],'candidate':candidate,
+            'base_sha':run['brief']['base_sha'],'context':context,'repo':run['repo'],'worktree':part['worktree'],
             'tasks':run['brief']['tasks'],'results':{k:t['result'] for k,t in run['tasks'].items()},
             'instructions':'Review the complete integrated candidate at exactly this SHA. Do not write source. '
                 'Use owned wd-test resources only. Return reproducible findings and independent evidence.',

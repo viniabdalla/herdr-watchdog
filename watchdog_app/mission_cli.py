@@ -81,7 +81,7 @@ def main(argv):
             elif args.action=='dispatch':result=transport.dispatch(store,args.run,args.task)
             elif args.action=='followup':result=transport.followup(store,args.run,args.task,args.text)
             elif args.action=='report':result=transport.report(store,args.run,args.role,json.loads(args.file.read_text()))
-            elif args.action=='review':result=transport.review(store,args.run,args.candidate)
+            elif args.action=='review':result=transport.review(store,args.run,args.candidate,context=args.text)
             elif args.action in ('approve','accept-result'):
                 with store.lock(args.run):
                     result=store.load(args.run);main_session(result);source_current(result)
