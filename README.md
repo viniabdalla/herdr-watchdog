@@ -20,6 +20,10 @@ Run from the project folder, or pass `--repo /path/to/project`. `--pane ID
 --session UUID` selects an exact verified conversation. Missing native session
 registration is reported; Watchdog never guesses a UUID from focus or cwd.
 An existing Codex thread in agent-tool context is matched by CODEX_THREAD_ID.
+Conversation rows show the account before the session ID: canonical `~/.codex`
+and `~/.claude` use “Default account”; other paths use their final folder name,
+with parent folders added when needed to distinguish accounts. Labels come only
+from the verified binding path, without reading credentials or account settings.
 
 Four presets are available; number 2 is the initial default. Arrows or j/k move
 through the selector, the drawing follows, Enter applies, and Esc cancels without

@@ -1,6 +1,7 @@
 """Terminal selectors. Escape returns before any layout mutation."""
 import curses
 from .layouts import PRESETS
+from .accounts import account_labels
 
 
 def text(screen, row, col, value, attr=0):
@@ -53,6 +54,7 @@ def choose_layout(screen, default=2):
 
 def choose_conversation(screen, choices):
     setup(screen)
+    labels = account_labels(binding.account for binding in choices)
     selected = 0
     while True:
         screen.erase()
@@ -61,7 +63,7 @@ def choose_conversation(screen, choices):
         start = max(0, selected - max(1, h - 5) + 1)
         for index, binding in enumerate(choices[start:start + max(1, h - 5)], start):
             text(screen, 2 + index - start, 0,
-                 f'{binding.kind} · {binding.pane} · {binding.session}',
+                 f'{binding.kind} · {binding.pane} · {labels[index]} · {binding.session}',
                  curses.A_REVERSE if index == selected else 0)
         text(screen, h - 2, 0, 'Arrows / j k: choose   Enter: continue   Esc: cancel')
         screen.refresh()
