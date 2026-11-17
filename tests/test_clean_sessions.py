@@ -434,3 +434,11 @@ class CleanSessionsTests(unittest.TestCase):
         evidence=op['receiver_receipt']['value']['memory_receipt']
         self.assertEqual(evidence['method'],'exact_id_tool_accept')
         self.assertEqual(evidence['accepted_handoff_id'],op['preparation']['memory_handoff_id'])
+
+    def test_preparation_references_require_exact_absolute_files_or_empty_list(self):
+        self.op=self.request();message=self.runtime.deliveries[0][1]
+        for guidance in ('existing ABSOLUTE regular-file paths','no :line/#line citations',
+                         'no directories','no duplicate references','at most 8','use []'):
+            self.assertIn(guidance,message)
+        self.assertIn(json.dumps(str(self.repo/'TODO.md')),message)
+        self.assertNotIn(str(self.repo/'TODO.md')+':',message)

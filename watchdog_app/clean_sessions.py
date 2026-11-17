@@ -177,6 +177,7 @@ def request(session,policy,*,confirmed=False,store=None):
             'Authorized Git/startup scope: '+json.dumps(approved)+'\n'
             'Call the ACTUAL ai-memory MCP tool memory_handoff_begin now, using summary (2–3 sentences), open_questions (short strings), next_steps (unfinished tasks and next actions), and files_touched (owned file hints). Include this operation ID in the summary and bounded evidence paths in next_steps. Keep sharing at its existing operator default. Session-aware clients omit scope for this repo; static clients pass workspace+project from .ai-memory.toml or the normalized upstream/origin identity, never the last active project. '
             'If ai-memory or preparation is unavailable, report kind blocked with reason instead; do not invent a handoff ID. '
+            'For references, supply at most 8 existing ABSOLUTE regular-file paths: no :line/#line citations, no directories, no duplicate references. Verify each path first; use [] if no verified paths are available. Exact absolute file-path example for this project: '+json.dumps(str(session.repo/'TODO.md'))+'. Do not append a line number or fragment. '
             'No full transcripts. This is a project baton transfer; legacy runs remain historical export-only. '
             'The backend commits authorized owned files, fast-forwards only listed pinned branches, pushes to the explicit destination, verifies a checkpoint, and opens a fresh dedicated leader. '
             'You remain leader until actual successor receipt and your explicit release.\n'
