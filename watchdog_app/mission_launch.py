@@ -41,8 +41,17 @@ def main_session(run):
     return session
 
 
+def graph_read(args, repo=None):
+    try:
+        return command(['agent-graph','graph',*args],cwd=repo)
+    except RuntimeError as error:
+        if 'not found' not in str(error):
+            raise
+        return command(['agent-graph','graph',*args],cwd=Path.home())
+
+
 def role_context(role, repo):
-    return command(['agent-graph', 'graph', 'node-up', 'tropico-coding-team/' + role], cwd=repo)
+    return graph_read(['node-up','tropico-coding-team/' + role],repo)
 
 
 def validate_brief(run, brief):
@@ -122,6 +131,11 @@ def clean_base(run, brief):
 
 
 def create_gossip(run, store):
+    if 'graph' not in run:
+        digest = graph_read(['hash','tropico-coding-team'],run.get('repo'))
+        if not re.fullmatch('[0-9a-f]{64}',digest):
+            raise RuntimeError('Agent Graph hash is unavailable')
+        run['graph']={'name':'tropico-coding-team','hash':digest,'instance':run['id']}
     folder = store.root / run['id'];folder.mkdir(mode=0o700, exist_ok=True)
     path = folder / 'gossip.json'
     nick = 'wd-main-' + run['id'][:8]
@@ -133,7 +147,10 @@ def create_gossip(run, store):
         try:
             state = json.loads(path.read_text())
             if state.get('ready') and state.get('gossip'):
-                return {'gossip': state['gossip'], 'nickname': nick}
+                run['transport']={'gossip': state['gossip'], 'nickname': nick, 'pubkey':state['pubkey']}
+                from .mission_transport import publish_identity
+                publish_identity(run,'leader')
+                return run['transport']
         except (OSError, ValueError):
             pass
         time.sleep(.1)
@@ -257,6 +274,8 @@ def participant(store, identity, role):
         'Use --long --max-secs 40, never --bell. Keep the same Gossip task ID on follow-ups. '
         'No source changes before receiving a task. Return structured JSON via the Watchdog report command.\n'
         f"Run: {identity}\nRole: {role}\nWorktree: {part['worktree']}\n"
+        f"Graph identity: {json.dumps(run.get('graph',{}))}\n"
+        'Watchdog publishes your graph entry only after verifying your native account/thread and Gossip key.\n'
         f"Poll: agent-gossip poll --gossip {transport['gossip']} --nickname {part['nickname']}\n"
         f"Report: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'report', '--run', identity, '--role', role, '--state-dir', str(store.root), '--file', 'REPORT.json'])}\n"
         'Report schema will be included with the assignment. The launcher is not a planner. '

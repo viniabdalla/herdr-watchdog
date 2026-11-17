@@ -16,6 +16,8 @@ def rows(repo, store=None):
         result.append(('RUN '+run['id'][:8]+' · '+{'requested':'Preparing the brief','launching':'Opening the team','active':'Team is running','blocked':'Needs help','done':'Done'}.get(run['phase'],'Unavailable'),None,run))
         if run.get('reason'):result.append((run['reason'],'blocked',run))
         if run.get('monitor_problem'):result.append(('Monitoring unavailable: '+run['monitor_problem'],'blocked',run))
+        for message in run.get('report_errors',{}).values():
+            result.append(('Report needs attention: '+message,'blocked',run))
         for key in run['tasks']:
             task=task_view(run,key)
             result.append((task['label']+' · '+task['title'],task['color'],run))

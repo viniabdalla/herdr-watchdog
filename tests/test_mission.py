@@ -83,7 +83,8 @@ class StateTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             mission.finish(self.run, 'a'*40, confirmed=True)
         self.run['candidate'] = 'a'*40
-        self.run['qa'] = {'candidate': 'b'*40, 'verdict': 'pass', 'tests': ['suite passed']}
+        self.run['review_contract']={'id':'attempt','version':self.run.get('result_version',0),'candidate':'a'*40,'verified_commits':True}
+        self.run['qa'] = {'candidate': 'b'*40, 'review_id':'attempt','verdict': 'pass', 'tests': ['suite passed']}
         with self.assertRaises(RuntimeError):mission.finish(self.run, 'a'*40, confirmed=True)
         self.run['qa']['candidate'] = 'a'*40
         with self.assertRaises(RuntimeError):mission.finish(self.run, 'a'*40, confirmed=False)
@@ -116,3 +117,26 @@ class StateTests(unittest.TestCase):
         mission.accept_event(self.run,self.event('working'),now=110)
         self.assertFalse(self.run['tasks']['task'].get('accepted_result'))
         self.assertIsNone(self.run['qa'])
+
+    def test_delayed_qa_cannot_approve_superseding_implementation(self):
+        mission.accept_event(self.run,self.event('result',commits=['a'*40],tests=['A passed']))
+        self.run.update(candidate='a'*40,qa_task='qa-task',qa_finished=False,
+            review_contract={'id':'attempt-A','candidate':'a'*40,'version':self.run.get('result_version',0)})
+        mission.accept_event(self.run,self.event('working'))
+        newer=self.event('result',commits=['b'*40],tests=['B passed']);newer['id']='result-B'
+        mission.accept_event(self.run,newer)
+        late={'id':'qa-late','event':'task','kind':'artifact-update','author':'qa','pubkey':'qa-key','task_id':'qa-task',
+            'body':json.dumps({'run_id':'run','status':'qa','candidate':'a'*40,'review_id':'attempt-A',
+                              'verdict':'pass','summary':'A passed','tests':['A passed']})}
+        with self.assertRaisesRegex(RuntimeError,'superseded|stale'):
+            mission.accept_event(self.run,late)
+        with self.assertRaises(RuntimeError):mission.finish(self.run,'a'*40,confirmed=True)
+        self.assertNotEqual(self.run['tasks']['task']['state'],'done')
+
+    def test_qa_attempt_token_cannot_be_replayed_at_same_candidate(self):
+        self.run.update(candidate='a'*40,qa_task='qa-task',result_version=1,
+            review_contract={'id':'attempt-new','candidate':'a'*40,'version':1})
+        event={'id':'old-attempt','event':'task','kind':'artifact-update','author':'qa','pubkey':'qa-key','task_id':'qa-task',
+            'body':json.dumps({'run_id':'run','status':'qa','candidate':'a'*40,'review_id':'attempt-old',
+                              'verdict':'pass','summary':'old attempt passed','tests':['passed']})}
+        with self.assertRaisesRegex(RuntimeError,'attempt'):mission.accept_event(self.run,event)
