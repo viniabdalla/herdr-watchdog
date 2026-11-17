@@ -1,5 +1,7 @@
 """Coordination notifications target verified native threads, never pane input."""
 from dataclasses import asdict
+from contextlib import redirect_stdout
+import io
 import json
 from types import SimpleNamespace
 import unittest
@@ -80,10 +82,35 @@ class WakeTests(unittest.TestCase):
         candidate=self.run['brief']['base_sha']
         self.run['tasks']['task'].update(state='review',result={'commits':[candidate],'tests':['passed']})
         self.store.save(self.run)
-        with patch.object(transport.Gossip,'call',return_value=self.native_task):
+        with patch.object(transport.Gossip,'call',return_value=self.native_task) as send:
             run=transport.review(self.store,self.run['id'],candidate)
+        contract=json.loads(send.call_args.args[1])
+        self.assertEqual(contract['base_sha'],self.run['brief']['base_sha'])
+        self.assertEqual(contract['candidate'],candidate)
+        self.assertEqual(contract['review_id'],run['review_contract']['id'])
         self.assert_notification(run,'qa',run['review_contract'])
         self.assertIsNone(run['qa'])
+
+    def test_review_cli_delivers_optional_context_without_changing_scope_or_wake(self):
+        from watchdog_app import mission_cli
+        candidate=self.run['brief']['base_sha']
+        self.run['tasks']['task'].update(state='review',result={'commits':[candidate],'tests':['passed']})
+        self.store.save(self.run)
+        context='The integrated candidate also contains separately reviewed core fixes.\nThe worker file scope is unchanged.'
+        with patch.object(transport.Gossip,'call',return_value=self.native_task) as send,redirect_stdout(io.StringIO()):
+            result=mission_cli.main(['review','--run',self.run['id'],'--state-dir',str(self.store.root),
+                                    '--candidate',candidate,'--text',context])
+        self.assertEqual(result,0)
+        run=self.store.load(self.run['id'])
+        contract=json.loads(send.call_args.args[1])
+        self.assertEqual(contract['base_sha'],self.run['brief']['base_sha'])
+        self.assertEqual(contract['candidate'],candidate)
+        self.assertEqual(contract['context'],context)
+        self.assertEqual(run['review_contract']['context'],context)
+        self.assertEqual(contract['tasks'],self.run['brief']['tasks'])
+        self.assertEqual(send.call_args.args[0],self.run['participants']['qa']['nickname'])
+        self.assertEqual(send.call_args.kwargs['expected_key'],self.run['participants']['qa']['pubkey'])
+        self.assert_notification(run,'qa',run['review_contract'])
 
     def test_identity_change_after_gossip_send_retains_pending_wake_without_queue(self):
         for changed in ('source','recipient'):
