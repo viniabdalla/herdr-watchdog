@@ -126,3 +126,15 @@ The operator lifecycle is documented in [Mission Control](docs/mission-control.m
 The run ledger is in `$WATCHDOG_STATE_DIR/runs` (normally
 `~/.local/state/herdr-watchdog/runs`). Keep it: it contains exact native identities,
 source snapshots, assignments, results and owned resource mappings.
+
+
+## Leader handoff / Clean sessions
+
+`watchdog mission handoff-export` writes a bounded continuation capsule outside
+Git. It references selected-task evidence and explicit sidecars without reading
+raw conversations or treating sidecars as completed TODO work. Legacy runs are
+export-only. Native runs support an explicit verified preview and confirmed
+adoption of an operator-supplied fresh main, preserving the existing team and
+its exact attempts/results/QA. No actor, panel, binding file or queue is
+restarted or silently redirected. See [Leader handoff](docs/leader-handoff.md)
+for the conservative idle/clean boundary and single-use CLI flow.

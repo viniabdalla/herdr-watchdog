@@ -49,7 +49,7 @@ def main(argv):
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('list','inspect','template','launch','monitor','watch','poll','open',
-                                         'participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','approve'))
+                                         'handoff-export','handoff-preview','handoff-adopt','participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','approve'))
     parser.add_argument('--run')
     parser.add_argument('--repo',type=Path,default=Path.cwd())
     parser.add_argument('--state-dir',type=Path,help='Watchdog run ledger directory')
@@ -61,6 +61,10 @@ def main(argv):
     parser.add_argument('--text')
     parser.add_argument('--candidate')
     parser.add_argument('--after',type=int,default=0)
+    parser.add_argument('--binding-file',type=Path)
+    parser.add_argument('--context-file',type=Path)
+    parser.add_argument('--attachment',type=Path,action='append',default=[])
+    parser.add_argument('--offer',help='Exact handoff preview offer UUID')
     parser.add_argument('--confirm',action='store_true')
     parser.add_argument('--resume',action='store_true',help='Reuse verified clean worktrees after a pre-network context rejection')
     args=parser.parse_args(argv);store=RunStore(args.state_dir)
@@ -74,7 +78,18 @@ def main(argv):
             if args.action=='launch' and not args.brief:parser.error('--brief is required')
             if args.action=='report' and not args.file:parser.error('--file is required')
             if args.action=='followup' and not args.text:parser.error('--text is required')
-            if args.action=='inspect':result=store.load(args.run)
+            if args.action in ('handoff-export','handoff-preview','handoff-adopt'):
+                from . import mission_handoff
+                if not args.file:parser.error('--file is required for handoff')
+                if args.action=='handoff-export':
+                    result=mission_handoff.export(store,args.run,args.file,context_file=args.context_file,attachments=args.attachment)
+                else:
+                    if not args.binding_file:parser.error('--binding-file is required')
+                    if args.action=='handoff-preview':result=mission_handoff.preview(store,args.run,args.file,args.binding_file)
+                    else:
+                        if not args.offer:parser.error('--offer is required for adoption')
+                        result=mission_handoff.adopt(store,args.run,args.file,args.binding_file,args.offer,confirmed=args.confirm)
+            elif args.action=='inspect':result=store.load(args.run)
             elif args.action=='template':result=template(store.load(args.run))
             elif args.action=='launch':
                 brief=json.loads(args.brief.read_text())
