@@ -4,6 +4,7 @@ from dataclasses import asdict
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -175,6 +176,17 @@ class LaunchTests(unittest.TestCase):
             self.assertIn('model_reasoning_effort="medium"',overrides)
             self.assertNotIn('CODEX_THREAD_ID',popen.call_args.kwargs['env'])
             self.assertNotIn('CODEX_MODEL_REASONING_EFFORT',popen.call_args.kwargs['env'])
+            report_line=next(line for line in argv[-1].splitlines() if line.startswith('Report: '))
+            report_command=shlex.split(report_line.removeprefix('Report: '))
+            self.assertEqual(report_command[1],str(launch.ROOT/'watchdog'))
+        # The assigned checkout deliberately lacks a helper. The canonical
+        # controller command still loads the current ledger from that cwd.
+        checkout=Path(run['participants']['worker']['worktree'])
+        self.assertFalse((checkout/'watchdog').exists())
+        report_command[3]='inspect'
+        inspected=subprocess.run(report_command,cwd=checkout,capture_output=True,text=True)
+        self.assertEqual(inspected.returncode,0,inspected.stderr)
+        self.assertEqual(json.loads(inspected.stdout)['id'],self.run_id)
 
     def test_qa_candidate_requires_actual_worker_changes_including_cherry_pick(self):
         from watchdog_app.mission_transport import verify_result_commits

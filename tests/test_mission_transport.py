@@ -22,7 +22,7 @@ class TransportTests(unittest.TestCase):
         git(self.repo,"add","TODO.md");git(self.repo,"commit","-qm","base")
         self.store=RunStore(Path(self.temp.name)/"runs")
         fixture=test_mission.StateTests();fixture.setUp();self.run=fixture.run
-        self.run.update(id='9c6e1ad3-c0c9-4e05-b4dc-b367753ce3e1',repo=str(self.repo),
+        self.run.update(id='9c6e1ad3-c0c9-4e05-b4dc-b367753ce3e1',created=1,repo=str(self.repo),
             transport={'gossip':'room','nickname':'main'},cursor=0,source_digest=__import__('hashlib').sha256((self.repo/'TODO.md').read_bytes()).hexdigest(),brief={'tasks':[{
                 'id':'task','dependencies':[],'allowed_files':['a.py'],'acceptance':['Works'],'tests':['python -m unittest']}], 'base_sha':git(self.repo,'rev-parse','HEAD')})
         self.run['tasks']['task']['state']='ready'
@@ -45,11 +45,35 @@ class TransportTests(unittest.TestCase):
         self.run['tasks']['task'].update(gossip_task='existing',state='blocked',delivery='sent')
         self.store.save(self.run)
         calls=[]
-        with patch.object(transport.Gossip,'call',side_effect=lambda *a,**k:calls.append((a,k)) or 'existing'), patch.object(transport,'verify_participant'):
-            transport.followup(self.store,self.run['id'],'task','Use the existing test fixture')
+        guidance='Use /tmp/wd-test-fixture/input.json.\nRun WATCHDOG_GOSSIP_TEST=1 python -m unittest; preserve sandbox settings.'
+        with patch.object(transport.Gossip,'call',side_effect=lambda *a,**k:calls.append((a,k)) or 'existing'), patch.object(transport,'verify_participant'),patch.object(transport,'wake_participant'):
+            transport.followup(self.store,self.run['id'],'task',guidance)
         self.assertEqual(calls[0][1]['task_id'],'existing')
-        self.assertIn('Use the existing test fixture',calls[0][0][1])
-        self.assertEqual(self.store.load(self.run['id'])['tasks']['task']['gossip_task'],'existing')
+        self.assertEqual(json.loads(calls[0][0][1])['clarification'],guidance)
+        task=self.store.load(self.run['id'])['tasks']['task']
+        self.assertEqual(task['gossip_task'],'existing')
+        from watchdog_app.progress_ui import rows
+        primary='\n'.join(row[0] for row in rows(self.repo,self.store))
+        self.assertIn('Guidance sent; waiting for the agent',primary)
+        self.assertNotIn('/tmp/wd-test-fixture',primary)
+        self.assertNotIn('WATCHDOG_GOSSIP_TEST',primary)
+        self.assertEqual(task['guidance'][-1]['text'],guidance)
+        self.assertEqual(task['guidance'][-1]['task_id'],'existing')
+        self.assertEqual(task['guidance'][-1]['delivery'],'sent')
+
+    def test_uncertain_followup_preserves_guidance_without_automatic_retry(self):
+        self.run['tasks']['task'].update(gossip_task='existing',state='blocked',delivery='sent')
+        self.store.save(self.run)
+        with patch.object(transport.Gossip,'call',side_effect=RuntimeError('timeout')) as send,patch.object(transport,'verify_participant'):
+            with self.assertRaisesRegex(RuntimeError,'timeout'):
+                transport.followup(self.store,self.run['id'],'task','Use the approved fixture')
+            with self.assertRaisesRegex(RuntimeError,'uncertain'):
+                transport.followup(self.store,self.run['id'],'task','Use the approved fixture')
+        self.assertEqual(send.call_count,1)
+        task=self.store.load(self.run['id'])['tasks']['task']
+        self.assertEqual(len(task['guidance']),1)
+        self.assertEqual(task['guidance'][0]['text'],'Use the approved fixture')
+        self.assertEqual(task['guidance'][0]['delivery'],'uncertain')
 
     def test_bridge_queues_compact_event_once_and_never_on_switched_main(self):
         run=self.run
@@ -123,10 +147,30 @@ class TransportTests(unittest.TestCase):
         report={'run_id':self.run['id'],'status':'qa','candidate':'a'*40,'review_id':'review-A',
                 'verdict':'pass','summary':'A review ended, now superseded','tests':['A suite passed']}
         sent=[]
-        with patch.object(transport,'verify_participant'),patch.object(transport.Gossip,'invoke',side_effect=lambda *a:sent.append(a)):
+        with patch.object(transport,'verify_publisher'),patch.object(transport.Gossip,'invoke',side_effect=lambda *a:sent.append(a)):
             transport.report(self.store,self.run['id'],'qa',report)
         self.assertEqual(sent[0][:2],('a2a','artifact'))
         self.assertIn('qa-native',sent[0])
+
+    def test_publisher_rejects_bad_role_shape_and_local_signer_before_send(self):
+        self.run['tasks']['task'].update(gossip_task='native-task',state='working')
+        self.store.save(self.run)
+        data={'run_id':self.run['id'],'task_id':'task','status':'blocked','summary':'Need fixture'}
+        state=self.store.root/self.run['id']/'worker-gossip.json'
+        state.parent.mkdir()
+        state.write_text(json.dumps({'gossip':'room','nickname':'worker','pubkey':'foreign'}))
+        with patch.object(transport.Gossip,'invoke') as send:
+            with self.assertRaisesRegex(RuntimeError,'role'):
+                transport.report(self.store,self.run['id'],'leader',data)
+            with self.assertRaisesRegex(RuntimeError,'JSON object'):
+                transport.report(self.store,self.run['id'],'worker',[])
+            with self.assertRaisesRegex(RuntimeError,'local Gossip identity'):
+                transport.report(self.store,self.run['id'],'worker',data)
+            state.write_text(json.dumps({'gossip':'room','nickname':'worker','pubkey':'key'}))
+            with patch.object(transport,'verify_graph',side_effect=RuntimeError('Graph identity changed')):
+                with self.assertRaisesRegex(RuntimeError,'Graph identity changed'):
+                    transport.report(self.store,self.run['id'],'worker',data)
+            send.assert_not_called()
 
     def test_native_identity_loss_blocks_report_even_from_pinned_gossip_key(self):
         self.run['tasks']['task'].update(gossip_task='native-task',state='working')
@@ -156,3 +200,37 @@ class TransportTests(unittest.TestCase):
                 self.assertEqual(len(self.delivered),1)
                 self.assertIn('report retained for inspection',self.delivered[0])
                 self.assertNotIn('New identity claims result',self.delivered[0])
+
+    def test_recovered_native_identity_clears_only_its_stale_progress_warning(self):
+        from watchdog_app.progress_ui import rows
+        for role in ('worker','qa'):
+            with self.subTest(role=role):
+                run=copy.deepcopy(self.run)
+                run.update(qa_task='qa-native',candidate='a'*40,qa_finished=False,
+                    review_contract={'id':'review-A','candidate':'a'*40,'version':0,'verified_commits':True})
+                run['participants']['qa']['native']={'session':'qa-native'}
+                run['tasks']['task'].update(gossip_task='native-task',state='review',
+                    result={'commits':['a'*40],'tests':['passed']})
+                self.store.save(run)
+                data={'run_id':run['id'],'summary':'Verified recovery','tests':['passed']}
+                data.update({'task_id':'task','status':'result','commits':['a'*40]} if role=='worker' else
+                    {'status':'qa','candidate':'a'*40,'review_id':'review-A','verdict':'pass'})
+                event={'id':'rejected','seq':1,'event':'task','kind':'artifact-update','author':role,
+                       'pubkey':run['participants'][role]['pubkey'],
+                       'task_id':'native-task' if role=='worker' else 'qa-native','body':json.dumps(data)}
+                failing=[True]
+                def verify(_,checking):
+                    if failing[0] or checking!=role:raise RuntimeError('Native identity unavailable for '+checking)
+                with patch.object(transport,'verify_participant',side_effect=verify),patch.object(transport.Gossip,'peers',return_value=[{'pubkey':'key'},{'pubkey':'qa-key'}]),patch.object(transport.Gossip,'poll',side_effect=[[event],[dict(event,id='recovered',seq=2)]]):
+                    rejected=transport.tick(self.store,run['id'])
+                    self.assertEqual(rejected['tasks'],run['tasks'])
+                    failing[0]=False
+                    recovered=transport.tick(self.store,run['id'])
+                self.assertTrue(recovered['participants'][role]['available'])
+                self.assertFalse(recovered['participants'][role].get('problem'))
+                self.assertFalse(recovered.get('report_errors'))
+                self.assertEqual(recovered['events']['recovered']['report'],data)
+                other='qa' if role=='worker' else 'worker'
+                primary='\n'.join(row[0] for row in rows(self.repo,self.store))
+                self.assertNotIn('Native identity unavailable for '+role,primary)
+                self.assertIn('Native identity unavailable for '+other,primary)

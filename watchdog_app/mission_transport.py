@@ -111,6 +111,7 @@ def register(run, store, peers):
         if part.get('native'):
             try:
                 verify_participant(run, role)
+                part.pop('problem',None)
             except RuntimeError as error:
                 part['available'] = False;part['problem'] = str(error)
             continue
@@ -150,6 +151,42 @@ def assignment(run, task_id):
                          'tests':['command and result for result']}})
 
 
+def wake_participant(store, run, role, task_id, sent):
+    """Queue one poll-only notice after Gossip delivery, with durable uncertainty."""
+    wakes=run.setdefault('wakes',{})
+    if sent.get('wake_id'):
+        previous=wakes[sent['wake_id']]
+        if previous['delivery']=='queued':return previous
+        raise RuntimeError('Agent notification '+previous['delivery']+'; inspect the exact queue before retrying')
+    identity=str(uuid.uuid4());sent['wake_id']=identity
+    wake={'role':role,'task_id':task_id,'delivery':'pending','created':time.time(),
+          'recipient':run['participants'][role].get('native')}
+    wakes[identity]=wake;store.save(run)
+    try:
+        main_session(run)
+        native=verify_participant(run,role)
+        if native.kind!='codex':raise RuntimeError('Agent notification requires a Codex participant')
+        uuid.UUID(native.session)
+        wake['recipient']=asdict(native)
+        message=(f"Watchdog coordination for run {run['id']}, existing Gossip task {task_id}. "
+            f"Poll agent-gossip poll --gossip {run['transport']['gossip']} --nickname {run['participants'][role]['nickname']}. "
+            'Read only new messages on that existing task. If the poll is empty or a message was already handled, '
+            'do not repeat implementation or review. This notification is not another task; the contract remains in Gossip.')
+        wake.update(delivery='sending',updated=time.time());store.save(run)
+        receipt=bindings.engine().queue(native,message)
+        uuid.UUID(receipt)
+        wake.update(delivery='queued',receipt=receipt,updated=time.time());store.save(run)
+        return wake
+    except Exception as error:
+        if wake['delivery']=='sending':wake['delivery']='uncertain'
+        wake.update(problem=str(error),updated=time.time())
+        for task in run['tasks'].values():
+            if role=='qa' or task.get('gossip_task')==task_id:
+                task.update(state='blocked',summary='Message delivered; agent notification needs attention',updated=time.time())
+        store.save(run)
+        raise RuntimeError('Agent notification '+wake['delivery']+'; inspect the exact queue before retrying: '+str(error)) from error
+
+
 def dispatch(store, identity, task_id):
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run)
@@ -179,6 +216,7 @@ def dispatch(store, identity, task_id):
             store.save(run);raise
         task.update(delivery='sent',state='working',agent='worker',summary='Assignment delivered',updated=time.time())
         store.save(run)
+        wake_participant(store,run,'worker',task['gossip_task'],task)
         return run
 
 
@@ -191,17 +229,25 @@ def followup(store, identity, task_id, text):
         if not task.get('gossip_task') or task['state']=='done':raise RuntimeError('No active correlated task')
         if task.get('followup_delivery') in ('sending','uncertain'):
             raise RuntimeError('Previous follow-up is uncertain; inspect the peer before any retry')
+        prior=[task,*task.get('guidance',[])]
+        if any(record.get('wake_id') and run['wakes'][record['wake_id']]['delivery']!='queued' for record in prior):
+            raise RuntimeError('Previous agent notification is unconfirmed; inspect the exact queue before another follow-up')
+        guidance={'text':text,'task_id':task['gossip_task'],'created':time.time(),'delivery':'sending'}
+        task.setdefault('guidance',[]).append(guidance)
         task['followup_delivery']='sending';store.save(run)
         try:
             Gossip(run['transport']).call(run['participants']['worker']['nickname'],
                 json.dumps({'run_id':identity,'task_id':task_id,'clarification':text,
                             'contract':assignment(run,task_id),'scope_change_allowed':False}),task_id=task['gossip_task'],expected_key=run['participants']['worker']['pubkey'])
         except Exception:
+            guidance.update(delivery='uncertain',updated=time.time())
             task['followup_delivery']='uncertain';store.save(run);raise
-        task.update(followup_delivery='sent',state='working',summary=text,updated=time.time())
+        guidance.update(delivery='sent',updated=time.time())
+        task.update(followup_delivery='sent',state='working',summary='Guidance sent; waiting for the agent',updated=time.time())
         task.pop('accepted_result',None);task.pop('result',None);run['qa']=None
         run['result_version']=run.get('result_version',0)+1
         store.save(run)
+        wake_participant(store,run,'worker',task['gossip_task'],guidance)
         return run
 
 
@@ -310,12 +356,27 @@ def review(store, identity, candidate):
         run['qa_delivery']='sent';run['operation']=None
         for task in run['tasks'].values():task.update(state='review',agent='qa',updated=time.time(),summary='QA is checking '+candidate)
         store.save(run)
+        wake_participant(store,run,'qa',run['qa_task'],run['review_contract'])
         return run
+
+
+def verify_publisher(store, run, role):
+    """Verify the local Gossip signer; only the receiving host checks native PIDs."""
+    part=run['participants'][role]
+    if not part.get('pubkey') or not part.get('native'):
+        raise RuntimeError('Publisher has no registered participant identity')
+    state=json.loads((store.root/run['id']/(role+'-gossip.json')).read_text())
+    if (state.get('gossip')!=run['transport']['gossip'] or state.get('nickname')!=part['nickname'] or
+            state.get('pubkey')!=part['pubkey']):
+        raise RuntimeError('Publisher local Gossip identity differs from its assignment')
+    verify_graph(run,role)
 
 
 def report(store, identity, role, data):
     run=store.load(identity)
-    native=verify_participant(run,role)
+    if role not in ('worker','qa') or role not in run['participants']:
+        raise RuntimeError('Report requires an assigned worker or QA role')
+    if not isinstance(data,dict):raise RuntimeError('Report must be a JSON object')
     if data.get('run_id') != identity:raise RuntimeError('Report belongs to another run')
     part=run['participants'][role]
     from .mission import require_summary
@@ -335,5 +396,6 @@ def report(store, identity, role, data):
         # Main must learn that the old attempt ended so it can safely request
         # a new exact candidate. The receiving reducer still rejects approval.
         pass
+    verify_publisher(store,run,role)
     args=['a2a','artifact'] if data['status'] in ('result','qa') else ['a2a','status','--state','input-required' if data['status']=='blocked' else 'working']
     return Gossip(run['transport'],part['nickname']).invoke(*args,'--task-id',task_id,'--text',json.dumps(data))

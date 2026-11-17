@@ -75,6 +75,15 @@ concrete summary. Free-form “done”, process exit, heartbeat loss and an arti
 alone never complete a task. Follow-ups preserve the same run, selected task and
 Gossip task identities. Scope changes or task edits require a fresh contract;
 a clarification is not authority to broaden the original allowed files.
+Progress shows “Guidance sent; waiting for the agent” after a follow-up. The full
+instruction and its delivery status remain in the task's `guidance` history,
+available through `mission inspect`, including uncertain deliveries.
+Participants must use the absolute controller report command in their bootstrap,
+so fixes remain available even when their checkout is pinned to an older base.
+Publishing checks report structure and the assigned local Gossip key/graph;
+the receiving host independently verifies native identity before accepting any
+evidence. Publishing never requires visibility of host processes inside a tool
+sandbox and never changes authoritative task state directly.
 
 The main checks and integrates commits into its feature branch. For multiple
 selected tasks, accept the returned result for sequencing, then dispatch the
@@ -110,6 +119,20 @@ and thread, retaining report bodies and delivery receipts in the run ledger.
 It never reads full participant transcripts. `mission poll --run RUN_UUID`
 performs one monitor pass; `mission watch --run RUN_UUID` restarts monitoring
 without launching new terminals. Only one monitor can own a run at once.
+
+Each confirmed assignment, follow-up and QA request also queues one short native
+Codex notification to the verified participant account and full thread UUID.
+It asks the participant to poll its existing Gossip task, ignore already handled
+messages and avoid duplicating work. It works while the actor is idle or busy;
+the contract and result correlation remain in Gossip. A queued notification is
+not proof that the model has consumed the message.
+
+The run's `wakes` history records the recipient, intent, receipt and delivery
+status. An identity failure leaves notification pending; an enqueue failure
+leaves it uncertain. Progress shows that attention is needed. Inspect the exact
+conversation queue before reconciling manually; Watchdog never retries these
+notifications automatically or substitutes pane input. Further follow-ups are
+blocked while an earlier worker notification remains unconfirmed.
 
 ## Interrupted work and limits
 

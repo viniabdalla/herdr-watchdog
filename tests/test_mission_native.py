@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 import uuid
 from unittest.mock import patch
@@ -118,7 +119,7 @@ class GraphMetadataNativeTests(unittest.TestCase):
                 run['transport']=create_gossip(run,store)
             self.addCleanup(lambda:command(['agent-gossip','leave',run['transport']['gossip'],'--nickname',run['transport']['nickname']]))
             for role in ('worker','qa'):
-                nick='wd-test-'+role+'-'+run['id'][:6];state=Path(folder)/(role+'.json')
+                nick='wd-test-'+role+'-'+run['id'][:6];state=store.root/run['id']/(role+'-gossip.json')
                 command(['agent-gossip','join',run['transport']['gossip'],'--nickname',nick,
                          '--owner-pid',str(os.getpid()),'--state-file',state])
                 self.addCleanup(lambda n=nick:command(['agent-gossip','leave',run['transport']['gossip'],'--nickname',n]))
@@ -129,7 +130,8 @@ class GraphMetadataNativeTests(unittest.TestCase):
                 own=json.loads(state.read_text())
                 native=asdict(FakeBinding(session=role+'-thread',pane=role+'-pane'))
                 run['participants'][role]={'nickname':nick,'pubkey':own['pubkey'],'native':native,
-                    'worktree':folder,'model':'gpt-6.1-sol','effort':'medium'}
+                    'worktree':folder,'account':native['account'],'available':True,
+                    'model':'gpt-6.1-sol','effort':'medium'}
                 Gossip(run['transport'],nick).invoke('meta','merge','--merge','{"display_note":"existing peer metadata"}')
                 publish_identity(run,role)
             deadline=time.monotonic()+8
@@ -154,6 +156,40 @@ class GraphMetadataNativeTests(unittest.TestCase):
                     if time.monotonic()>deadline:raise
                     time.sleep(.05)
             worker=run['participants']['worker']
+            from watchdog_app import mission_transport as transport
+            native_task=Gossip(run['transport']).call(worker['nickname'],'Return an owned test result',expected_key=worker['pubkey'])
+            run.update(phase='active',events={},qa=None,candidate=None,cursor=0,
+                tasks={'task':{'title':'Owned task','state':'working','agent':'worker','summary':'Assigned',
+                               'updated':1,'gossip_task':native_task}},
+                resources={role:{'pane_id':part['native']['pane'],'terminal_id':part['native']['terminal']}
+                           for role,part in run['participants'].items()})
+            store.save(run)
+            result={'run_id':run['id'],'task_id':'task','status':'result','summary':'Owned producer evidence',
+                    'commits':['a'*40],'tests':['fixture checks passed']}
+            runtime=SimpleNamespace(Binding=lambda **kw:SimpleNamespace(**kw),
+                verify=lambda *_:(_ for _ in ()).throw(FileNotFoundError('/proc/host-pid/stat')))
+            with patch.object(transport.bindings,'engine',return_value=runtime):
+                transport.report(store,run['id'],'worker',result)
+            self.assertEqual(store.load(run['id'])['tasks']['task']['state'],'working')
+            deadline=time.monotonic()+8
+            while True:
+                events=Gossip(run['transport']).poll(0)
+                published=next((event for event in events if event.get('kind')=='artifact-update' and
+                                event.get('task_id')==native_task),None)
+                if published:break
+                if time.monotonic()>deadline:self.fail(events)
+                time.sleep(.05)
+            self.assertEqual(published['pubkey'],worker['pubkey'])
+            self.assertEqual(json.loads(published['body']),result)
+            runtime.verify=lambda *_:(_ for _ in ()).throw(RuntimeError('Native identity changed'))
+            delivered=[]
+            session=SimpleNamespace(binding=object(),runtime=SimpleNamespace(queue=lambda _,text:delivered.append(text)))
+            with patch.object(transport.bindings,'engine',return_value=runtime),patch.object(transport,'main_session',return_value=session):
+                received=transport.tick(store,run['id'])
+            self.assertNotIn('result',received['tasks']['task'])
+            self.assertEqual(json.loads(received['events'][published['id']]['rejected']['body']),result)
+            self.assertTrue(any('report retained for inspection' in text for text in delivered))
+            self.assertFalse(any('Owned producer evidence' in text for text in delivered))
             Gossip(run['transport'],worker['nickname']).invoke('meta','merge','--merge','{"leader":true}')
             with self.assertRaisesRegex(RuntimeError,'one live approved leader'):
                 verify_graph(run,'worker')
