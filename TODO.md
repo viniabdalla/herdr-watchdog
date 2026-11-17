@@ -13,6 +13,7 @@ Each project uses its own TODO.md with these sections. Progress counts the
 tasks currently listed here; it is not an estimate of the entire project.
 
 ## In progress
+- [ ] Clean sessions: start a selected task in a fresh conversation with the needed context; evaluate agent-gossip.
 
 ## Next
 - [ ] Session progress: read the conversation checklist automatically instead of using the manual preview checklist.
@@ -20,7 +21,6 @@ tasks currently listed here; it is not an estimate of the entire project.
 - [ ] Artifacts: automatically discover and summarize files created or changed by the AI; preserve the working Yazi link.
 - [ ] Project progress: add durable completion history for progress across TODO edits; Done entries and edit backups already exist.
 - [ ] Conversation picker: show account names beside pane and session.
-- [ ] Clean sessions: start a selected task in a fresh conversation with the needed context; evaluate agent-gossip.
 
 ## Blocked
 
