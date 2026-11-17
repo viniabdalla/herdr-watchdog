@@ -193,6 +193,10 @@ def main():
         from watchdog_app.tasks_ui import run
         run(args.repo.resolve(), args.binding_file)
         return
+    if args.mode == 'progress':
+        from watchdog_app.progress_ui import run
+        run(args.repo.resolve())
+        return
     curses.wrapper(panel, args.repo.resolve(), args.mode, args.yazi_client_id)
 
 

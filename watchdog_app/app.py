@@ -164,6 +164,10 @@ def open_selector(api, repo, binding=None, *, pane=None, session=None, preset=No
 
 def main(argv=None):
     os.umask(0o077)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ['mission']:
+        from .mission_cli import main as mission_main
+        return mission_main(argv[1:])
     parser = argparse.ArgumentParser(description='Watchdog: verified conversation layouts and project panels')
     parser.add_argument('command', nargs='?', default='open',
                         choices=('open', 'layout', 'list', 'status', 'panel', 'pick'))
@@ -230,7 +234,7 @@ def main(argv=None):
         state = apply(binding, repo, preset)
         print(f'Watchdog / {repo.name} / {binding.kind} {binding.pane} / '
               f'layout {preset}: {PRESETS[preset][0]}')
-        print('Layout is ready. Tasks is interactive; Progress and Artifacts retain preview data sources.')
+        print('Layout is ready. Tasks and Progress are interactive; Artifacts retains its preview data source.')
         return 0
     except (RuntimeError, OSError, ValueError, KeyError) as error:
         print('Watchdog: ' + str(error), file=sys.stderr)

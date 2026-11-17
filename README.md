@@ -86,3 +86,29 @@ WATCHDOG_HERDR_TEST=1 python3 -B -m unittest discover -s tests -q
 Live layout tests use only their own workspace in wd-test. Yazi tests use
 temporary files and real PTYs. `python3 uninstall.py` removes only this checkout's
 links and keeps state; it does not close running panels or stop Herdr.
+
+## Mission Control pilot
+
+Select open tasks in Tasks, press **o / Orchestrate**, and confirm the project,
+main conversation, account and team. This queues a coordination request to that
+exact Codex thread. Send keeps its existing current-conversation behavior. The
+main prepares the task contracts; the launcher does not invent a plan. Neither
+requesting work nor approving a run edits TODO.md.
+
+Progress now reads the run ledger: **Ready to start** (blue), **Working** (yellow),
+**Needs help** (red), **Checking the result** (purple), **Done** (green), and
+**Unavailable** when contact cannot be verified. It shows task, agent, last update,
+reason and execution-tab navigation with Enter/click. Project TODO counts are a
+separate section. Actual colors follow the terminal palette.
+
+The initial team is exactly one worker and one QA. Both terminals share one new
+tab; each has its own worktree. All tasks use the one worker sequentially. The
+first independent task is dispatched once native account/thread and Gossip
+identity are verified. Main reviews each result before dispatching the next
+contract. QA reviews the complete integrated candidate at its full commit SHA.
+The main/user approves completion separately. No command merges or pushes code.
+
+The operator lifecycle is documented in [Mission Control](docs/mission-control.md).
+The run ledger is in `$WATCHDOG_STATE_DIR/runs` (normally
+`~/.local/state/herdr-watchdog/runs`). Keep it: it contains exact native identities,
+source snapshots, assignments, results and owned resource mappings.
