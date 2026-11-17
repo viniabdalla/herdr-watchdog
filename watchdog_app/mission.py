@@ -14,6 +14,10 @@ LABELS = {'ready': 'Ready to start', 'working': 'Working', 'blocked': 'Needs hel
           'review': 'Checking the result', 'done': 'Done', 'unavailable': 'Unavailable'}
 
 
+class SupersededReview(RuntimeError):
+    """A finished review is retained as stale evidence, never approval."""
+
+
 class RunStore:
     def __init__(self, root=None):
         self.root = Path(root) if root is not None else state_root() / 'runs'
@@ -114,6 +118,10 @@ def accept_event(run, event, *, now=None):
         return False
     if event.get('kind') not in ('status-update', 'artifact', 'artifact-update'):
         return False
+    body = event.get('body')
+    if (event.get('kind') == 'status-update' and event.get('state') == 'working'
+            and (body is None or isinstance(body,str) and not body.strip())):
+        return False  # Normal transport acknowledgement, not implementation evidence.
     try:
         report = json.loads(event.get('body', ''))
     except (ValueError, TypeError) as error:
@@ -123,14 +131,21 @@ def accept_event(run, event, *, now=None):
     require_summary(report)
     now = time.time() if now is None else now
     if qa_event:
+        contract = run.get('review_contract') or {}
+        if not contract or report.get('review_id') != contract.get('id'):
+            raise RuntimeError('QA report belongs to another review attempt')
         if report.get('candidate') != run.get('candidate'):
             raise RuntimeError('QA report does not match the exact candidate')
         if report.get('status') == 'qa':
             if report.get('verdict') not in ('pass', 'fail') or not report.get('tests'):
                 raise RuntimeError('QA requires a verdict and test evidence')
-            run['qa'] = report
         elif report.get('status') != 'blocked':
             raise RuntimeError('QA reports must contain qa or blocked status')
+        if contract.get('version') != run.get('result_version', 0):
+            run['qa_finished'] = True
+            raise SupersededReview('QA review was superseded by newer implementation evidence')
+        if report.get('status') == 'qa':
+            run['qa'] = report
         run['qa_finished'] = True
         for task in run['tasks'].values():
             if task['state'] != 'done':
@@ -151,12 +166,14 @@ def accept_event(run, event, *, now=None):
                 raise RuntimeError('Result requires ordered full commit SHAs and test evidence')
             task['result'] = report
             run['qa'] = None  # New implementation invalidates any older QA.
+        run['result_version'] = run.get('result_version', 0) + 1
         task.pop('accepted_result', None)
         if status != 'result':
             task.pop('result', None)
             run['qa'] = None
         task.update(state={'result': 'review'}.get(status, status), summary=report['summary'],
                     agent='worker', updated=now)
+    run.get('report_errors', {}).pop(native_id, None)
     run['events'][event_id] = {'report': report, 'delivery': 'pending', 'received': now}
     return True
 
@@ -187,7 +204,11 @@ def finish(run, candidate, *, confirmed=False):
     if not confirmed:
         raise RuntimeError('Explicit approval is required')
     qa = run.get('qa') or {}
-    if (run.get('candidate') != candidate or qa.get('candidate') != candidate or
+    contract = run.get('review_contract') or {}
+    if (not contract.get('verified_commits') or
+            contract.get('version') != run.get('result_version', 0) or
+            qa.get('review_id') != contract.get('id') or
+            contract.get('candidate') != candidate or run.get('candidate') != candidate or qa.get('candidate') != candidate or
             qa.get('verdict') != 'pass' or not qa.get('tests') or
             any(not t.get('result') or t['state'] != 'review' for t in run['tasks'].values())):
         raise RuntimeError('Completion requires every result and passing QA for this exact candidate')

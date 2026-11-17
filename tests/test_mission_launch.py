@@ -175,3 +175,21 @@ class LaunchTests(unittest.TestCase):
             self.assertIn('model_reasoning_effort="medium"',overrides)
             self.assertNotIn('CODEX_THREAD_ID',popen.call_args.kwargs['env'])
             self.assertNotIn('CODEX_MODEL_REASONING_EFFORT',popen.call_args.kwargs['env'])
+
+    def test_qa_candidate_requires_actual_worker_changes_including_cherry_pick(self):
+        from watchdog_app.mission_transport import verify_result_commits
+        git(self.repo,'checkout','-qb','worker-source')
+        (self.repo/'a.py').write_text('print(2)\n')
+        git(self.repo,'add','a.py');git(self.repo,'commit','-qm','worker change')
+        worker_sha=git(self.repo,'rev-parse','HEAD')
+        git(self.repo,'checkout','-qb','feature-candidate',self.base)
+        (self.repo/'unrelated.txt').write_text('other work')
+        git(self.repo,'add','unrelated.txt');git(self.repo,'commit','-qm','unrelated')
+        wrong=git(self.repo,'rev-parse','HEAD')
+        run=dict(self.run,brief=self.brief,tasks={'selected':{'result':{'commits':[worker_sha]}}})
+        with self.assertRaisesRegex(RuntimeError,'contain'):
+            verify_result_commits(run,wrong)
+        git(self.repo,'cherry-pick',worker_sha)
+        candidate=git(self.repo,'rev-parse','HEAD')
+        self.assertNotEqual(candidate,worker_sha)
+        verify_result_commits(run,candidate)

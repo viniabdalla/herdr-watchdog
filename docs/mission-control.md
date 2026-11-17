@@ -47,7 +47,10 @@ access and network access for Gossip. It preserves Herdr pane context and clears
 inherited Codex thread/account environment before setting the approved account.
 No existing Gossip is adopted, no advisor is launched, and no unrelated peer is
 recruited. A monitor verifies native account/thread/terminal identity and pins
-the two newly launched Gossip keys before assigning work.
+the two newly launched Gossip keys before assigning work. The owned room records
+a graph instance and hash, one live `leader: true` entry for the exact main
+identity, and worker/QA entries bound to their verified native identities and
+pinned keys. Missing, conflicting or replaced graph identities block routing.
 
 The worker receives its explicit contract over Gossip. Reports are small JSON
 files, sent with the command included in its bootstrap prompt. For example:
@@ -84,10 +87,14 @@ watchdog mission review --run RUN_UUID --candidate FULL_INTEGRATED_SHA
 ```
 
 QA uses its clean detached worktree at that exact candidate. Its report contains
-`run_id`, `status: "qa"`, `candidate`, `verdict: "pass"` or `"fail"`, a concrete
+`run_id`, the assignment's `review_id`, `status: "qa"`, `candidate`, `verdict: "pass"` or `"fail"`, a concrete
 `summary`, and a `tests` list. Main delegates fixes through `followup` on the same
 worker task, integrates them into its feature branch and invokes `review` again
-at the new exact SHA. Earlier QA cannot approve a later candidate.
+at the new exact SHA. Each review has a unique attempt ID and captures the implementation evidence
+version. New worker evidence invalidates that review, including delayed passes
+for the same candidate. Before QA starts, every returned commit must be present
+in the candidate or have an equivalent cherry-picked patch. Earlier QA cannot
+approve a later result or candidate.
 
 ```sh
 watchdog mission approve --run RUN_UUID --candidate FULL_INTEGRATED_SHA --confirm

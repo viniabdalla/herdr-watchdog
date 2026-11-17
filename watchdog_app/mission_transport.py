@@ -1,12 +1,13 @@
 """Directed Gossip assignments and compact, exact-thread returns."""
 from dataclasses import asdict
 import json
+import socket
 from pathlib import Path
 import time
 import uuid
 
 from . import bindings
-from .mission import accept_event, contact
+from .mission import accept_event, contact, SupersededReview
 from .mission_launch import command, git, main_session, source_current, owned_worktree
 
 
@@ -43,6 +44,46 @@ class Gossip:
         return returned
 
 
+def publish_identity(run, role):
+    graph = run['graph']
+    leader = role == 'leader'
+    part = run['transport'] if leader else run['participants'][role]
+    native = run['main'] if leader else part['native']
+    entry = {'instance':graph['instance'],'graph':graph['name'],'hash':graph['hash'],
+             'node':role,'nickname':part['nickname'],'joined_at':int(time.time()),
+             'host':socket.gethostname(),'harness':'Codex','status':'busy','native':native,
+             'cwd':run.get('repo') if leader else part['worktree']}
+    if leader:
+        entry['leader']=True
+    else:
+        entry.update(invited_by=run['transport']['nickname'],model=part['model'],effort=part['effort'])
+    gossip=Gossip(run['transport'],part['nickname'])
+    gossip.invoke('meta','merge','--merge',json.dumps(entry))
+    document=json.loads(gossip.invoke('meta','get'))
+    actual=document['document'].get(part['pubkey'],{})
+    if any(actual.get(key)!=value for key,value in entry.items()):
+        raise RuntimeError('Published graph identity did not match the pinned Gossip key')
+
+
+def verify_graph(run, role):
+    part=run['participants'][role]
+    meta=json.loads(Gossip(run['transport'],part['nickname']).invoke('meta','get'))
+    graph=run['graph'];absent=set(meta['absent'])
+    live={key:value for key,value in meta['document'].items() if key not in absent and
+          value.get('instance')==graph['instance'] and value.get('hash')==graph['hash']}
+    leaders=[key for key,value in live.items() if value.get('leader') is True]
+    if leaders != [run['transport']['pubkey']]:
+        raise RuntimeError('Graph must have exactly one live approved leader')
+    for key,node,native,nickname in ((run['transport']['pubkey'],'leader',run['main'],run['transport']['nickname']),
+                                    (part['pubkey'],role,part['native'],part['nickname'])):
+        entry=live.get(key,{})
+        if (entry.get('node')!=node or entry.get('native')!=native or entry.get('nickname')!=nickname or
+                entry.get('graph')!=graph['name']):
+            raise RuntimeError('Graph role/native identity changed')
+    if live[part['pubkey']].get('leader'):
+        raise RuntimeError('Participant cannot appoint itself leader')
+
+
 def verify_participant(run, role):
     part = run['participants'][role]
     native = part.get('native')
@@ -54,6 +95,7 @@ def verify_participant(run, role):
     if (binding.account != part['account'] or binding.pane != run['resources'][role]['pane_id'] or
             binding.terminal != run['resources'][role]['terminal_id']):
         raise RuntimeError(role + ' identity changed')
+    verify_graph(run,role)
     return binding
 
 
@@ -84,8 +126,12 @@ def register(run, store, peers):
                 raise RuntimeError('Native account/thread registration is unavailable or ambiguous')
             bindings.verify(matching[0])
             part.update(native=asdict(matching[0]), pubkey=peer['pubkey'], available=True)
+            publish_identity(run,role)
+            verify_graph(run,role)
             part.pop('problem',None)
         except (OSError, ValueError, KeyError, StopIteration, RuntimeError) as error:
+            part.pop('native',None)
+            part.pop('pubkey',None)
             part['problem'] = str(error) or 'Waiting for the owned Gossip peer'
             part['available'] = False
 
@@ -154,6 +200,7 @@ def followup(store, identity, task_id, text):
             task['followup_delivery']='uncertain';store.save(run);raise
         task.update(followup_delivery='sent',state='working',summary=text,updated=time.time())
         task.pop('accepted_result',None);task.pop('result',None);run['qa']=None
+        run['result_version']=run.get('result_version',0)+1
         store.save(run)
         return run
 
@@ -189,13 +236,30 @@ def tick(store, identity):
                 accept_event(run,event)
             except RuntimeError as error:
                 # A correlated malformed report stays visible and cannot imply completion.
-                run['reason']=str(error)
+                run.setdefault('report_errors',{})[event.get('task_id','unknown')]=str(error)
                 run['events'][event['id']]={'delivery':'pending','received':time.time(),
                     'report':{'status':'blocked','summary':str(error),'task_id':event.get('task_id')}}
             run['cursor']=max(run.get('cursor',0),event.get('seq',0))
         run['monitor_updated']=time.time();store.save(run)
         forward(store,run)
         return run
+
+
+def verify_result_commits(run, candidate):
+    """Require each reported change in the candidate, allowing clean cherry-picks."""
+    repo = run['repo']
+    if git(repo,'merge-base',run['brief']['base_sha'],candidate) != run['brief']['base_sha']:
+        raise RuntimeError('Candidate does not contain the approved base')
+    for task in run['tasks'].values():
+        for sha in task['result']['commits']:
+            if git(repo,'merge-base',sha,candidate) == sha:
+                continue
+            parents = git(repo,'rev-list','--parents','-n','1',sha).split()
+            if len(parents) != 2:
+                raise RuntimeError('Candidate does not contain the reported merge/root commit ' + sha)
+            equivalent = git(repo,'cherry',candidate,sha,parents[1]).splitlines()
+            if equivalent != ['- ' + sha]:
+                raise RuntimeError('Candidate does not contain worker result commit ' + sha)
 
 
 def review(store, identity, candidate):
@@ -208,6 +272,7 @@ def review(store, identity, candidate):
             raise RuntimeError('Every selected task needs implementation evidence before QA')
         resolved=git(run['repo'],'rev-parse',candidate+'^{commit}')
         if resolved != candidate:raise RuntimeError('QA requires the full exact candidate SHA')
+        verify_result_commits(run,candidate)
         if run.get('qa_delivery') in ('sending','uncertain'):
             raise RuntimeError('QA assignment delivery is uncertain; inspect it before retrying')
         part=run['participants']['qa']
@@ -215,12 +280,15 @@ def review(store, identity, candidate):
             raise RuntimeError('QA worktree is not clean')
         run['operation']='checkout QA candidate';store.save(run)
         git(part['worktree'],'checkout','--detach',candidate)
-        run['candidate']=candidate;run['qa']=None;run['qa_finished']=False;run['qa_delivery']='sending';store.save(run)
-        text=json.dumps({'run_id':identity,'candidate':candidate,'repo':run['repo'],'worktree':part['worktree'],
+        run['candidate']=candidate;run['qa']=None;run['qa_finished']=False;run['qa_delivery']='sending'
+        run['review_contract']={'id':str(uuid.uuid4()),'candidate':candidate,
+            'version':run.get('result_version',0),'verified_commits':True}
+        store.save(run)
+        text=json.dumps({'run_id':identity,'review_id':run['review_contract']['id'],'candidate':candidate,'repo':run['repo'],'worktree':part['worktree'],
             'tasks':run['brief']['tasks'],'results':{k:t['result'] for k,t in run['tasks'].items()},
             'instructions':'Review the complete integrated candidate at exactly this SHA. Do not write source. '
                 'Use owned wd-test resources only. Return reproducible findings and independent evidence.',
-            'report_schema':{'run_id':identity,'status':'qa','candidate':candidate,'verdict':'pass | fail',
+            'report_schema':{'run_id':identity,'review_id':run['review_contract']['id'],'status':'qa','candidate':candidate,'verdict':'pass | fail',
                              'summary':'Findings and limitations','tests':['command and observed result']}})
         try:
             run['qa_task']=Gossip(run['transport']).call(part['nickname'],text,task_id=run.get('qa_task'),label='Check integrated result',expected_key=part['pubkey'])
@@ -248,6 +316,11 @@ def report(store, identity, role, data):
     trial=json.loads(json.dumps(run))
     event={'id':str(uuid.uuid4()),'event':'task','kind':'artifact','author':part['nickname'],
            'pubkey':part['pubkey'],'task_id':task_id,'body':json.dumps(data)}
-    if not accept_event(trial,event):raise RuntimeError('Report did not match the assignment')
+    try:
+        if not accept_event(trial,event):raise RuntimeError('Report did not match the assignment')
+    except SupersededReview:
+        # Main must learn that the old attempt ended so it can safely request
+        # a new exact candidate. The receiving reducer still rejects approval.
+        pass
     args=['a2a','artifact'] if data['status'] in ('result','qa') else ['a2a','status','--state','input-required' if data['status']=='blocked' else 'working']
     return Gossip(run['transport'],part['nickname']).invoke(*args,'--task-id',task_id,'--text',json.dumps(data))

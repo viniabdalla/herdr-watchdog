@@ -101,3 +101,59 @@ class HerdrNativeTests(unittest.TestCase):
         self.assertEqual(len(team),2)
         open_run(run,api)
         self.assertNotEqual(run['tab'],original['tab_id'])
+
+@unittest.skipUnless(os.environ.get('WATCHDOG_GOSSIP_TEST')=='1', 'set WATCHDOG_GOSSIP_TEST=1 for graph metadata')
+class GraphMetadataNativeTests(unittest.TestCase):
+    def test_owned_graph_has_one_bound_leader_and_matching_worker_and_qa(self):
+        from dataclasses import asdict
+        from test_actions import FakeBinding
+        from watchdog_app.mission import RunStore
+        from watchdog_app.mission_launch import create_gossip
+        from watchdog_app.mission_transport import publish_identity, verify_graph
+        with tempfile.TemporaryDirectory(prefix='wd-test-graph-') as folder:
+            store=RunStore(folder)
+            run={'id':str(uuid.uuid4()),'repo':str(Path.cwd()),'main':asdict(FakeBinding(pid=os.getpid())),
+                 'participants':{}}
+            with patch('watchdog_app.mission_transport.time.time',return_value=1794925219.0016139):
+                run['transport']=create_gossip(run,store)
+            self.addCleanup(lambda:command(['agent-gossip','leave',run['transport']['gossip'],'--nickname',run['transport']['nickname']]))
+            for role in ('worker','qa'):
+                nick='wd-test-'+role+'-'+run['id'][:6];state=Path(folder)/(role+'.json')
+                command(['agent-gossip','join',run['transport']['gossip'],'--nickname',nick,
+                         '--owner-pid',str(os.getpid()),'--state-file',state])
+                self.addCleanup(lambda n=nick:command(['agent-gossip','leave',run['transport']['gossip'],'--nickname',n]))
+                deadline=time.monotonic()+8
+                while time.monotonic()<deadline:
+                    if state.exists() and json.loads(state.read_text()).get('ready'):break
+                    time.sleep(.05)
+                own=json.loads(state.read_text())
+                native=asdict(FakeBinding(session=role+'-thread',pane=role+'-pane'))
+                run['participants'][role]={'nickname':nick,'pubkey':own['pubkey'],'native':native,
+                    'worktree':folder,'model':'gpt-6.1-sol','effort':'medium'}
+                Gossip(run['transport'],nick).invoke('meta','merge','--merge','{"display_note":"existing peer metadata"}')
+                publish_identity(run,role)
+            deadline=time.monotonic()+8
+            while True:
+                metadata=json.loads(Gossip(run['transport']).invoke('meta','get'))
+                if len(metadata['document'])==3:break
+                if time.monotonic()>deadline:self.fail(metadata)
+                time.sleep(.05)
+            live={key:value for key,value in metadata['document'].items() if key not in metadata['absent']}
+            self.assertEqual([key for key,value in live.items() if value.get('leader')], [run['transport']['pubkey']])
+            for role,key,native in [('leader',run['transport']['pubkey'],run['main'])]+[(r,p['pubkey'],p['native']) for r,p in run['participants'].items()]:
+                self.assertEqual(live[key]['node'],role)
+                self.assertEqual(live[key]['instance'],run['id'])
+                self.assertEqual(live[key]['hash'],run['graph']['hash'])
+                self.assertEqual(live[key]['native'],native)
+            deadline=time.monotonic()+8
+            while True:
+                try:
+                    for role in ('worker','qa'):verify_graph(run,role)
+                    break
+                except RuntimeError:
+                    if time.monotonic()>deadline:raise
+                    time.sleep(.05)
+            worker=run['participants']['worker']
+            Gossip(run['transport'],worker['nickname']).invoke('meta','merge','--merge','{"leader":true}')
+            with self.assertRaisesRegex(RuntimeError,'one live approved leader'):
+                verify_graph(run,'worker')

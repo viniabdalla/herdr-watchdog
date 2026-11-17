@@ -97,3 +97,33 @@ class TransportTests(unittest.TestCase):
         self.store.save(self.run)
         with patch.object(transport,'verify_participant'),patch.object(transport,'owned_worktree'),self.assertRaisesRegex(RuntimeError,'QA review is still in progress'):
             transport.review(self.store,self.run['id'],'b'*40)
+
+    def test_empty_working_ack_is_not_a_report_and_malformed_error_recovers(self):
+        self.run['tasks']['task'].update(gossip_task='native-task',state='working')
+        self.store.save(self.run)
+        base={'event':'task','kind':'status-update','state':'working','author':'worker','pubkey':'key','task_id':'native-task'}
+        ack=dict(base,id='ack',seq=1,body='')
+        bad=dict(base,id='bad',seq=2,body='This is not a structured implementation report')
+        good=dict(base,id='good',seq=3,body=json.dumps({'run_id':self.run['id'],'task_id':'task','status':'working','summary':'Running tests'}))
+        with patch.object(transport,'register'),patch.object(transport,'forward'),patch.object(transport.Gossip,'peers',return_value=[]),patch.object(transport.Gossip,'poll',side_effect=[[ack],[bad],[good]]):
+            after=transport.tick(self.store,self.run['id'])
+            self.assertFalse(after.get('reason'))
+            self.assertFalse(after.get('report_errors'))
+            self.assertEqual(after['events'],{})
+            after=transport.tick(self.store,self.run['id'])
+            self.assertIn('native-task',after.get('report_errors',{}))
+            after=transport.tick(self.store,self.run['id'])
+            self.assertFalse(after.get('report_errors'))
+            self.assertEqual(after['tasks']['task']['summary'],'Running tests')
+
+    def test_superseded_qa_report_still_notifies_main_that_attempt_ended(self):
+        self.run.update(candidate='a'*40,qa_task='qa-native',qa_finished=False,result_version=2,
+            review_contract={'id':'review-A','candidate':'a'*40,'version':1,'verified_commits':True})
+        self.store.save(self.run)
+        report={'run_id':self.run['id'],'status':'qa','candidate':'a'*40,'review_id':'review-A',
+                'verdict':'pass','summary':'A review ended, now superseded','tests':['A suite passed']}
+        sent=[]
+        with patch.object(transport,'verify_participant'),patch.object(transport.Gossip,'invoke',side_effect=lambda *a:sent.append(a)):
+            transport.report(self.store,self.run['id'],'qa',report)
+        self.assertEqual(sent[0][:2],('a2a','artifact'))
+        self.assertIn('qa-native',sent[0])
