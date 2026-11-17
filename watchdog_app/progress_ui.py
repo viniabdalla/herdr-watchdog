@@ -9,6 +9,8 @@ from .mission_launch import open_run
 from .tasks_ui import put, safe
 from .todo import Snapshot
 from .session_progress import Progress
+from .actions import Session
+from .clean_sessions_ui import Controller
 
 
 def session_rows(view, width=80):
@@ -89,11 +91,18 @@ def panel(screen, repo, binding_file=None):
     except curses.error:pass
     selected=offset=0;notice=''
     progress=Progress(repo,binding_file)
+    clean=Controller(repo)
     while True:
         screen.erase();h,w=screen.getmaxyx()
         put(screen,0,'WATCHDOG / PROGRESS',curses.A_BOLD);put(screen,1,Path(repo).name)
-        try:source=rows(repo,progress=progress,width=w)
-        except (OSError,ValueError,KeyError,TypeError) as error:source=[('Cannot read runs: '+str(error),'blocked',None)]
+        try:
+            if binding_file:
+                session=Session.for_panel(binding_file,Path(repo))
+                if session.file!=Path(binding_file):
+                    binding_file=session.file;progress=Progress(repo,binding_file)
+                clean.poll(session.binding)
+            source=[(text,'blocked' if color=='Blocked' else 'working',None) for text,color,_ in clean.rows()]+rows(repo,progress=progress,width=w)
+        except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:source=[('Cannot read runs: '+str(error),'blocked',None)]
         rendered=[]
         for text,color,run in source:
             rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])

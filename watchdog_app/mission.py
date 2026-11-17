@@ -57,7 +57,7 @@ def request(session, snapshot, ids, *, confirmed=False, store=None):
     if not confirmed:
         raise RuntimeError('Explicit confirmation is required')
     store = store or RunStore()
-    with locked(snapshot.repo):
+    with session.routing(), locked(snapshot.repo):
         snapshot.assert_current()
         tasks = snapshot.selected(ids)
         session.verify()

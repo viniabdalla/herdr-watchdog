@@ -133,15 +133,23 @@ source snapshots, assignments, results and owned resource mappings.
 
 ## Leader handoff / Clean sessions
 
-`watchdog mission handoff-export` writes a bounded continuation capsule outside
-Git. It references selected-task evidence and explicit sidecars without reading
-raw conversations or treating sidecars as completed TODO work. Legacy runs are
-export-only. Native runs support an explicit verified preview and confirmed
-adoption of an operator-supplied fresh main, preserving current attempts and
-exact results/QA. Current actors finish only their current assignment; later
-tasks and reviews require fresh conversations. No actor, panel, binding file or queue is
-restarted or silently redirected. See [Leader handoff](docs/leader-handoff.md)
-for the conservative idle/clean boundary and single-use CLI flow.
+Tasks' **c / Clean sessions** requests the verified current leader to reconcile
+TODO and save a real ai-memory MCP handoff. Review the exact project/thread and
+explicit owned-file, approved-branch, push and fresh-frontend scope, then confirm.
+The backend commits owned changes, fast-forwards only approved branches, verifies
+the pushed checkpoint, creates a fresh Herdr split/Codex frontend, delivers bounded
+context to its exact thread and waits for actual receiver receipt and predecessor
+release. Store then transfers Tasks/Progress and the existing Orchestrate target,
+preserving panel terminals, Artifacts, Files/Yazi and layout. Left Undone is read-only.
+Pending/blocked/partial/received/released outcomes and uncertain effects stay visible;
+no blind resend or relaunch occurs. Active native runs must finish first.
+
+The separate `watchdog mission handoff-export`/preview/adopt APIs retain their
+bounded run-evidence and freshness guards. Legacy ledgers stay export-only; project
+baton transfer never forges native legacy adoption. See
+[Leader handoff](docs/leader-handoff.md) for the workflow, boundaries and evidence.
+Tests use real isolated Git/remotes and UI controls with labelled simulated
+model/native/ai-memory/Herdr boundaries; production end-to-end acceptance is separate.
 
 The clean-session policy supersedes older transport-probe examples: never use a
 real-task executor for a probe. The current grandfathered worker finishes only

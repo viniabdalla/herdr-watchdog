@@ -1,10 +1,96 @@
 # Leader handoff / Clean sessions
 
-This CLI-first MVP prepares a fresh leader to coordinate current assignments
-and supply clean conversations for subsequent work. It does not start a conversation, clear an actor's context, move/focus a
-tab or restart anything. An actual new main must be supplied explicitly by the
-operator. No production leadership switch is implied by exporting a capsule or
-by the automated tests.
+Tasks now has **c / Clean sessions**, independent of task selection. It shows
+this project, the full current native thread/account, and an editable scope:
+configured push remote, current destination branch, exact owned files, explicitly
+approved integration branches, dedicated Codex executable, model and effort.
+Tab/Up/Down selects a field, Ctrl+U clears it, Enter reviews and **y** confirms.
+The upstream supplies destination defaults; there is no guessed push destination.
+Only `TODO.md` is authorized by default. Add other owned file paths explicitly;
+branch integration defaults to none and supports fast-forward only.
+
+Confirmation queues a precise request to the verified current leader. That
+leader reconciles TODO honestly and must call the **actual ai-memory MCP
+`memory_handoff_begin`** with a concise summary, questions, unfinished work and
+next steps. The request supplies the exact tool/argument conventions and response
+format. Semantic TODO reconciliation and memory save/accept are **leader
+attestations**, not deterministic semantic checks or a new memory backend. Missing
+ai-memory produces a visible blocker; a handwritten replacement file is not
+memory transfer. The bounded continuation JSON is transport/checkpoint evidence
+referencing that real handoff, never an independent memory service.
+
+The backend verifies the preparation reply from **new completed assistant events**
+in the pinned native history, then commits only authorized owned files, integrates
+only the pinned approved branch heads and pushes to the explicit destination.
+Unowned dirty/staged files, moved refs, non-fast-forward integration, changed
+remotes or failed push stop the operation. It verifies the actual push URL's
+remote SHA before recording the checkpoint. TODO completion is never inferred
+from dispatch, file presence or a queue receipt.
+
+At that checkpoint it performs the observed `Herdr().call('pane', 'split',
+verified_leader.pane, '--direction', 'right', '--cwd', repo, '--no-focus')['pane']`
+and runs a dedicated fresh Codex frontend. The wrapper uses the approved account,
+executable/model/effort, removes inherited thread/auth/memory environment, and
+restores its owned terminal with `TerminalLease`. Native full thread, account,
+project, pane, terminal, PID/start and freshness claims are checked. Continuation
+is queued through `bindings.engine().queue` to that exact full thread. Existing
+actors and panes stay intact.
+
+A queue receipt means delivery only. A correlated **completed native successor
+reply** must confirm operation/token, checkpoint, continuation digest and actual
+ai-memory handoff receipt (the exact hook-supplied handoff, or
+`memory_handoff_list` followed by `memory_handoff_accept` for that ID). Then the
+predecessor receives an explicit release request, replies with the exact
+operation/checkpoint/successor and parks. Only after both real completed replies
+and final idle/native/Git checks does Store relinquish old ownership and activate
+the successor. Tasks and Progress follow the correlated Watchdog redirect in the
+same terminals. Artifacts, Files/Yazi client and layout are retained; Left Undone
+stays read-only. An activation message then tells the successor it may lead. The
+existing **Orchestrate** action uses the successor's authoritative Session binding.
+New Send/Orchestrate requests are serialized against pending/partial cleanup.
+
+Tasks and Progress show `pending` (with the exact current stage), `blocked`,
+`partial`, `received` and `released`. Side-effect intents are durable before Git,
+Herdr, queue or ownership mutations. Duplicate or uncertain confirmations,
+replaced history/identity, stale checkpoints and interrupted writes fail visibly.
+A crash between Store writes leaves ownership unavailable rather than creating
+two active coordinators. No failed queue, split, startup, push or rebind is
+repeated automatically. Keep a panel open to advance the workflow; the other
+panel can continue it if one closes. After closing both, reopen either panel.
+
+Inspect retained evidence with:
+
+```sh
+watchdog clean-sessions inspect --operation OPERATION_UUID --state-dir WATCHDOG_STATE_ROOT
+```
+
+Evidence is under `WATCHDOG_STATE_ROOT/clean-sessions/`. A blocked/partial operation
+requires operator inspection of its exact Git/queue/pane/ownership outcome;
+there is deliberately no blind resume/resend or automatic claim removal. Do not
+delete operation or purpose records to bypass an uncertain outcome.
+
+This **project baton** flow refuses active native runs until their existing owner
+has finished them. It does not silently rewrite a run's whole-TODO digest or
+replace its coordinator. The separate native run preview/adopt API below retains
+its existing safety checks. Historical Gossip ledgers (including the original
+legacy run and digest) remain byte-untouched and export-only. A project baton is
+not a native adoption of a legacy ledger. Later Run scope, Agents and Plan reader
+work remain outside this feature.
+
+Validation uses real temporary Git repositories/bare remotes, real Store/Session
+and Tasks controls (including a curses PTY), with explicitly **simulated** model,
+ai-memory replies, native registry/queue, frontend child and Herdr boundaries.
+Tests cover UI request through receipt/release and existing Orchestrate routing,
+owned commit/approved integration/push and failure injection without resend.
+No production model sessions or leadership transfer were executed by these tests;
+a live end-to-end demonstration with the actual ai-memory service and fresh
+native frontend remains an operator acceptance step.
+
+## Existing run capsule CLI
+
+The independent CLI-first run handoff APIs below export bounded evidence and
+adopt an already supplied fresh native main. They do not perform the project UI
+workflow described above, create a frontend, or transfer panel ownership.
 
 ## Bounded continuation evidence
 
@@ -56,7 +142,7 @@ legacy export creates no adoption authority and never uses/rebinds Gossip.
 
 The operator first supplies an already existing Watchdog binding JSON for the
 new Codex main: the same canonical `repo` plus its fully registered `binding`.
-This feature does not create or modify that file. Then:
+This run-adoption API does not create or modify that file. Then:
 
 ```sh
 python3 /absolute/controller/watchdog mission handoff-preview \

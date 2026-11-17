@@ -8,6 +8,7 @@ import time
 from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
+from .clean_sessions_ui import Controller, Setup, confirmation_rows
 
 
 def safe(text):
@@ -59,9 +60,10 @@ class TasksUI:
         self.open_when_ready = False
         self.targets, self.mouse_armed = [], None
         self.palette = colors()
+        self.clean = Controller(self.repo)
         self.can_confirm = False
         try:
-            self.session = Session(binding_file, self.repo)
+            self.session = Session.for_panel(binding_file, self.repo) if binding_file else Session(None, self.repo)
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
             self.session = Session(None, self.repo)
             self.notice = str(error)
@@ -69,6 +71,18 @@ class TasksUI:
             self.review_status = 'Codex: unbound · open with watchdog to review or send'
 
     def refresh(self):
+        try:
+            target = self.session.successor_file()
+            if target:
+                self.job.close()
+                self.session = Session(target, self.repo)
+                self.last_auto_key = None
+                self.mode, self.pending = 'tasks', None
+                self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + self.session.binding.session
+            if self.session.binding:
+                self.clean.poll(self.session.binding)
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+            self.notice = str(error)
         try:
             snapshot = Snapshot.read(self.repo)
             if self.snapshot and snapshot.digest != self.snapshot.digest:
@@ -100,7 +114,8 @@ class TasksUI:
                 self.review_status = 'Codex result is stale; press r to review again'
         if self.job.running:
             self.review_status = 'Codex: reviewing the last completed reply…'
-        if self.session.binding and self.snapshot and time.monotonic() >= self.next_check:
+        if (self.session.binding and self.snapshot and time.monotonic() >= self.next_check and
+                not (self.clean.operation and self.clean.operation['state'] != 'released')):
             self.next_check = time.monotonic() + 5
             try:
                 source = latest_reply(self.session.binding)
@@ -112,8 +127,12 @@ class TasksUI:
 
     def body(self):
         rows = []
+        if self.mode == 'clean_setup':
+            return self.clean_setup.rows(self.session)
         if self.mode == 'confirm':
             offer = self.pending
+            if offer['kind'] == 'clean':
+                return confirmation_rows(self.session, offer['policy'])
             title = {'done': 'Confirm completion', 'send': 'Confirm send',
                      'queue': 'Conversation is working — confirm queue',
                      'orchestrate': 'Confirm orchestration',
@@ -161,8 +180,9 @@ class TasksUI:
             for error in self.result['rejected']:
                 rows.append(('Withheld: ' + error, 'Blocked', None))
             return rows
+        rows.extend(self.clean.rows())
         if not self.snapshot:
-            return [('TODO.md is unavailable. Create or fix it in the project folder.', None, None)]
+            return rows + [('TODO.md is unavailable. Create or fix it in the project folder.', None, None)]
         suggestions = {a['id']: a for a in (self.result or {}).get('actions', []) if 'id' in a}
         for section in SECTIONS:
             tasks = [t for t in self.snapshot.tasks if t.section == section]
@@ -196,11 +216,14 @@ class TasksUI:
         if self.mode == 'confirm':
             buttons = [('Confirm y', 'y'), ('Cancel Esc', 'escape')]
             hint = 'y: confirm · Esc: cancel · j/k: scroll'
+        elif self.mode == 'clean_setup':
+            buttons = [('Review Enter', 'enter'), ('Cancel Esc', 'escape')]
+            hint = 'Tab/Up/Down: field · type to edit · Ctrl+U: clear · Enter: review'
         elif self.mode == 'proposals':
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         else:
-            buttons = [('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
+            buttons = [('Clean sessions c', 'c'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
             hint = 'Space: select · j/k: move · PgUp/PgDn'
         packed, x, line = [], 0, 0
@@ -257,7 +280,14 @@ class TasksUI:
 
     def execute(self):
         offer = self.pending
-        if offer['kind'] in ('send', 'queue'):
+        if (offer['kind'] != 'clean' and self.clean.operation and
+                self.clean.operation['state'] != 'released'):
+            raise RuntimeError('Clean sessions '+self.clean.operation['state']+'; inspect transfer before editing tasks or sending')
+        if offer['kind'] == 'clean':
+            self.job.close()
+            operation = self.clean.start(self.session, offer['policy'])
+            self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
+        elif offer['kind'] in ('send', 'queue'):
             try:
                 self.session.dispatch(offer['snapshot'], offer['ids'], offer['kind'] == 'queue')
             except Busy as error:
@@ -292,6 +322,14 @@ class TasksUI:
         h, w = self.screen.getmaxyx()
         if h < 10 or w < 24:
             return key != 'q'
+        if self.mode == 'clean_setup':
+            if key == 'enter':
+                self.session.verify()
+                self.pending = {'kind': 'clean', 'policy': self.clean_setup.policy.copy()}
+                self.mode, self.scroll = 'confirm', 0
+            else:
+                self.clean_setup.handle(key)
+            return True
         if key in ('up', 'k', 'down', 'j'):
             if self.mode == 'confirm':
                 self.scroll = max(0, self.scroll + (1 if key in ('down', 'j') else -1))
@@ -335,6 +373,10 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif key == 'c':
+            self.session.verify()
+            self.clean_setup = Setup(self.session)
+            self.mode, self.scroll = 'clean_setup', 0
         elif key == 'o':
             self.confirm('orchestrate')
         elif key == 's':
@@ -392,6 +434,7 @@ class TasksUI:
         curses.mousemask(curses.ALL_MOUSE_EVENTS)
         keys = {curses.KEY_UP: 'up', curses.KEY_DOWN: 'down', curses.KEY_NPAGE: 'pagedown',
                 curses.KEY_PPAGE: 'pageup', curses.KEY_HOME: 'home', curses.KEY_ENTER: 'enter',
+                curses.KEY_BACKSPACE: 'backspace', curses.KEY_BTAB: 'backtab',
                 '\n': 'enter', '\r': 'enter', '\x1b': 'escape'}
         try:
             while True:

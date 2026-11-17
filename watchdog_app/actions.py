@@ -1,4 +1,5 @@
 """Explicit task routing through the same verified native binding engine."""
+from contextlib import contextmanager
 from dataclasses import asdict
 import json
 from pathlib import Path
@@ -37,6 +38,8 @@ class Session:
         if self.binding is None:
             raise RuntimeError('No conversation binding. Open this panel with watchdog first.')
         data = json.loads(self.file.read_text())
+        if data.get('ownership') in ('released', 'transferring'):
+            raise RuntimeError('Panel ownership was released; follow the verified successor in Tasks')
         if data.get('binding') != asdict(self.binding) or Path(data['repo']).resolve() != self.repo:
             raise RuntimeError('Conversation binding changed; reopen Tasks before sending or reviewing')
         try:
@@ -48,8 +51,60 @@ class Session:
             raise RuntimeError('Conversation project association changed; reopen Watchdog')
         return live
 
+    @classmethod
+    def for_panel(cls, file, repo):
+        """Follow only correlated Watchdog redirects; the final identity is live verified."""
+        current = Path(file)
+        for _ in range(16):
+            data = json.loads(current.read_text())
+            if Path(data['repo']).resolve() != Path(repo).resolve():
+                raise RuntimeError('Panel redirect belongs to another project')
+            if data.get('ownership') != 'released':
+                return cls(current, repo)
+            target = Path(data['successor_binding_file'])
+            if target.is_symlink() or target.parent.resolve() != current.parent.resolve():
+                raise RuntimeError('Successor binding must stay in Watchdog state')
+            value = json.loads(target.read_text())
+            if (not data.get('transfer_operation') or
+                    value.get('transfer_operation') != data['transfer_operation'] or
+                    value.get('predecessor_binding') != data['binding']):
+                raise RuntimeError('Successor panel transfer correlation changed')
+            current = target
+        raise RuntimeError('Panel redirect chain is cyclic or too long')
+
+    def successor_file(self):
+        """UI-only explicit redirect. Existing dispatch jobs never retarget silently."""
+        if not self.file:
+            return None
+        data = json.loads(self.file.read_text())
+        target = data.get('successor_binding_file')
+        if data.get('ownership') != 'released' or not target:
+            return None
+        path = Path(target)
+        if path.is_symlink() or path.parent.resolve() != self.file.parent.resolve():
+            raise RuntimeError('Successor binding must stay in Watchdog state')
+        value = json.loads(path.read_text())
+        if (value.get('transfer_operation') != data.get('transfer_operation') or
+                value.get('predecessor_binding') != asdict(self.binding)):
+            raise RuntimeError('Successor panel transfer correlation changed')
+        return Session.for_panel(path, self.repo).file
+
+    @contextmanager
+    def routing(self):
+        """Serialize new coordination/task sends against a project leader transfer."""
+        from .clean_sessions import lease, operations
+        from .store import Store
+        if not self.file:
+            self.verify()
+        store = Store(self.file.parent)
+        with lease(store, self.repo):
+            for operation in operations(store, self.repo):
+                if operation['state'] != 'released':
+                    raise RuntimeError('Clean sessions '+operation['state']+'; inspect the transfer before sending new work')
+            yield
+
     def dispatch(self, snapshot, ids, queued=False):
-        with locked(snapshot.repo):
+        with self.routing(), locked(snapshot.repo):
             snapshot.assert_current()
             tasks = snapshot.selected(ids)
             live = self.verify()
