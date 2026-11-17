@@ -200,3 +200,37 @@ class TransportTests(unittest.TestCase):
                 self.assertEqual(len(self.delivered),1)
                 self.assertIn('report retained for inspection',self.delivered[0])
                 self.assertNotIn('New identity claims result',self.delivered[0])
+
+    def test_recovered_native_identity_clears_only_its_stale_progress_warning(self):
+        from watchdog_app.progress_ui import rows
+        for role in ('worker','qa'):
+            with self.subTest(role=role):
+                run=copy.deepcopy(self.run)
+                run.update(qa_task='qa-native',candidate='a'*40,qa_finished=False,
+                    review_contract={'id':'review-A','candidate':'a'*40,'version':0,'verified_commits':True})
+                run['participants']['qa']['native']={'session':'qa-native'}
+                run['tasks']['task'].update(gossip_task='native-task',state='review',
+                    result={'commits':['a'*40],'tests':['passed']})
+                self.store.save(run)
+                data={'run_id':run['id'],'summary':'Verified recovery','tests':['passed']}
+                data.update({'task_id':'task','status':'result','commits':['a'*40]} if role=='worker' else
+                    {'status':'qa','candidate':'a'*40,'review_id':'review-A','verdict':'pass'})
+                event={'id':'rejected','seq':1,'event':'task','kind':'artifact-update','author':role,
+                       'pubkey':run['participants'][role]['pubkey'],
+                       'task_id':'native-task' if role=='worker' else 'qa-native','body':json.dumps(data)}
+                failing=[True]
+                def verify(_,checking):
+                    if failing[0] or checking!=role:raise RuntimeError('Native identity unavailable for '+checking)
+                with patch.object(transport,'verify_participant',side_effect=verify),patch.object(transport.Gossip,'peers',return_value=[{'pubkey':'key'},{'pubkey':'qa-key'}]),patch.object(transport.Gossip,'poll',side_effect=[[event],[dict(event,id='recovered',seq=2)]]):
+                    rejected=transport.tick(self.store,run['id'])
+                    self.assertEqual(rejected['tasks'],run['tasks'])
+                    failing[0]=False
+                    recovered=transport.tick(self.store,run['id'])
+                self.assertTrue(recovered['participants'][role]['available'])
+                self.assertFalse(recovered['participants'][role].get('problem'))
+                self.assertFalse(recovered.get('report_errors'))
+                self.assertEqual(recovered['events']['recovered']['report'],data)
+                other='qa' if role=='worker' else 'worker'
+                primary='\n'.join(row[0] for row in rows(self.repo,self.store))
+                self.assertNotIn('Native identity unavailable for '+role,primary)
+                self.assertIn('Native identity unavailable for '+other,primary)

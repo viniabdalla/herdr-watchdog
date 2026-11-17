@@ -111,6 +111,7 @@ def register(run, store, peers):
         if part.get('native'):
             try:
                 verify_participant(run, role)
+                part.pop('problem',None)
             except RuntimeError as error:
                 part['available'] = False;part['problem'] = str(error)
             continue
