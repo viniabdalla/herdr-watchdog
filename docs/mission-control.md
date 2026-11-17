@@ -75,6 +75,9 @@ concrete summary. Free-form “done”, process exit, heartbeat loss and an arti
 alone never complete a task. Follow-ups preserve the same run, selected task and
 Gossip task identities. Scope changes or task edits require a fresh contract;
 a clarification is not authority to broaden the original allowed files.
+Progress shows “Guidance sent; waiting for the agent” after a follow-up. The full
+instruction and its delivery status remain in the task's `guidance` history,
+available through `mission inspect`, including uncertain deliveries.
 
 The main checks and integrates commits into its feature branch. For multiple
 selected tasks, accept the returned result for sequencing, then dispatch the

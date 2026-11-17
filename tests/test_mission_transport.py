@@ -22,7 +22,7 @@ class TransportTests(unittest.TestCase):
         git(self.repo,"add","TODO.md");git(self.repo,"commit","-qm","base")
         self.store=RunStore(Path(self.temp.name)/"runs")
         fixture=test_mission.StateTests();fixture.setUp();self.run=fixture.run
-        self.run.update(id='9c6e1ad3-c0c9-4e05-b4dc-b367753ce3e1',repo=str(self.repo),
+        self.run.update(id='9c6e1ad3-c0c9-4e05-b4dc-b367753ce3e1',created=1,repo=str(self.repo),
             transport={'gossip':'room','nickname':'main'},cursor=0,source_digest=__import__('hashlib').sha256((self.repo/'TODO.md').read_bytes()).hexdigest(),brief={'tasks':[{
                 'id':'task','dependencies':[],'allowed_files':['a.py'],'acceptance':['Works'],'tests':['python -m unittest']}], 'base_sha':git(self.repo,'rev-parse','HEAD')})
         self.run['tasks']['task']['state']='ready'
@@ -45,11 +45,35 @@ class TransportTests(unittest.TestCase):
         self.run['tasks']['task'].update(gossip_task='existing',state='blocked',delivery='sent')
         self.store.save(self.run)
         calls=[]
+        guidance='Use /tmp/wd-test-fixture/input.json.\nRun WATCHDOG_GOSSIP_TEST=1 python -m unittest; preserve sandbox settings.'
         with patch.object(transport.Gossip,'call',side_effect=lambda *a,**k:calls.append((a,k)) or 'existing'), patch.object(transport,'verify_participant'):
-            transport.followup(self.store,self.run['id'],'task','Use the existing test fixture')
+            transport.followup(self.store,self.run['id'],'task',guidance)
         self.assertEqual(calls[0][1]['task_id'],'existing')
-        self.assertIn('Use the existing test fixture',calls[0][0][1])
-        self.assertEqual(self.store.load(self.run['id'])['tasks']['task']['gossip_task'],'existing')
+        self.assertEqual(json.loads(calls[0][0][1])['clarification'],guidance)
+        task=self.store.load(self.run['id'])['tasks']['task']
+        self.assertEqual(task['gossip_task'],'existing')
+        from watchdog_app.progress_ui import rows
+        primary='\n'.join(row[0] for row in rows(self.repo,self.store))
+        self.assertIn('Guidance sent; waiting for the agent',primary)
+        self.assertNotIn('/tmp/wd-test-fixture',primary)
+        self.assertNotIn('WATCHDOG_GOSSIP_TEST',primary)
+        self.assertEqual(task['guidance'][-1]['text'],guidance)
+        self.assertEqual(task['guidance'][-1]['task_id'],'existing')
+        self.assertEqual(task['guidance'][-1]['delivery'],'sent')
+
+    def test_uncertain_followup_preserves_guidance_without_automatic_retry(self):
+        self.run['tasks']['task'].update(gossip_task='existing',state='blocked',delivery='sent')
+        self.store.save(self.run)
+        with patch.object(transport.Gossip,'call',side_effect=RuntimeError('timeout')) as send,patch.object(transport,'verify_participant'):
+            with self.assertRaisesRegex(RuntimeError,'timeout'):
+                transport.followup(self.store,self.run['id'],'task','Use the approved fixture')
+            with self.assertRaisesRegex(RuntimeError,'uncertain'):
+                transport.followup(self.store,self.run['id'],'task','Use the approved fixture')
+        self.assertEqual(send.call_count,1)
+        task=self.store.load(self.run['id'])['tasks']['task']
+        self.assertEqual(len(task['guidance']),1)
+        self.assertEqual(task['guidance'][0]['text'],'Use the approved fixture')
+        self.assertEqual(task['guidance'][0]['delivery'],'uncertain')
 
     def test_bridge_queues_compact_event_once_and_never_on_switched_main(self):
         run=self.run

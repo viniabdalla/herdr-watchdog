@@ -191,14 +191,18 @@ def followup(store, identity, task_id, text):
         if not task.get('gossip_task') or task['state']=='done':raise RuntimeError('No active correlated task')
         if task.get('followup_delivery') in ('sending','uncertain'):
             raise RuntimeError('Previous follow-up is uncertain; inspect the peer before any retry')
+        guidance={'text':text,'task_id':task['gossip_task'],'created':time.time(),'delivery':'sending'}
+        task.setdefault('guidance',[]).append(guidance)
         task['followup_delivery']='sending';store.save(run)
         try:
             Gossip(run['transport']).call(run['participants']['worker']['nickname'],
                 json.dumps({'run_id':identity,'task_id':task_id,'clarification':text,
                             'contract':assignment(run,task_id),'scope_change_allowed':False}),task_id=task['gossip_task'],expected_key=run['participants']['worker']['pubkey'])
         except Exception:
+            guidance.update(delivery='uncertain',updated=time.time())
             task['followup_delivery']='uncertain';store.save(run);raise
-        task.update(followup_delivery='sent',state='working',summary=text,updated=time.time())
+        guidance.update(delivery='sent',updated=time.time())
+        task.update(followup_delivery='sent',state='working',summary='Guidance sent; waiting for the agent',updated=time.time())
         task.pop('accepted_result',None);task.pop('result',None);run['qa']=None
         run['result_version']=run.get('result_version',0)+1
         store.save(run)
