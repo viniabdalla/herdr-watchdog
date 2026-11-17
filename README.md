@@ -67,11 +67,12 @@ are withheld visibly. New replies or task edits invalidate old confirmations.
 ## Current limits
 
 The launcher, verified binding, four layouts and artifact-to-Yazi link work.
-Tasks is interactive with confirmed curator proposals. Session progress is
-manually maintained, and artifacts come from an explicit list. Automatic session
-checklist reading and artifact discovery remain pending.
-Other projects without the preview source files show missing-source messages;
-the remaining data adapters are future work.
+Tasks is interactive with confirmed curator proposals. Progress reads successful
+native checklist calls from the explicitly verified conversation; it no longer
+reads the manual preview checklist. Missing or unsupported checklist data has
+an explicit status without a percentage. Artifacts still uses an explicit list;
+automatic artifact discovery remains pending. See [Session progress](docs/session-progress.md)
+for supported formats and evidence limits.
 
 This project's TODO.md uses the shared git-todo section format. The displayed
 project ratio counts only the currently listed tasks. It is not a prediction

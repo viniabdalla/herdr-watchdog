@@ -90,7 +90,7 @@ def ensure_panels(api, state, save):
         else:
             argv = [sys.executable, str(ROOT / 'watchdog'), 'panel', role, '--repo',
                     state['repo'], '--yazi-client-id', state['yazi_client_id']]
-            if role == 'tasks' and state.get('binding_file'):
+            if role in ('tasks', 'progress') and state.get('binding_file'):
                 argv += ['--binding-file', state['binding_file']]
         pane['launch_state'] = 'starting'
         save()

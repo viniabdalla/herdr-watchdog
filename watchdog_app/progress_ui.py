@@ -8,10 +8,29 @@ from .mission import RunStore, task_view
 from .mission_launch import open_run
 from .tasks_ui import put, safe
 from .todo import Snapshot
+from .session_progress import Progress
 
 
-def rows(repo, store=None):
-    result=[]
+def session_rows(view, width=80):
+    labels={'ready':('Ready','ready'), 'working':('Working','working'),
+            'done':('Done','done'), 'no_checklist':('No checklist','unavailable'),
+            'catching_up':('Catching up','review'), 'unsupported':('Unsupported','unavailable'),
+            'unavailable':('Unavailable','unavailable')}
+    label,color=labels[view.state]
+    result=[('SESSION · '+label,color,None)]
+    if view.total is not None:
+        size=max(4,min(28,width-20))
+        filled=size*view.done//view.total
+        result.append(('['+'#'*filled+'-'*(size-filled)+f'] {view.done}/{view.total} complete',color,None))
+        if view.current:result.append(('Current: '+view.current,color,None))
+    elif view.detail:
+        result.append((view.detail,color,None))
+    result.append(('',None,None))
+    return result
+
+
+def rows(repo, store=None, *, progress=None, width=80):
+    result=session_rows((progress or Progress(repo)).poll(), width)
     for run in (store or RunStore()).list(repo):
         result.append(('RUN '+run['id'][:8]+' · '+{'requested':'Preparing the brief','launching':'Opening the team','active':'Team is running','blocked':'Needs help','done':'Done'}.get(run['phase'],'Unavailable'),None,run))
         if run.get('reason'):result.append((run['reason'],'blocked',run))
@@ -34,7 +53,7 @@ def rows(repo, store=None):
             if part.get('problem'):result.append((role+': '+part['problem'],'blocked',run))
         result.append(('Enter: open execution tab' if run.get('tab') else 'Waiting for execution tab',None,run))
         result.append(('',None,None))
-    if not result:result=[('No active runs. Select tasks and choose Orchestrate.',None,None),('',None,None)]
+    if not any(run for _,_,run in result):result.extend([('No active runs. Select tasks and choose Orchestrate.',None,None),('',None,None)])
     try:
         snapshot=Snapshot.read(repo)
         done=sum(t.done for t in snapshot.tasks)
@@ -45,7 +64,7 @@ def rows(repo, store=None):
     return result
 
 
-def panel(screen, repo):
+def panel(screen, repo, binding_file=None):
     try:curses.curs_set(0)
     except curses.error:pass
     screen.keypad(True);screen.timeout(1000);curses.mousemask(curses.ALL_MOUSE_EVENTS)
@@ -59,10 +78,11 @@ def panel(screen, repo):
                 curses.init_pair(i,color if curses.COLORS>=16 else color%8,bg);palette[name]=curses.color_pair(i)
     except curses.error:pass
     selected=offset=0;notice=''
+    progress=Progress(repo,binding_file)
     while True:
         screen.erase();h,w=screen.getmaxyx()
         put(screen,0,'WATCHDOG / PROGRESS',curses.A_BOLD);put(screen,1,Path(repo).name)
-        try:source=rows(repo)
+        try:source=rows(repo,progress=progress,width=w)
         except (OSError,ValueError,KeyError,TypeError) as error:source=[('Cannot read runs: '+str(error),'blocked',None)]
         rendered=[]
         for text,color,run in source:
@@ -93,5 +113,5 @@ def panel(screen, repo):
                 except (RuntimeError,OSError,ValueError,KeyError) as error:notice=str(error)
 
 
-def run(repo):
-    curses.wrapper(panel,Path(repo).resolve())
+def run(repo, binding_file=None):
+    curses.wrapper(panel,Path(repo).resolve(),binding_file)
