@@ -1,0 +1,87 @@
+[
+  {
+    "path": "TODO.md",
+    "agent": "Codex",
+    "summary": "Shared task list for this project."
+  },
+  {
+    "path": "tools/watchdog-preview.py",
+    "agent": "Codex",
+    "summary": "Panel entry point: interactive Tasks, preview Progress and Artifacts."
+  },
+  {
+    "path": "docs/preview-session.json",
+    "agent": "Codex",
+    "summary": "Manually maintained checklist for this preview setup."
+  },
+  {
+    "path": "docs/preview-artifacts.json",
+    "agent": "Codex",
+    "summary": "Explicit preview artifact list; automatic tracking is not connected yet."
+  },
+  {
+    "path": "docs/watchdog-mvp-notes.md",
+    "agent": "Codex",
+    "summary": "Revised scope, tested Herdr limitations and what this preview actually does."
+  },
+  {
+    "path": "tests/test_artifacts_yazi.py",
+    "agent": "Codex",
+    "summary": "Real-terminal regression for revealing an artifact in the linked Yazi pane."
+  },
+  {
+    "path": "watchdog",
+    "agent": "Codex",
+    "summary": "Installed launcher: choose a verified conversation and a layout."
+  },
+  {
+    "path": "watchdog_app/app.py",
+    "agent": "Codex",
+    "summary": "Command handling, panel startup checks and reuse of the native Left Undone."
+  },
+  {
+    "path": "watchdog_app/bindings.py",
+    "agent": "Codex",
+    "summary": "Uses Left Undone's account, process and conversation verification."
+  },
+  {
+    "path": "watchdog_app/layouts.py",
+    "agent": "Codex",
+    "summary": "Applies all four layouts while preserving terminal processes."
+  },
+  {
+    "path": "README.md",
+    "agent": "Codex",
+    "summary": "How to install and use the launcher, with current preview limitations."
+  },
+  {
+    "path": "docs/reviewed-project-tasks.md",
+    "agent": "Codex",
+    "summary": "The eight remaining project tasks after replacing the stale Left Undone list."
+  },
+  {
+    "path": "docs/left-undone-curation-diagnosis.md",
+    "agent": "Codex",
+    "summary": "Which model the curator uses, two Codex replay failures and why missed completions stay stale."
+  },
+  {
+    "path": "watchdog_app/tasks_ui.py",
+    "agent": "Codex",
+    "summary": "Interactive task selection, colors, confirmations and review proposals."
+  },
+  {
+    "path": "watchdog_app/curate.py",
+    "agent": "Codex",
+    "summary": "Codex reviewer of completed replies against project TODO tasks."
+  },
+  {
+    "path": "watchdog_app/todo.py",
+    "agent": "Codex",
+    "summary": "Preserved TODO edits, backups and concurrent-edit conflict handling."
+  },
+  {
+    "path": "watchdog_app/actions.py",
+    "agent": "Codex",
+    "summary": "Verified account and full-thread Codex inbox delivery."
+  }
+]

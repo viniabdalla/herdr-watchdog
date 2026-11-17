@@ -1,0 +1,41 @@
+{
+  "title": "Watchdog roadmap \u2014 manual checklist",
+  "steps": [
+    {
+      "text": "Implement task selection, confirmation and Codex inbox delivery",
+      "status": "done"
+    },
+    {
+      "text": "Validate real-thread Codex inbox delivery in a disposable conversation",
+      "status": "done"
+    },
+    {
+      "text": "Read the conversation checklist automatically",
+      "status": "pending"
+    },
+    {
+      "text": "Codex reply-based proposals with confirmed application",
+      "status": "done"
+    },
+    {
+      "text": "Evaluate curator proposals on real conversations; retain confirmation",
+      "status": "pending"
+    },
+    {
+      "text": "Discover and summarize AI-created artifacts automatically",
+      "status": "pending"
+    },
+    {
+      "text": "Add durable progress history across TODO edits",
+      "status": "pending"
+    },
+    {
+      "text": "Show account names in the conversation picker",
+      "status": "pending"
+    },
+    {
+      "text": "Start clean-context sessions; evaluate agent-gossip",
+      "status": "pending"
+    }
+  ]
+}
