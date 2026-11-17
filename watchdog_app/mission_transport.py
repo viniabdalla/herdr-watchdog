@@ -8,16 +8,21 @@ import uuid
 
 from . import bindings
 from .mission import accept_event, contact, SupersededReview
-from .mission_launch import command, git, main_session, source_current, owned_worktree
+from .mission_launch import command, git, main_session, source_current, owned_worktree, ROOT
+import shlex
+import sys
 
 
 class Gossip:
-    def __init__(self, transport, nickname=None):
+    def __init__(self, transport, nickname=None, *, session_context=None):
         self.room = transport['gossip']
         self.nickname = nickname or transport['nickname']
+        self.session_context = session_context
 
     def invoke(self, *args):
-        return command(['agent-gossip', *args, '--gossip', self.room, '--nickname', self.nickname], timeout=15)
+        argv=['agent-gossip', *args, '--gossip', self.room, '--nickname', self.nickname]
+        if self.session_context:argv += ['--session-context',self.session_context]
+        return command(argv, timeout=15)
 
     def peers(self):
         return json.loads(self.invoke('peers'))['peers']
@@ -57,7 +62,7 @@ def publish_identity(run, role):
         entry['leader']=True
     else:
         entry.update(invited_by=run['transport']['nickname'],model=part['model'],effort=part['effort'])
-    gossip=Gossip(run['transport'],part['nickname'])
+    gossip=Gossip(run['transport'],part['nickname'],session_context=part.get('gossip_context'))
     gossip.invoke('meta','merge','--merge',json.dumps(entry))
     document=json.loads(gossip.invoke('meta','get'))
     actual=document['document'].get(part['pubkey'],{})
@@ -65,9 +70,9 @@ def publish_identity(run, role):
         raise RuntimeError('Published graph identity did not match the pinned Gossip key')
 
 
-def verify_graph(run, role):
+def verify_graph(run, role, *, gossip=None):
     part=run['participants'][role]
-    meta=json.loads(Gossip(run['transport'],part['nickname']).invoke('meta','get'))
+    meta=json.loads((gossip or Gossip(run['transport'])).invoke('meta','get'))
     graph=run['graph'];absent=set(meta['absent'])
     live={key:value for key,value in meta['document'].items() if key not in absent and
           value.get('instance')==graph['instance'] and value.get('hash')==graph['hash']}
@@ -126,8 +131,20 @@ def register(run, store, peers):
             if len(matching) != 1:
                 raise RuntimeError('Native account/thread registration is unavailable or ambiguous')
             bindings.verify(matching[0])
+            proof_file=store.root/run['id']/(role+'-identity.json')
+            if proof_file.exists():
+                from .mission_identity import check_context
+                proof=json.loads(proof_file.read_text())
+                if proof['native']!=asdict(matching[0]) or proof['pubkey']!=peer['pubkey']:
+                    raise RuntimeError('Participant bootstrap identity changed')
+                check_context(proof['context'],proof['native'])
+                expected={k:proof['context'][k] for k in ('session_id','generation','owner_pid','owner_start','boot_id')}
+                if state.get('session_context')!=expected:
+                    raise RuntimeError('Participant peer is not bound to its verified native context')
+            elif run.get('identity_protocol')==2:
+                raise RuntimeError('Waiting for native participant bootstrap and self-enrollment')
             part.update(native=asdict(matching[0]), pubkey=peer['pubkey'], available=True)
-            publish_identity(run,role)
+            if proof_file.exists():part['gossip_context']=proof['context']['context_file']
             verify_graph(run,role)
             part.pop('problem',None)
         except (OSError, ValueError, KeyError, StopIteration, RuntimeError) as error:
@@ -169,7 +186,7 @@ def wake_participant(store, run, role, task_id, sent):
         uuid.UUID(native.session)
         wake['recipient']=asdict(native)
         message=(f"Watchdog coordination for run {run['id']}, existing Gossip task {task_id}. "
-            f"Poll agent-gossip poll --gossip {run['transport']['gossip']} --nickname {run['participants'][role]['nickname']}. "
+            f"Poll via {shlex.join([sys.executable,str(ROOT/'watchdog'),'mission','receive','--run',run['id'],'--role',role,'--state-dir',str(store.root)])}. "
             'Read only new messages on that existing task. If the poll is empty or a message was already handled, '
             'do not repeat implementation or review. This notification is not another task; the contract remains in Gossip.')
         wake.update(delivery='sending',updated=time.time());store.save(run)
@@ -371,15 +388,19 @@ def verify_publisher(store, run, role):
     if (state.get('gossip')!=run['transport']['gossip'] or state.get('nickname')!=part['nickname'] or
             state.get('pubkey')!=part['pubkey']):
         raise RuntimeError('Publisher local Gossip identity differs from its assignment')
-    verify_graph(run,role)
+    verify_graph(run,role,gossip=Gossip(run['transport'],part['nickname'],session_context=part.get('gossip_context')))
 
 
-def report(store, identity, role, data):
+def report(store, identity, role, data, *, via_broker=True):
     run=store.load(identity)
     if role not in ('worker','qa') or role not in run['participants']:
         raise RuntimeError('Report requires an assigned worker or QA role')
     if not isinstance(data,dict):raise RuntimeError('Report must be a JSON object')
     if data.get('run_id') != identity:raise RuntimeError('Report belongs to another run')
+    proof=store.root/identity/(role+'-identity.json')
+    if via_broker and proof.exists() and json.loads(proof.read_text()).get('broker'):
+        from .mission_broker import request
+        return request(store,identity,role,'report',report=data)
     part=run['participants'][role]
     from .mission import require_summary
     require_summary(data)
@@ -400,4 +421,4 @@ def report(store, identity, role, data):
         pass
     verify_publisher(store,run,role)
     args=['a2a','artifact'] if data['status'] in ('result','qa') else ['a2a','status','--state','input-required' if data['status']=='blocked' else 'working']
-    return Gossip(run['transport'],part['nickname']).invoke(*args,'--task-id',task_id,'--text',json.dumps(data))
+    return Gossip(run['transport'],part['nickname'],session_context=part.get('gossip_context')).invoke(*args,'--task-id',task_id,'--text',json.dumps(data))

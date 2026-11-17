@@ -172,6 +172,24 @@ class LaunchTests(unittest.TestCase):
             launch.launch(self.store,self.run_id,changed,confirmed=True,api=self.api,resume=True)
         self.assertFalse(self.api.calls)
 
+    def test_missing_monitor_starts_once_and_live_pid_is_preserved(self):
+        run=self.start();run.pop('monitor_pid');self.store.save(run)
+        with patch.object(launch,'start_monitor',return_value=os.getpid()) as start:
+            result=launch.ensure_monitor(self.store,self.run_id)
+            self.assertEqual(result['monitor_pid'],os.getpid())
+            with self.assertRaisesRegex(RuntimeError,'still present'):
+                launch.ensure_monitor(self.store,self.run_id)
+            self.assertEqual(start.call_count,1)
+
+    def test_uncertain_monitor_start_is_not_retried(self):
+        run=self.start();run.pop('monitor_pid');self.store.save(run)
+        with patch.object(launch,'start_monitor',side_effect=RuntimeError('start failed')) as start:
+            with self.assertRaisesRegex(RuntimeError,'start failed'):
+                launch.ensure_monitor(self.store,self.run_id)
+            with self.assertRaisesRegex(RuntimeError,'uncertain start'):
+                launch.ensure_monitor(self.store,self.run_id)
+            self.assertEqual(start.call_count,1)
+
     def test_confirmation_cannot_be_inferred(self):
         with self.assertRaisesRegex(RuntimeError,'confirmation'):
             launch.launch(self.store,self.run_id,self.brief,api=self.api)

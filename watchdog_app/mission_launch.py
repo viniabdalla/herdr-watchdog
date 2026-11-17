@@ -182,6 +182,22 @@ def start_monitor(run, store):
     return proc.pid
 
 
+
+def ensure_monitor(store, identity):
+    """Start a missing owned monitor; never replace a live or uncertain one."""
+    with store.lock(identity):
+        run=store.load(identity);main_session(run);source_current(run)
+        if run['phase']!='active' or run.get('monitor_operation'):
+            raise RuntimeError('Monitor start requires an active run without an uncertain start')
+        old=run.get('monitor_pid')
+        if old and (Path('/proc')/str(old)).exists():
+            raise RuntimeError('Stored monitor PID is still present; inspect it before restarting')
+        run['monitor_operation']='starting';store.save(run)
+        run['monitor_pid']=start_monitor(run,store)
+        run['monitor_operation']=None;store.save(run)
+        return {'run':identity,'monitor_pid':run['monitor_pid'],'started':True}
+
+
 def resumable_worktrees(run, store, brief):
     """Recover only a known pre-network rejection, never an uncertain launch."""
     if (run['phase'] != 'blocked' or run.get('operation') != 'create gossip' or
@@ -222,6 +238,7 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
         contexts = {r: role_context(r, run['repo']) for r in ('worker', 'qa')}
         api = api or Herdr(run.get('herdr_session'))
         run['brief'] = brief
+        run['identity_protocol'] = 2
         folder = store.root / identity;folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         def intent(operation):
             main_session(run)
@@ -307,21 +324,23 @@ def participant(store, identity, role):
     except FileExistsError as error:
         raise RuntimeError('Participant launch already attempted; inspect its owned pane before recovery') from error
     transport = run['transport']
-    # Join is owned by this wrapper. It remains alive while the Codex child runs.
-    command(['agent-gossip', 'join', transport['gossip'], '--nickname', part['nickname'],
-             '--owner-pid', str(os.getpid()), '--state-file',
-             str(store.root / identity / (role + '-gossip.json'))])
     prompt = (part['role_context'] + '\n\nWatchdog Mission Control participant. '
         'Only the main conversation talks to the user. No extra agents, main merges, pushes, '
-        'global config edits or server stops. Poll Gossip for your directed assignment before doing work. '
-        'Use --long --max-secs 40, never --bell. Keep the same Gossip task ID on follow-ups. '
+        'global config edits or server stops. Use the typed Receive command for your assignment after enrollment. '
+        'Keep the same Gossip task ID on follow-ups. '
         'No source changes before receiving a task. Return structured JSON via the Watchdog report command.\n'
+        'First wait for your role-identity.json in the run state folder (host bootstrap may take 45 seconds). '
+        'Then execute the Enroll command below from THIS conversation. It publishes only your own identity. '
+        'Do not poll before successful enrollment; never change CODEX_THREAD_ID or sign as another peer.\n'
         'Always use the absolute controller report command below; it receives fixes independently of your assigned checkout.\n'
         f"Run: {identity}\nRole: {role}\nWorktree: {part['worktree']}\n"
         f"Graph identity: {json.dumps(run.get('graph',{}))}\n"
         'Watchdog publishes your graph entry only after verifying your native account/thread and Gossip key.\n'
-        f"Poll: agent-gossip poll --gossip {transport['gossip']} --nickname {part['nickname']}\n"
-        f"Report: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'report', '--run', identity, '--role', role, '--state-dir', str(store.root), '--file', 'REPORT.json'])}\n"
+        f"Enroll: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'enroll', '--run', identity, '--role', role, '--state-dir', str(store.root)])}\n"
+        f"Receive: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'receive', '--run', identity, '--role', role, '--state-dir', str(store.root)])} --after 0\n"
+        'Use Receive through the typed host bridge; direct Gossip commands cannot validate the host PID from this sandbox. '
+        'Poll when notified, rather than spinning while idle. Reports use the same scoped bridge.\n'
+        f"Report: {shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'report', '--run', identity, '--role', role, '--state-dir', str(store.root), '--file', '/tmp/watchdog-' + role + '-' + identity + '-report.json'])}\n"
         'Report schema will be included with the assignment. The launcher is not a planner. '
         'Do not contact or recruit unrelated peers. Do not close a task before main approves it.')
     env = {k:v for k,v in os.environ.items() if not k.startswith(('CODEX_', 'AI_MEMORY_', 'OPENAI_', 'ANTHROPIC_', 'CLAUDE_CODE_')) and k != 'CLAUDECODE'}
@@ -331,11 +350,31 @@ def participant(store, identity, role):
             '--sandbox', 'workspace-write', '--ask-for-approval', 'never', '--add-dir', runtime_dir,
             '--add-dir', str(store.root), '--add-dir', git(run['repo'], 'rev-parse', '--path-format=absolute', '--git-common-dir'),
             '-c', 'sandbox_workspace_write.network_access=true',
-            '-c', 'model_reasoning_effort=' + json.dumps(part['effort']), prompt]
+            '-c', 'model_reasoning_effort=' + json.dumps(part['effort'])]
+    if part.get('resume_session'):
+        argv += ['resume',part['resume_session']]
+    argv.append(prompt)
+    from .mission_terminal import TerminalLease
+    terminal = TerminalLease(sys.stdout.fileno())
     child = subprocess.Popen(argv, env=env)
+    broker = None
     try:
+        from .mission_identity import bootstrap
+        try:
+            proof = bootstrap(store, identity, role, child)
+            from .mission_broker import Broker
+            broker = Broker(store, identity, role, proof, child)
+        except Exception as error:
+            atomic(store.root / identity / (role + '-bootstrap-error.json'),
+                   {'error': str(error), 'at': time.time()})
+            print('Watchdog identity bootstrap blocked: ' + str(error), file=sys.stderr, flush=True)
         return child.wait()
     finally:
-        # Do not infer success from exit and never kill another process.
-        atomic(store.root / identity / (role + '-exit.json'),
-               {'code': child.returncode, 'at': time.time()})
+        try:
+            if broker is not None:broker.close()
+        finally:
+            try:terminal.restore()
+            finally:
+                # Do not infer success from exit and never kill another process.
+                atomic(store.root / identity / (role + '-exit.json'),
+                       {'code': child.returncode, 'at': time.time()})
