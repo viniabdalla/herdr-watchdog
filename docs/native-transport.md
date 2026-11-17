@@ -55,9 +55,22 @@ its content or actor is rejected. Wrong actors, roles, generations, attempts,
 review IDs and candidates cannot supply accepted evidence. Superseded QA is
 retained and forwarded explicitly as rejected evidence, never approval.
 
+Native QA attempts are terminal after a QA verdict or Blocked report. Fresh
+Working, Blocked or verdict reports on that finished attempt are rejected;
+identical retries remain no-ops. Main must request a new review attempt to
+resume QA. Approval also defensively requires `qa_finished: true`, current
+`status: qa` and a passing verdict at the exact candidate and result version;
+a retained earlier pass cannot approve an unfinished or non-passing review.
+
 A committed pending event can be forwarded by the monitor after a restart. A
 notification whose send began but lost its receipt stays uncertain and is never
-resent automatically. Progress shows pending/uncertain main notifications and
+resent automatically. Restart recovery reconciles every task/review `sending`
+intent, including interruptions before a delivery record exists and after a
+receipt was committed. Only a known sent receipt matching the role, recipient,
+generation, attempt and task/review scope finalizes delivery. Missing or
+inconsistent receipt evidence becomes an inspectable blocked/uncertain state;
+no queue call is repeated and no delivery record or receipt is invented. A
+current attempt's later authenticated report survives receipt reconciliation. Progress shows pending/uncertain main notifications and
 uncertain native assignments; retained evidence is inspectable even when main
 cannot currently be contacted. No dispatch, report, process exit or model
 proposal completes TODO.md.
@@ -112,8 +125,12 @@ interrupted attachment retains evidence for inspection instead of retrying.
 The included automated tests exercise real temporary Git worktrees, durable
 state and a real Unix socket/ancestry, substituting the external Codex
 identity/queue boundary. They do **not** claim a real Codex inbox experiment.
-The worker is busy during implementation and its existing wrapper is legacy;
-a live approved-actor probe must wait for the safe idle host path above.
+Main also exercised an approved existing Codex actor through this idle host path
+on the original native candidate: enrollment, queue receipt, authenticated report
+persistence/forwarding and duplicate retry were verified. Only the helper was
+closed; the actor was preserved. That transport probe does not approve a
+candidate or cover later repairs. The QA transition and crash-window corrections
+use isolated regression fixtures; they do not repeat the live probe.
 
 ## QA and current scope limit
 

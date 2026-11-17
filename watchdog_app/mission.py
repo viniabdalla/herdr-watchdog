@@ -155,6 +155,8 @@ def accept_event(run, event, *, now=None):
         if contract.get('version') != run.get('result_version', 0):
             run['qa_finished'] = True
             raise SupersededReview('QA review was superseded by newer implementation evidence')
+        if native and run.get('qa_finished'):
+            raise RuntimeError('QA attempt is terminal; main must request a new review')
         if report.get('status') == 'qa':
             run['qa'] = report
         run['qa_finished'] = report.get('status') != 'working'
@@ -217,7 +219,8 @@ def finish(run, candidate, *, confirmed=False):
         raise RuntimeError('Explicit approval is required')
     qa = run.get('qa') or {}
     contract = run.get('review_contract') or {}
-    if (not contract.get('verified_commits') or
+    if (run.get('qa_finished') is not True or qa.get('status') != 'qa' or
+            not contract.get('verified_commits') or
             contract.get('version') != run.get('result_version', 0) or
             qa.get('review_id') != contract.get('id') or
             contract.get('candidate') != candidate or run.get('candidate') != candidate or qa.get('candidate') != candidate or

@@ -172,6 +172,78 @@ def forward(store, run):
         event.update(delivery='sent',receipt=receipt,recipient=asdict(session.binding));store.save(run)
 
 
+def delivery_receipt(run, role, attempt, *, task_id=None):
+    """Trust a committed receipt only for this exact role, actor and contract."""
+    record=run.get('deliveries',{}).get(attempt)
+    if not isinstance(record,dict):return False,'Queue receipt is missing: no delivery record for this intent'
+    try:
+        receipt=record.get('receipt')
+        valid_receipt=isinstance(receipt,str) and str(uuid.UUID(receipt))==receipt
+    except ValueError:valid_receipt=False
+    if record.get('state')!='sent' or not valid_receipt:
+        return False,'Queue receipt is missing or uncertain; inspect the exact thread queue'
+    part=run['participants'][role]
+    if (not attempt or record.get('attempt_id')!=attempt or record.get('role')!=role or
+            not part.get('generation') or record.get('generation')!=part['generation'] or
+            not part.get('native') or record.get('recipient')!=part['native']):
+        return False,'Queue receipt recipient, role, generation or attempt differs from the current intent'
+    payload=record.get('payload')
+    if (not isinstance(payload,dict) or payload.get('run_id')!=run['id'] or payload.get('attempt_id')!=attempt):
+        return False,'Queue receipt contract run or attempt differs from the current intent'
+    if role=='worker':
+        if payload.get('task_id')!=task_id:return False,'Queue receipt task differs from the current intent'
+    else:
+        review=run.get('review_contract') or {}
+        if (not review.get('id') or payload.get('review_id')!=review['id'] or
+                payload.get('candidate')!=review.get('candidate') or
+                payload.get('candidate')!=run.get('candidate')):
+            return False,'Queue receipt review or candidate differs from the current intent'
+    return True,''
+
+
+def reconcile_intents(run):
+    # The task/review intent is committed before deliver() even creates its own
+    # record. Conversely deliver() commits a receipt before its caller finalizes.
+    # Reconcile both windows without ever submitting a queue message.
+    for record in run.get('deliveries',{}).values():
+        if record['state']=='sending':
+            record.update(state='uncertain',problem='Interrupted queue delivery; inspect before recovery')
+    for key,task in run['tasks'].items():
+        if task.get('delivery')!='sending':continue
+        attempt=task.get('attempt_id')
+        sent,problem=delivery_receipt(run,'worker',attempt,task_id=key)
+        task['delivery']='sent' if sent else 'uncertain'
+        if sent:
+            reported=any(e.get('role')=='worker' and not e.get('rejected') and
+                e['report'].get('attempt_id')==attempt for e in run['events'].values())
+            if not reported:
+                task.update(state='working',agent='worker',summary='Assignment delivered; committed receipt recovered',updated=time.time())
+        else:
+            task.update(state='blocked',agent='worker',summary='Delivery needs inspection: '+problem,updated=time.time())
+            record=run.get('deliveries',{}).get(attempt)
+            if record is not None:record.update(state='uncertain',problem=problem)
+    if run.get('qa_delivery')=='sending':
+        attempt=run.get('qa_task');sent,problem=delivery_receipt(run,'qa',attempt)
+        run['qa_delivery']='sent' if sent else 'uncertain'
+        if sent:
+            run.pop('qa_delivery_problem',None)
+            if run.get('operation')=='checkout QA candidate':run['operation']=None
+            review=run.get('review_contract') or {}
+            reported=any(e.get('role')=='qa' and not e.get('rejected') and
+                e['report'].get('attempt_id')==attempt for e in run['events'].values())
+            if not reported and review.get('version')==run.get('result_version',0):
+                for task in run['tasks'].values():
+                    if task['state']!='done':task.update(state='review',agent='qa',
+                        summary='QA is checking '+run['candidate'],updated=time.time())
+        else:
+            run['qa_delivery_problem']=problem;run['qa']=None
+            for task in run['tasks'].values():
+                if task['state']!='done':task.update(state='blocked',agent='qa',
+                    summary='QA delivery needs inspection: '+problem,updated=time.time())
+            record=run.get('deliveries',{}).get(attempt)
+            if record is not None:record.update(state='uncertain',problem=problem)
+
+
 def tick(store, identity):
     from . import mission_transport as transport
     with store.lock(identity):
@@ -179,15 +251,7 @@ def tick(store, identity):
         if run['phase'] not in ('active','blocked'):return run
         transport.main_session(run)
         register(run,store)
-        # A process could have died after committing sending and before recording a receipt.
-        for record in run.get('deliveries',{}).values():
-            if record['state']=='sending':record.update(state='uncertain',problem='Interrupted queue delivery; inspect before recovery')
-        for task in run['tasks'].values():
-            record=run.get('deliveries',{}).get(task.get('attempt_id'),{})
-            if record.get('state')=='uncertain' and task.get('delivery')=='sending':
-                task.update(delivery='uncertain',state='blocked',summary='Interrupted delivery; inspect exact queue',updated=time.time())
-        if run.get('qa_delivery')=='sending' and run.get('deliveries',{}).get(run.get('qa_task'),{}).get('state')=='uncertain':
-            run['qa_delivery']='uncertain'
+        reconcile_intents(run)
         for event in run['events'].values():
             if event['delivery']=='sending':event.update(delivery='uncertain',notification_problem='Interrupted notification; not resent')
         run['monitor_updated']=time.time();run.pop('monitor_problem',None);store.save(run)

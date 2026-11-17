@@ -304,3 +304,124 @@ class NativeTransportTests(unittest.TestCase):
     def test_native_enroll_rejects_non_object_data(self):
         with self.assertRaisesRegex(RuntimeError,'data'):
             native.handle(self.store,self.identity,'worker',self.proof(),'enroll',[])
+
+    def _single_task_review(self):
+        transport.dispatch(self.store,self.identity,self.task)
+        self.record(self.report('result',commits=[self.base],tests=['Observed fixture check']))
+        run=self.store.load(self.identity)
+        run['tasks']={self.task:run['tasks'][self.task]}
+        run['brief']['tasks']=[run['brief']['tasks'][0]];self.store.save(run)
+        return transport.review(self.store,self.identity,self.base)
+
+    def _qa_report(self,run,**changes):
+        return {'run_id':self.identity,'event_id':str(uuid.uuid4()),'attempt_id':run['qa_task'],
+                'review_id':run['review_contract']['id'],'candidate':self.base,'status':'qa',
+                'verdict':'pass','summary':'Observed QA verdict','tests':['Observed fixture check'],**changes}
+
+    def test_terminal_qa_rejects_fresh_working_report_instead_of_reusing_old_pass(self):
+        run=self._single_task_review();passed=self._qa_report(run)
+        self.record(passed,'qa')
+        for status in ('working','blocked','qa'):
+            with self.subTest(status=status):
+                later=self._qa_report(run,status=status,summary='Review resumed')
+                with self.assertRaisesRegex(RuntimeError,'terminal|finished'):
+                    self.record(later,'qa')
+        current=self.store.load(self.identity)
+        self.assertTrue(current['qa_finished']);self.assertEqual(current['qa'],passed)
+        finish(current,self.base,confirmed=True)
+        self.assertEqual(current['phase'],'done','The unchanged accepted terminal pass remains valid')
+        count=len(self.calls);self.assertTrue(self.record(passed,'qa')['duplicate'])
+        self.assertEqual(len(self.calls),count)
+
+    def test_finish_defensively_rejects_old_pass_with_unfinished_or_non_passing_qa(self):
+        run=self._single_task_review();self.record(self._qa_report(run),'qa')
+        passing=self.store.load(self.identity)
+        for mutation in ({'qa_finished':False},{'qa_finished':None},{'qa_finished':True,'status':'working'},
+                         {'qa_finished':True,'verdict':'fail'}):
+            with self.subTest(mutation=mutation):
+                run=copy.deepcopy(passing);run['qa_finished']=mutation['qa_finished']
+                for key in ('status','verdict'):
+                    if key in mutation:run['qa'][key]=mutation[key]
+                with self.assertRaises(RuntimeError):finish(run,self.base,confirmed=True)
+                self.assertNotEqual(run['phase'],'done')
+
+    def _prepare_delivery_window(self,stage,window):
+        self.store.save(copy.deepcopy(self.run));self.calls.clear()
+        if stage=='followup':
+            transport.dispatch(self.store,self.identity,self.task)
+        elif stage=='qa':
+            transport.dispatch(self.store,self.identity,self.task)
+            self.record(self.report('result',commits=[self.base],tests=['Observed fixture check']))
+            run=self.store.load(self.identity)
+            run['tasks']={self.task:run['tasks'][self.task]}
+            run['brief']['tasks']=[run['brief']['tasks'][0]];self.store.save(run)
+        before=len(self.calls);deliver=native.deliver
+        def interrupted(*args,**kwargs):
+            if window=='after_receipt':deliver(*args,**kwargs)
+            raise SystemExit('Injected process termination at '+window)
+        with patch.object(native,'deliver',side_effect=interrupted):
+            with self.assertRaises(SystemExit):
+                if stage=='dispatch':transport.dispatch(self.store,self.identity,self.task)
+                elif stage=='followup':transport.followup(self.store,self.identity,self.task,'Same allowed fixture')
+                else:transport.review(self.store,self.identity,self.base)
+        self.assertEqual(len(self.calls)-before,int(window=='after_receipt'))
+        return self.store.load(self.identity)
+
+    def test_restart_reconciles_all_task_and_qa_intents_without_queue_resubmission(self):
+        for stage in ('dispatch','followup','qa'):
+            for window in ('before_record','after_receipt'):
+                with self.subTest(stage=stage,window=window):
+                    interrupted=self._prepare_delivery_window(stage,window)
+                    attempt=interrupted['qa_task'] if stage=='qa' else interrupted['tasks'][self.task]['attempt_id']
+                    count=len(self.calls)
+                    for _ in range(2):transport.tick(self.store,self.identity)
+                    run=self.store.load(self.identity)
+                    self.assertEqual(len(self.calls),count)
+                    want='sent' if window=='after_receipt' else 'uncertain'
+                    if stage=='qa':
+                        self.assertEqual(run['qa_delivery'],want)
+                        self.assertEqual(run['tasks'][self.task]['state'],'review' if want=='sent' else 'blocked')
+                        if want=='sent':self.assertIsNone(run['operation'])
+                        else:self.assertIn('receipt',run['qa_delivery_problem'].lower())
+                        self.assertFalse(run['qa_finished']);self.assertIsNone(run['qa'])
+                    else:
+                        self.assertEqual(run['tasks'][self.task]['delivery'],want)
+                        self.assertEqual(run['tasks'][self.task]['state'],'working' if want=='sent' else 'blocked')
+                        self.assertEqual(run['tasks'][self.task]['attempt_id'],attempt)
+                    if window=='before_record':self.assertNotIn(attempt,run.get('deliveries',{}))
+
+    def test_recovery_rejects_receipts_with_wrong_role_generation_recipient_or_attempt(self):
+        changes={'role':'other','generation':'old','recipient':{'session':'other'},
+                 'attempt_id':str(uuid.uuid4()),'receipt':'not-a-receipt',
+                 'payload_attempt':str(uuid.uuid4()),'payload_run':str(uuid.uuid4())}
+        for stage in ('dispatch','followup','qa'):
+            for field,value in changes.items():
+                with self.subTest(stage=stage,field=field):
+                    run=self._prepare_delivery_window(stage,'after_receipt')
+                    attempt=run['qa_task'] if stage=='qa' else run['tasks'][self.task]['attempt_id']
+                    record=run['deliveries'][attempt]
+                    if field.startswith('payload_'):record['payload'][{'payload_attempt':'attempt_id','payload_run':'run_id'}[field]]=value
+                    else:record[field]=value
+                    self.store.save(run);count=len(self.calls)
+                    for _ in range(2):transport.tick(self.store,self.identity)
+                    run=self.store.load(self.identity)
+                    self.assertEqual(len(self.calls),count)
+                    self.assertEqual(run['qa_delivery'] if stage=='qa' else run['tasks'][self.task]['delivery'],'uncertain')
+                    self.assertEqual(run['tasks'][self.task]['state'],'blocked')
+
+    def test_recovery_checks_current_task_or_review_scope_and_preserves_later_reports(self):
+        for stage,field in (('dispatch','task_id'),('followup','task_id'),('qa','review_id'),('qa','candidate')):
+            with self.subTest(stage=stage,field=field):
+                run=self._prepare_delivery_window(stage,'after_receipt')
+                attempt=run['qa_task'] if stage=='qa' else run['tasks'][self.task]['attempt_id']
+                run['deliveries'][attempt]['payload'][field]='wrong';self.store.save(run)
+                count=len(self.calls);transport.tick(self.store,self.identity)
+                run=self.store.load(self.identity)
+                self.assertEqual(run['qa_delivery'] if stage=='qa' else run['tasks'][self.task]['delivery'],'uncertain')
+                self.assertEqual(len(self.calls),count)
+        self._prepare_delivery_window('dispatch','after_receipt')
+        self.record(self.report('blocked',summary='A real fixture blocker arrived after the receipt'))
+        count=len(self.calls);transport.tick(self.store,self.identity)
+        task=self.store.load(self.identity)['tasks'][self.task]
+        self.assertEqual(task['delivery'],'sent');self.assertEqual(task['state'],'blocked')
+        self.assertIn('fixture blocker',task['summary']);self.assertEqual(len(self.calls),count)

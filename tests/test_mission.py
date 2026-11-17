@@ -84,7 +84,8 @@ class StateTests(unittest.TestCase):
             mission.finish(self.run, 'a'*40, confirmed=True)
         self.run['candidate'] = 'a'*40
         self.run['review_contract']={'id':'attempt','version':self.run.get('result_version',0),'candidate':'a'*40,'verified_commits':True}
-        self.run['qa'] = {'candidate': 'b'*40, 'review_id':'attempt','verdict': 'pass', 'tests': ['suite passed']}
+        self.run['qa_finished'] = True
+        self.run['qa'] = {'status':'qa','candidate': 'b'*40, 'review_id':'attempt','verdict': 'pass', 'tests': ['suite passed']}
         with self.assertRaises(RuntimeError):mission.finish(self.run, 'a'*40, confirmed=True)
         self.run['qa']['candidate'] = 'a'*40
         with self.assertRaises(RuntimeError):mission.finish(self.run, 'a'*40, confirmed=False)
