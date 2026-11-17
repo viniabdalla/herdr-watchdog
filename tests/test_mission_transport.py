@@ -105,7 +105,7 @@ class TransportTests(unittest.TestCase):
         ack=dict(base,id='ack',seq=1,body='')
         bad=dict(base,id='bad',seq=2,body='This is not a structured implementation report')
         good=dict(base,id='good',seq=3,body=json.dumps({'run_id':self.run['id'],'task_id':'task','status':'working','summary':'Running tests'}))
-        with patch.object(transport,'register'),patch.object(transport,'forward'),patch.object(transport.Gossip,'peers',return_value=[]),patch.object(transport.Gossip,'poll',side_effect=[[ack],[bad],[good]]):
+        with patch.object(transport,'register'),patch.object(transport,'forward'),patch.object(transport.Gossip,'peers',return_value=[{'pubkey':'key'}]),patch.object(transport.Gossip,'poll',side_effect=[[ack],[bad],[good]]):
             after=transport.tick(self.store,self.run['id'])
             self.assertFalse(after.get('reason'))
             self.assertFalse(after.get('report_errors'))
@@ -127,3 +127,32 @@ class TransportTests(unittest.TestCase):
             transport.report(self.store,self.run['id'],'qa',report)
         self.assertEqual(sent[0][:2],('a2a','artifact'))
         self.assertIn('qa-native',sent[0])
+
+    def test_native_identity_loss_blocks_report_even_from_pinned_gossip_key(self):
+        self.run['tasks']['task'].update(gossip_task='native-task',state='working')
+        self.run.update(qa_task='qa-native',candidate='a'*40,qa_finished=False,
+            review_contract={'id':'review-A','candidate':'a'*40,'version':0,'verified_commits':True})
+        reports={
+            'worker':{'task_id':'task','status':'result','commits':['a'*40],'tests':['passed']},
+            'qa':{'status':'qa','candidate':'a'*40,'review_id':'review-A','verdict':'pass','tests':['passed']}}
+        for role,report in reports.items():
+            with self.subTest(role=role):
+                self.store.save(self.run)
+                self.delivered.clear()
+                native_task='native-task' if role=='worker' else 'qa-native'
+                key=self.run['participants'][role]['pubkey']
+                event={'id':'result-after-switch','seq':1,'event':'task','kind':'artifact-update',
+                       'author':role,'pubkey':key,'task_id':native_task,
+                       'body':json.dumps({'run_id':self.run['id'],'summary':'New identity claims result',**report})}
+                def lost_identity(run,*_):
+                    run['participants'][role].update(available=False,problem='Native identity changed')
+                with patch.object(transport,'register',side_effect=lost_identity),patch.object(transport.Gossip,'peers',return_value=[{'pubkey':key}]),patch.object(transport.Gossip,'poll',return_value=[event]):
+                    after=transport.tick(self.store,self.run['id'])
+                self.assertEqual(after['tasks'],self.run['tasks'])
+                self.assertIsNone(after['qa'])
+                self.assertFalse(after['qa_finished'])
+                self.assertIn('identity',after['report_errors'][native_task])
+                self.assertEqual(after['events']['result-after-switch']['rejected']['body'],event['body'])
+                self.assertEqual(len(self.delivered),1)
+                self.assertIn('report retained for inspection',self.delivered[0])
+                self.assertNotIn('New identity claims result',self.delivered[0])
