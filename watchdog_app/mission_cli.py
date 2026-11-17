@@ -60,6 +60,7 @@ def main(argv):
     parser.add_argument('--text')
     parser.add_argument('--candidate')
     parser.add_argument('--confirm',action='store_true')
+    parser.add_argument('--resume',action='store_true',help='Reuse verified clean worktrees after a pre-network context rejection')
     args=parser.parse_args(argv);store=RunStore(args.state_dir)
     try:
         if args.action=='list':result=store.list(args.repo)
@@ -73,7 +74,7 @@ def main(argv):
             if args.action=='followup' and not args.text:parser.error('--text is required')
             if args.action=='inspect':result=store.load(args.run)
             elif args.action=='template':result=template(store.load(args.run))
-            elif args.action=='launch':result=launch(store,args.run,json.loads(args.brief.read_text()),confirmed=args.confirm)
+            elif args.action=='launch':result=launch(store,args.run,json.loads(args.brief.read_text()),confirmed=args.confirm,resume=args.resume)
             elif args.action=='watch':return watch(store,args.run) or 0
             elif args.action=='poll':result=transport.tick(store,args.run)
             elif args.action=='open':result=open_run(store.load(args.run))

@@ -182,18 +182,43 @@ def start_monitor(run, store):
     return proc.pid
 
 
-def launch(store, identity, brief, *, confirmed=False, api=None):
+def resumable_worktrees(run, store, brief):
+    """Recover only a known pre-network rejection, never an uncertain launch."""
+    if (run['phase'] != 'blocked' or run.get('operation') != 'create gossip' or
+            run.get('reason') != 'Error: state path conflicts with this task context'):
+        raise RuntimeError('This interruption requires resource inspection; it cannot be resumed')
+    if run.get('resources') or run.get('tab') or run.get('transport'):
+        raise RuntimeError('Resume refuses existing or uncertain execution resources')
+    if run.get('brief') != brief or set(run['participants']) != {'worker', 'qa'}:
+        raise RuntimeError('Resume requires the original approved brief and participants')
+    folder = store.root / run['id']
+    if (folder / 'gossip.json').exists():
+        raise RuntimeError('Resume refuses retained Gossip state; inspect its owner')
+    for role, part in run['participants'].items():
+        expected = 'watchdog/' + run['id'] + '/worker' if role == 'worker' else None
+        if part.get('worktree') != str(folder / role) or part.get('branch') != expected:
+            raise RuntimeError('Resume worktree path or branch differs')
+        path = owned_worktree(run, role)
+        if part.get('base_sha') != brief['base_sha'] or git(path, 'rev-parse', 'HEAD') != brief['base_sha']:
+            raise RuntimeError('Resume worktree no longer matches the approved base')
+        if git(path, 'status', '--porcelain'):
+            raise RuntimeError('Resume requires clean worktrees; changes were preserved')
+
+
+def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
     if not confirmed:
         raise RuntimeError('Explicit launch confirmation is required')
     with store.lock(identity):
         run = store.load(identity)
-        if run['phase'] != 'requested' or run.get('operation'):
+        if not resume and (run['phase'] != 'requested' or run.get('operation')):
             raise RuntimeError('Run already launched or interrupted; inspect its retained resources')
         if run['request_delivery'] != 'sent':
             raise RuntimeError('Coordination request delivery is uncertain; inspect the exact main queue')
         main_session(run)
         validate_brief(run, brief)
         clean_base(run, brief)
+        if resume:
+            resumable_worktrees(run, store, brief)
         contexts = {r: role_context(r, run['repo']) for r in ('worker', 'qa')}
         api = api or Herdr(run.get('herdr_session'))
         run['brief'] = brief
@@ -204,7 +229,7 @@ def launch(store, identity, brief, *, confirmed=False, api=None):
             store.save(run)
         try:
             run['phase'] = 'launching'
-            for role in ('worker', 'qa'):
+            for role in (() if resume else ('worker', 'qa')):
                 branch = 'watchdog/' + identity + '/' + role
                 worktree = folder / role
                 run['participants'][role] = dict(brief['participants'][role],
@@ -245,6 +270,9 @@ def launch(store, identity, brief, *, confirmed=False, api=None):
                 api.call('pane', 'run', pane['pane_id'], shlex.join(argv))
             run['phase'] = 'active';run['operation'] = 'start monitor';store.save(run)
             run['monitor_pid'] = start_monitor(run, store)
+            if resume:
+                run['resumed_from'] = {'operation': 'create gossip', 'reason': run.pop('reason'),
+                                       'at': time.time()}
             run['operation'] = None;store.save(run)
             return run
         except Exception as error:

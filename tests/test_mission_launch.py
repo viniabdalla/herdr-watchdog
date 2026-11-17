@@ -126,6 +126,52 @@ class LaunchTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):launch.open_run(run,self.api)
         self.assertNotIn(('tab','focus','tab'),self.api.calls)
 
+    def interrupted_gossip(self):
+        with patch.object(launch, 'create_gossip', side_effect=RuntimeError(
+                'Error: state path conflicts with this task context')):
+            with self.assertRaisesRegex(RuntimeError, 'state path conflicts'):
+                self.start()
+        return self.store.load(self.run_id)
+
+    def test_explicit_resume_reuses_clean_base_worktrees(self):
+        blocked = self.interrupted_gossip()
+        before = {role:Path(p['worktree']).stat().st_ino
+                  for role,p in blocked['participants'].items()}
+        run = launch.launch(self.store,self.run_id,self.brief,confirmed=True,
+                            api=self.api,resume=True)
+        self.assertEqual(run['phase'],'active')
+        self.assertEqual(sum(a[:2] == ('tab','create') for a in self.api.calls),1)
+        for role,p in run['participants'].items():
+            self.assertEqual(Path(p['worktree']).stat().st_ino,before[role])
+            self.assertEqual(git(p['worktree'],'rev-parse','HEAD'),self.base)
+
+    def test_resume_refuses_dirty_wrong_branch_or_uncertain_resources(self):
+        blocked = self.interrupted_gossip()
+        worker = blocked['participants']['worker']['worktree']
+        dirty = Path(worker)/'uncommitted.py';dirty.write_text('preserve me')
+        with self.assertRaisesRegex(RuntimeError,'clean'):
+            launch.launch(self.store,self.run_id,self.brief,confirmed=True,api=self.api,resume=True)
+        self.assertEqual(dirty.read_text(),'preserve me');dirty.unlink()
+        git(worker,'checkout','-qb','unexpected')
+        with self.assertRaisesRegex(RuntimeError,'branch'):
+            launch.launch(self.store,self.run_id,self.brief,confirmed=True,api=self.api,resume=True)
+        git(worker,'checkout',blocked['participants']['worker']['branch'])
+        blocked['resources']={'worker':{'pane_id':'unknown'}};self.store.save(blocked)
+        with self.assertRaisesRegex(RuntimeError,'resources'):
+            launch.launch(self.store,self.run_id,self.brief,confirmed=True,api=self.api,resume=True)
+        self.assertFalse(self.api.calls)
+
+    def test_resume_refuses_changed_head_and_changed_brief(self):
+        blocked = self.interrupted_gossip()
+        worker = blocked['participants']['worker']['worktree']
+        git(worker,'commit','--allow-empty','-qm','unapproved change')
+        with self.assertRaisesRegex(RuntimeError,'base'):
+            launch.launch(self.store,self.run_id,self.brief,confirmed=True,api=self.api,resume=True)
+        changed = copy.deepcopy(self.brief);changed['participants']['worker']['effort']='high'
+        with self.assertRaisesRegex(RuntimeError,'original approved brief'):
+            launch.launch(self.store,self.run_id,changed,confirmed=True,api=self.api,resume=True)
+        self.assertFalse(self.api.calls)
+
     def test_confirmation_cannot_be_inferred(self):
         with self.assertRaisesRegex(RuntimeError,'confirmation'):
             launch.launch(self.store,self.run_id,self.brief,api=self.api)
