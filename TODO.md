@@ -13,11 +13,12 @@ Each project uses its own TODO.md with these sections. Progress counts the
 tasks currently listed here; it is not an estimate of the entire project.
 
 ## In progress
-- [ ] Clean sessions workflow: automate verified Herdr split, fresh leader startup, bounded handoff delivery and explicit receipt in the handoff backend; expose a clear UI action. Reuse the observed live procedure, preserve native/legacy boundaries and leave current agents intact. Command-layer handoff alone does not complete this task.
 
 ## Next
-- [ ] Run scope: validate only the tasks selected for a run so unrelated TODO edits do not block active work; preserve identity, Git and exact-candidate QA checks.
+- [ ] Watchdog UI language: English/Portuguese selector in Tasks applies to Tasks, Progress, Artifacts and Agents; use LLM assistance for UI translations while preserving canonical project files, protocols and Yazi.
+- [ ] Orchestrate checkpoint: show project changes and new files in the confirmation, save an authorized local commit before launching, and follow project authorization for push.
 - [ ] Agents panel: show verified project agents, chronological task history, remaining context when available and verified Gossip channels; keep Artifacts adjacent, highlight task-linked artifacts and preserve the Yazi connection. Gossip remains optional.
+  Show each agent's verified Herdr pane and latest task in plain English or Portuguese; display unavailable when actual context telemetry is missing.
 - [ ] Plan reader: read an explicit project plan into bounded task briefs without rereading full conversation histories.
 - [ ] Curator validation: evaluate Done and Blocked proposals on real conversations; keep user confirmation required.
 - [ ] Artifacts: automatically discover and summarize files created or changed by the AI; preserve the working Yazi link.
@@ -26,6 +27,8 @@ tasks currently listed here; it is not an estimate of the entire project.
 ## Blocked
 
 ## Done
+- [x] 2026-11-17 Clean sessions workflow: automate verified Herdr split, fresh leader startup, bounded handoff delivery and explicit receipt in the handoff backend; expose a clear UI action. Reuse the observed live procedure, preserve native/legacy boundaries and leave current agents intact. Command-layer handoff alone does not complete this task.
+- [x] 2026-11-17 Run scope: validate only the tasks selected for a run so unrelated TODO edits do not block active work; preserve identity, Git and exact-candidate QA checks.
 - [x] 2026-11-17 Leader handoff command layer: bounded export, explicit native preview/adoption and clean-session purpose guards; P1 corrected and independently approved at 0e7125f. Host suite: 222 tests, no failures, 7 skipped. Live legacy Gossip runs remain export-only; this does not complete the UI flow.
 - [x] 2026-11-17 Native transport: exact-thread Codex inbox delivery, durable local reports, duplicate protection and recovery checks; independently approved at 2cf8d68 with a real delivery/report probe.
 - [x] 2026-11-17 Session progress: automatically read supported successful conversation checklist calls and refresh Progress. Unsupported or missing formats remain explicit; real local histories had no successful direct checklist pairs, so protocol fixtures were synthetic.
