@@ -18,7 +18,7 @@ class CleanSessionsUITests(unittest.TestCase):
         self.addCleanup(self.ui.job.close)
 
     def test_action_needs_no_task_selection_shows_exact_scope_and_can_cancel(self):
-        self.ui.handle('c');self.assertEqual(self.ui.mode,'clean_setup')
+        self.ui.handle('C');self.assertEqual(self.ui.mode,'clean_setup')
         body='\n'.join(row[0] for row in self.ui.body())
         self.assertIn(self.f.old.session,body);self.assertIn(str(self.f.repo),body)
         self.assertIn('owned',body.lower());self.assertIn('push',body.lower())
@@ -26,7 +26,7 @@ class CleanSessionsUITests(unittest.TestCase):
 
     def test_confirmation_requests_exact_leader_without_marking_todo_done(self):
         before=(self.f.repo/'TODO.md').read_bytes()
-        self.ui.handle('c');self.ui.clean_setup.policy=self.f.policy
+        self.ui.handle('C');self.ui.clean_setup.policy=self.f.policy
         self.ui.handle('enter');self.assertEqual(self.ui.mode,'confirm')
         body='\n'.join(row[0] for row in self.ui.body())
         self.assertIn('Confirm Clean sessions',body);self.assertIn(self.f.old.session,body);self.assertIn('origin',body)
@@ -42,7 +42,7 @@ class CleanSessionsUITests(unittest.TestCase):
         self.assertEqual(json.loads(self.f.file.read_text())['panes'],{})
 
     def test_pending_and_partial_outcomes_render_without_false_completion(self):
-        self.ui.handle('c');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
+        self.ui.handle('C');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
         self.assertIn('pending',' '.join(x[0] for x in self.ui.body()).lower())
         op=self.ui.clean.operation;op.update(state='partial',problem='ai-memory unavailable');fixture.clean.save(self.f.store,op)
         self.ui.clean.operation=op
@@ -50,7 +50,7 @@ class CleanSessionsUITests(unittest.TestCase):
         self.assertIn('partial',body);self.assertIn('ai-memory unavailable',body)
 
     def test_stopped_operation_offers_retry_and_close_then_c_starts_again(self):
-        self.ui.handle('c');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
+        self.ui.handle('C');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
         op=self.ui.clean.operation;op.update(state='partial',problem='Owned files changed while staging');fixture.clean.save(self.f.store,op)
         self.ui.handle('c');self.assertEqual(self.ui.mode,'confirm')
         body='\n'.join(x[0] for x in self.ui.body())
@@ -61,11 +61,11 @@ class CleanSessionsUITests(unittest.TestCase):
         self.assertNotIn('y: retry','\n'.join(x[0] for x in self.ui.body()))
         self.ui.handle('x');self.assertEqual(fixture.clean.load(self.f.store,op['operation_id'])['state'],'closed')
         self.assertIn('closed',self.ui.notice);self.assertEqual(self.ui.mode,'tasks')
-        self.ui.handle('c');self.assertEqual(self.ui.mode,'clean_setup')
+        self.ui.handle('C');self.assertEqual(self.ui.mode,'clean_setup')
 
     def test_setup_lists_pending_project_files_for_commit(self):
         (self.f.repo/'note.md').write_text('dropped by another conversation\n')
-        self.ui.handle('c');self.assertIn('note.md',self.ui.clean_setup.policy['owned_paths'])
+        self.ui.handle('C');self.assertIn('note.md',self.ui.clean_setup.policy['owned_paths'])
         self.assertEqual(self.ui.clean_setup.policy['owned_paths'][0],'TODO.md')
 
     def test_finished_operation_is_one_line_then_disappears(self):
@@ -76,7 +76,7 @@ class CleanSessionsUITests(unittest.TestCase):
         self.ui.clean.operation['updated']-=601;self.assertEqual(self.ui.clean.rows(),[])
 
     def test_editing_owned_files_keeps_comma_separators_and_spaces(self):
-        self.ui.handle('c');self.ui.clean_setup.index=2
+        self.ui.handle('C');self.ui.clean_setup.index=2
         self.ui.handle('\x15')
         for character in 'TODO.md, owned.py':self.ui.handle(character)
         self.assertEqual(self.ui.clean_setup.policy['owned_paths'],['TODO.md','owned.py'])
@@ -92,16 +92,20 @@ class CleanSessionsUITests(unittest.TestCase):
         self.addCleanup(terminal.close)
         self.terminal=terminal
         self.assertTrue(terminal.wait_for('Clean sessions c'))
-        os.write(terminal.master,b'c');self.assertTrue(terminal.wait_for('authorization scope'))
-        os.write(terminal.master,b'\r');self.assertTrue(terminal.wait_for('Confirm y'),terminal.output.decode(errors='replace'))
-        os.write(terminal.master,b'y');self.assertTrue(terminal.wait_for('Clean sessions pending'),terminal.output.decode(errors='replace'))
+        os.write(terminal.master,b'c');self.assertTrue(terminal.wait_for('Clean sessions pending'),terminal.output.decode(errors='replace'))
         delivery=json.loads((self.f.repo/'delivery.json').read_text())
         self.assertEqual(delivery['session'],self.f.old.session);self.assertIn('memory_handoff_begin',delivery['text'])
 
-    def test_action_through_existing_orchestrate_targets_released_successor(self):
-        self.ui.handle('c');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
+    def test_one_click_transfers_leadership_and_orchestrate_after_concurrent_commit(self):
+        with patch.object(tasks_ui,'clean_defaults',return_value=self.f.policy):
+            self.ui.handle('c')
         self.f.op=self.ui.clean.operation
-        self.f.prepared();self.f.tick();self.f.tick()
+        (self.f.repo/'TODO.md').write_text('## Next\n- [ ] Still pending\n')
+        fixture.git(self.f.repo,'commit','-am','Concurrent TODO update')
+        self.f.prepared(owned_paths=['TODO.md'])
+        op=self.f.tick()
+        self.assertEqual(op['checkpoint'],fixture.git(self.f.repo,'rev-parse','HEAD'))
+        self.f.tick()
         self.f.runtime.actors[self.f.new.session]=fixture.asdict(self.f.new)
         fixture.clean.atomic(fixture.clean.folder(self.f.store,self.f.op['operation_id'])/'leader-proof.json',{'native':fixture.asdict(self.f.new)})
         self.f.tick();self.f.receive();op=fixture.clean.load(self.f.store,self.f.op['operation_id'])

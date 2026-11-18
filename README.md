@@ -163,7 +163,9 @@ explicitly. A worktree without an upstream opens the destination form.
 The backend commits owned changes, fast-forwards only approved branches, verifies
 the pushed checkpoint, creates a fresh Herdr split/Codex frontend, delivers bounded
 context to its exact thread and waits for actual receiver receipt and predecessor
-release. Store then transfers Tasks/Progress and the existing Orchestrate target,
+release. If the original process and pane have both exited, Watchdog verifies
+the successor receipt and checks Herdr for a resumed predecessor before transferring.
+Store then transfers Tasks/Progress and the existing Orchestrate target,
 preserving panel terminals, Artifacts, Files/Yazi and layout. Left Undone is read-only.
 Pending/blocked/partial/received/released outcomes and uncertain effects stay visible;
 no blind resend or relaunch occurs. Active native runs must finish first.

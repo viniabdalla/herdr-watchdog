@@ -68,11 +68,14 @@ either matching hook operation content or exact-ID tool acceptance, block. Backe
 checks the explicit method, operation/project, hook excerpt or accepted ID, plus
 the existing token/checkpoint/context/native gates, and preserves the evidence.
 These remain receiver attestations, not an independent audit of service state.
-Then the
-predecessor receives an explicit release request, replies with the exact
-operation/checkpoint/successor and parks. Only after both real completed replies
-and final idle/native/Git checks does Store relinquish old ownership and activate
-the successor. Tasks and Progress follow the correlated Watchdog redirect in the
+The live predecessor receives an explicit release request, replies with the exact
+operation/checkpoint/successor and parks. If the predecessor already exited, Watchdog first validates
+the successor's completed receipt, checks the original process and pane are gone,
+and checks Herdr for a resumed or unidentified predecessor. It records observed
+exit separately from a release reply and repeats the checks before transferring
+ownership. A verified resume of the same session follows its new pane and uses
+the normal explicit release. Final idle, native identity and Git checks precede
+activation of the successor. Tasks and Progress follow the correlated Watchdog redirect in the
 same terminals. Artifacts, Files/Yazi client and layout are retained; Left Undone
 stays read-only. An activation message then tells the successor it may lead. The
 existing **Orchestrate** action uses the successor's authoritative Session binding.

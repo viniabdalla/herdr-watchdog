@@ -82,10 +82,9 @@ def defaults(session):
         remote=git(repo,'config','--get','branch.'+branch+'.remote')
         target=git(repo,'config','--get','branch.'+branch+'.merge').removeprefix('refs/heads/')
     except RuntimeError:remote=target=''
-    from .checkpoint import pending
-    # Like Orchestrate: files already pending are listed for commit; the user can remove any.
-    owned=['TODO.md']+[name for _,name in (pending(repo) or []) if name!='TODO.md']
-    return {'remote':remote,'branch':target,'owned_paths':owned[:32],'integrate':[],
+    _,pending=owned_changes(repo,[])
+    owned=['TODO.md',*sorted(pending-{'TODO.md'})]
+    return {'remote':remote,'branch':target,'owned_paths':owned,'integrate':[],
             'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
             'model':'gpt-6.1-sol','effort':'medium'}
 
@@ -100,8 +99,8 @@ def policy_for(session,policy):
     if git(repo,'symbolic-ref','--short','HEAD')!=value['branch']:
         raise RuntimeError('Cleanup only integrates into the current explicitly approved branch')
     for key in ('owned_paths','integrate'):
-        if not isinstance(value[key],list) or len(value[key])>32 or any(not isinstance(s,str) or not s or len(s)>240 for s in value[key]):
-            raise RuntimeError('Use at most 32 explicit '+key)
+        if not isinstance(value[key],list) or (key=='integrate' and len(value[key])>32) or any(not isinstance(s,str) or not s or len(s)>240 for s in value[key]):
+            raise RuntimeError('Invalid '+key+' in cleanup scope')
     for name in value['owned_paths']:
         p=PurePosixPath(name)
         if p.is_absolute() or '..' in p.parts or name in ('.','*','**') or p.parts[0]=='.git' or str(p)!=name:
@@ -213,9 +212,9 @@ def memory_scope(repo):
     return validate_memory_scope({'workspace':'default','project':repo.name.lower()})
 
 
-def request(session,policy,*,confirmed=False,store=None):
+def request(session,policy,*,confirmed=False,store=None,automatic=False):
     if not confirmed:raise RuntimeError('Explicit cleanup confirmation is required')
-    store=store or Store();session.verify()
+    store=store or Store();live=session.verify()
     if session.binding.kind!='codex':raise RuntimeError('Cleanup requires an exact native Codex thread')
     uuid.UUID(session.binding.session)
     with lease(store,session.repo):
@@ -230,10 +229,13 @@ def request(session,policy,*,confirmed=False,store=None):
             if previous['state'] not in SETTLED:
                 raise RuntimeError('Clean sessions '+previous['operation_id'][:8]+' is '+previous['state']+'; press c to retry or close it')
         native_boundary(store,session.repo)
+        leader_dir=live.get('foreground_cwd') or live.get('cwd') or session.repo
+        if Path(git(leader_dir,'rev-parse','--show-toplevel')).resolve()!=session.repo:
+            raise RuntimeError('Leader directory does not identify the selected Git worktree')
         approved=policy_for(session,policy)
         op={'version':1,'operation_id':str(uuid.uuid4()),'repo':str(session.repo),'binding_file':str(session.file),
             'source':asdict(session.binding),'memory_scope':memory_scope(session.repo),'base_sha':git(session.repo,'rev-parse','HEAD'),'policy':approved,
-            'state':'pending','stage':'preparation','effects':{},'created':time.time(),
+            'automatic':automatic,'state':'pending','stage':'preparation','effects':{},'created':time.time(),
             'boot_id':__import__('watchdog_app.mission_native',fromlist=['boot_id']).boot_id(),
             'tokens':{k:str(uuid.uuid4()) for k in ('prepared','received','released')},
             'history':{'source':history_mark(session.binding)}}
@@ -254,6 +256,11 @@ def request(session,policy,*,confirmed=False,store=None):
             +reply_instructions(op,'prepared',{'todo_reconciled':True,'memory_handoff_id':'ACTUAL_ID','memory_scope':op['memory_scope'],
                 'memory_handoff_list_verified':True,'summary':'Concise continuation',
                 'open_questions':[],'unfinished_tasks':[],'next_steps':[],'references':[]}))
+        if automatic:
+            prompt += ('\nIn your prepared JSON also include owned_paths: the subset of the candidate '
+                       'paths in the authorized scope that you verified belongs to this work. Include '
+                       'TODO.md for reconciliation. Leave unrelated changes for their owner. '
+                       'If ownership needs a user decision report blocked.')
         try:queue(store,op,'prepare',session.binding,prompt)
         except Exception as error:op.update(state='partial',problem='Preparation delivery uncertain: '+str(error));save(store,op)
         return op
@@ -265,35 +272,47 @@ def completed_reply(store,op,who,kind,binding):
     mark=op['history'][who];p=Path(binding.history);s=p.stat()
     if p.is_symlink() or (s.st_ino,s.st_dev)!=(mark['inode'],mark['device']) or s.st_size<mark['offset']:
         raise RuntimeError('Native receipt history was replaced or truncated')
-    with p.open('rb') as f:
-        f.seek(mark['offset']);raw=f.read(LIMIT+1)
-    if len(raw)>LIMIT:raise RuntimeError('New native messages exceed receipt bound; inspect manually without resend')
-    complete=raw.rfind(b'\n')+1
     found=[]
-    for line in raw[:complete].splitlines():
-        row=json.loads(line)
-        if not isinstance(row,dict):continue
-        payload=row.get('payload',{})
-        if not isinstance(payload,dict):continue
-        if row.get('type')!='event_msg' or payload.get('type')!='task_complete':continue
-        text=payload.get('last_agent_message','')
-        if not isinstance(text,str) or not text.startswith(PREFIX):continue
-        value=json.loads(text[len(PREFIX):])
-        if value.get('operation_id')!=op['operation_id']:continue
-        if value.get('token')!=op['tokens'][kind]:raise RuntimeError('Receipt operation token differs')
-        if value.get('kind')=='blocked':
-            raise LeaderBlocked('Leader reports blocked: '+str(value.get('reason','Preparation unavailable'))[:500])
-        if value.get('token')!=op['tokens'][kind] or value.get('kind')!=kind:
-            raise RuntimeError('Receipt operation token or phase differs')
-        found.append({'value':value,'turn_id':payload.get('turn_id'),'sha256':handoff.digest(row)})
-    mark['offset']+=complete;save(store,op)
+    offset=mark['offset']
+    with p.open('rb') as stream:
+        stream.seek(mark['offset'])
+        while stream.tell()<s.st_size:
+            line=stream.readline(s.st_size-stream.tell())
+            if not line.endswith(b'\n'):break
+            offset=stream.tell()
+            row=json.loads(line)
+            if not isinstance(row,dict):continue
+            payload=row.get('payload',{})
+            if not isinstance(payload,dict):continue
+            if row.get('type')!='event_msg' or payload.get('type')!='task_complete':continue
+            text=payload.get('last_agent_message','')
+            if not isinstance(text,str) or not text.startswith(PREFIX):continue
+            if len(text)>LIMIT:raise RuntimeError('Native receipt exceeds size bound')
+            value=json.loads(text[len(PREFIX):])
+            if value.get('operation_id')!=op['operation_id']:continue
+            if value.get('token')!=op['tokens'][kind]:raise RuntimeError('Receipt operation token differs')
+            if value.get('kind')=='blocked':
+                raise LeaderBlocked('Leader reports blocked: '+str(value.get('reason','Preparation unavailable'))[:500])
+            if value.get('token')!=op['tokens'][kind] or value.get('kind')!=kind:
+                raise RuntimeError('Receipt operation token or phase differs')
+            found.append({'value':value,'turn_id':payload.get('turn_id'),'sha256':handoff.digest(row)})
     if len(found)>1:raise RuntimeError('Duplicate native confirmations require inspection')
-    return found[0] if found else None
+    if found:return found[0]
+    mark['offset']=offset;save(store,op)
+    return None
 
 
 def source_session(op):
     session=Session(op['binding_file'],Path(op['repo']))
-    if asdict(session.binding)!=op['source']:raise RuntimeError('Current leader binding was replaced')
+    current=asdict(session.binding)
+    if current!=op['source']:
+        state=handoff.read_json(op['binding_file'])
+        original=op['source']
+        if (original not in state.get('reopened',[]) or
+                any(current[k]!=original[k] for k in ('kind','session','account','workspace','history'))):
+            raise RuntimeError('Current leader binding was replaced')
+        op.setdefault('original_source',original)
+        op['source']=current
     return session
 
 
@@ -303,7 +322,7 @@ def checkpoint_current(op):
         handoff.digest(git(repo,'remote','get-url','--push',policy['remote']))!=policy['remote_digest']):
         raise RuntimeError('Approved branch or push remote changed')
     if op.get('checkpoint'):
-        if git(repo,'rev-parse','HEAD')!=op['checkpoint'] or owned_changes(repo,policy['owned_paths'])[0]:
+        if git(repo,'rev-parse','HEAD')!=op['checkpoint'] or owned_changes(repo,op.get('checkpoint_paths',policy['owned_paths']))[0]:
             raise RuntimeError('Checkpoint is stale or its owned files changed')
         remote=git(repo,'ls-remote','--heads',git(repo,'remote','get-url','--push',policy['remote']),'refs/heads/'+policy['branch']).split()
         if not remote or remote[0]!=op['checkpoint']:raise RuntimeError('Remote checkpoint changed')
@@ -342,6 +361,23 @@ def owned_changes(repo,allowed):
     return changed&set(allowed),changed-set(allowed)
 
 
+def verify_preparation_commits(repo,base,head,allowed):
+    """Every new commit must descend linearly from base and touch only owned files."""
+    if base==head:return
+    parent=base
+    for line in git(repo,'rev-list','--reverse','--parents',base+'..'+head).splitlines():
+        commit,*parents=line.split()
+        if parents!=[parent]:
+            raise RuntimeError('Branch history diverged during preparation; review the worktree')
+        files=git_names(repo,'diff','--name-only','--no-renames','-z',parent,commit)
+        outside=files-set(allowed)
+        if outside:
+            raise RuntimeError('Concurrent commit includes files outside the handoff: '+', '.join(sorted(outside)))
+        parent=commit
+    if parent!=head:
+        raise RuntimeError('Branch history changed during preparation; review the worktree')
+
+
 def prepare_checkpoint(store,op,receipt):
     v=receipt['value']
     if not v.get('memory_handoff_id') or v['memory_handoff_id']=='ACTUAL_ID':
@@ -359,8 +395,15 @@ def prepare_checkpoint(store,op,receipt):
     if not isinstance(refs,list) or len(refs)>8:raise RuntimeError('At most eight bounded evidence references')
     references=[handoff.reference(p) for p in refs]
     repo=Path(op['repo']);policy=op['policy'];checkpoint_current(op)
-    if git(repo,'rev-parse','HEAD')!=op['base_sha']:raise RuntimeError('Preparation base changed before Git authorization')
-    changed,unowned=owned_changes(repo,policy['owned_paths'])
+    allowed=policy['owned_paths']
+    if op.get('automatic'):
+        selected=v.get('owned_paths')
+        if not isinstance(selected,list) or 'TODO.md' not in selected or any(not isinstance(p,str) or p not in allowed for p in selected):
+            raise RuntimeError('Leader must identify owned files within the proposed handoff scope')
+        allowed=selected
+    verify_preparation_commits(repo,op['base_sha'],git(repo,'rev-parse','HEAD'),allowed)
+    changed,unowned=owned_changes(repo,allowed)
+    op['checkpoint_paths']=allowed
     if unowned:op['left_uncommitted']=sorted(unowned)[:32]
     for name in changed:
         p=repo/name
@@ -371,19 +414,25 @@ def prepare_checkpoint(store,op,receipt):
         effect(store,op,'stage-owned',lambda:git(repo,'--literal-pathspecs','add','--',*sorted(changed)))
         # Recheck after staging, then constrain Git's commit pathspec as well:
         # a concurrent unrelated index entry must never enter this commit.
-        if owned_changes(repo,policy['owned_paths'])[0]!=changed:raise RuntimeError('Owned files changed while staging')
+        if owned_changes(repo,allowed)[0]!=changed:raise RuntimeError('Owned files changed while staging')
         effect(store,op,'commit-owned',lambda:git(repo,'--literal-pathspecs','commit','--only','-m',
             'Clean sessions: reconcile owned project checkpoint','--',*sorted(changed)))
+    head=git(repo,'rev-parse','HEAD')
+    verify_preparation_commits(repo,op['base_sha'],head,allowed)
     for ref,sha in policy['integration_heads'].items():
         if git(repo,'rev-parse','--verify',ref+'^{commit}')!=sha:raise RuntimeError('Approved integration branch changed')
+        if git(repo,'rev-parse','HEAD')!=head:raise RuntimeError('Branch changed before integration')
         effect(store,op,'integrate:'+ref,lambda:git(repo,'merge','--ff-only',sha))
-    if owned_changes(repo,policy['owned_paths'])[0]:raise RuntimeError('Owned files are dirty after integration')
-    head=git(repo,'rev-parse','HEAD')
-    effect(store,op,'push',lambda:git(repo,'push',policy['remote'],'HEAD:refs/heads/'+policy['branch']))
+        merged=git(repo,'rev-parse','HEAD')
+        if merged not in (head,sha):raise RuntimeError('Branch changed during integration')
+        head=merged
+    if owned_changes(repo,allowed)[0]:raise RuntimeError('Owned files are dirty after integration')
+    effect(store,op,'push',lambda:git(repo,'push',policy['remote'],head+':refs/heads/'+policy['branch']))
     remote=git(repo,'ls-remote','--heads',git(repo,'remote','get-url','--push',policy['remote']),'refs/heads/'+policy['branch']).split()
     if not remote or remote[0]!=head:raise RuntimeError('Push checkpoint not verified')
     op['checkpoint']=head
     context={'version':1,'operation_id':op['operation_id'],'project':op['repo'],'checkpoint':head,
+             'continuation_file':str(folder(store,op['operation_id'])/'continuation.json'),
              'predecessor':op['source'],'context':op['preparation'],'references':references,
              'legacy_run_adopted':False,'memory_evidence':'Predecessor attestation; successor must confirm actual ai-memory receipt',
              'authorization':policy,'next':'Wait for predecessor release before coordinating; preserve existing actors and panes.'}
@@ -435,10 +484,44 @@ def policy_run(store,op):
             'session_policy':{'registry_dir':str(store.root/'runs/session-policy')}}
 
 
+def predecessor_exited(op, api):
+    """Distinguish a closed leader from a busy, unregistered or resumed thread."""
+    source=op['source']
+    try:
+        stat=Path('/proc',str(source['pid']),'stat').read_text()
+    except FileNotFoundError:
+        pass
+    else:
+        if stat.rsplit(')',1)[1].split()[19]==str(source['started']):
+            return False
+    state=handoff.read_json(op['binding_file'])
+    if state.get('binding')!=source or state.get('ownership') in ('released','transferring'):
+        return False
+    panes=api.call('pane','list')['panes']
+    if any(pane['pane_id']==source['pane'] for pane in panes):
+        return False
+    agents=api.call('agent','list')['agents']
+    for agent in agents:
+        if agent.get('agent')!='codex':continue
+        sid=(agent.get('agent_session') or {}).get('value')
+        if sid==source['session'] or (not sid and agent.get('workspace_id')==source['workspace']):
+            return False
+    return True
+
+
 def transfer(store,op,api):
-    old=source_session(op);new=bindings.engine().Binding(**op['target']);verify_successor(op,new)
-    if old.verify().get('agent_status') not in ('idle','done') or bindings.verify(new).get('agent_status') not in ('idle','done'):
-        raise RuntimeError('Both leaders must be idle after explicit release before panel transfer')
+    old=bindings.engine().Binding(**op['source'])
+    new=bindings.engine().Binding(**op['target'])
+    def verify_leaders():
+        verify_successor(op,new)
+        if op.get('predecessor_exit'):
+            if not op.get('receiver_receipt') or not predecessor_exited(op,api):
+                raise RuntimeError('Cannot confirm predecessor exit and successor receipt')
+        elif source_session(op).verify().get('agent_status') not in ('idle','done'):
+            raise RuntimeError('Predecessor must finish its release turn')
+        if bindings.verify(new).get('agent_status') not in ('idle','done'):
+            raise RuntimeError('Successor must finish its receipt turn')
+    verify_leaders()
     checkpoint_current(op);native_boundary(store,Path(op['repo']))
     state=handoff.read_json(op['binding_file'])
     for role,pane in state.get('panes',{}).items():
@@ -447,18 +530,16 @@ def transfer(store,op,api):
     rs=RunStore(store.root/'runs');run=policy_run(store,op)
     with handoff.session_leases(rs,run,[op['source'],op['target']]) as slots:
         handoff.reserve_current_main(run,slots);handoff.fresh_main(run,op['target'],slots)
-        verify_successor(op,new)
-        if old.verify().get('agent_status') not in ('idle','done') or bindings.verify(new).get('agent_status') not in ('idle','done'):
-            raise RuntimeError('Leader became busy before ownership commit')
+        verify_leaders()
         checkpoint_current(op)
         # Intent is saved before reservation / Store mutation. Interrupted rebind
         # is visible and blocked; it never activates both coordinators.
         op['effects']['rebind']={'state':'sending'};save(store,op)
         handoff.write_claim(slots,op['target'],handoff.main_claim(run))
-        op['new_binding_file']=store.transfer(old.file,old.binding,new,Path(op['repo']),op['operation_id'],api=api)
+        op['new_binding_file']=store.transfer(op['binding_file'],old,new,Path(op['repo']),op['operation_id'],api=api)
     op['effects']['rebind']['state']='sent';save(store,op)
     queue(store,op,'activation',new,
-          f"Clean sessions {op['operation_id']}: predecessor release was observed; Watchdog panel ownership and Orchestrate now target your exact thread {new.session}. "
+          f"Clean sessions {op['operation_id']}: leadership transfer was verified; Watchdog panel ownership and Orchestrate now target your exact thread {new.session}. "
           f"Verified checkpoint {op['checkpoint']}; binding {op['new_binding_file']}. You are the project leader. Keep unfinished tasks open and preserve existing actors/panes.")
     op.update(state='released',stage='released');save(store,op)
 
@@ -492,7 +573,14 @@ def advance(store,identity,*,api=None):
         try:
             from .mission_native import boot_id
             if boot_id()!=op['boot_id']:raise RuntimeError('Cleanup belongs to a previous boot')
-            source_session(op);native_boundary(store,Path(op['repo']));checkpoint_current(op)
+            exited=False
+            try:
+                source_session(op)
+            except RuntimeError:
+                if op['stage'] not in ('receipt','release') or not predecessor_exited(op,api or Herdr()):
+                    raise
+                exited=True
+            native_boundary(store,Path(op['repo']));checkpoint_current(op)
             if any(e['state'] in ('sending','uncertain') for e in op['effects'].values()):
                 raise RuntimeError('Interrupted or uncertain operation retained; inspect exact side effect before recovery')
             stage=op['stage']
@@ -523,14 +611,21 @@ def advance(store,identity,*,api=None):
                     queue(store,op,'continuation',target,prompt);op['stage']='receipt';save(store,op)
             elif stage=='receipt':
                 target=bindings.engine().Binding(**op['target']);verify_successor(op,target)
-                receipt=completed_reply(store,op,'target','received',target)
+                receipt=op.get('receiver_receipt') or completed_reply(store,op,'target','received',target)
                 if receipt:
                     v=receipt['value']
                     if any(v.get(k)!=expected for k,expected in {'checkpoint':op['checkpoint'],'handoff_sha256':op['handoff_sha256'],
                             'memory_handoff_id':op['preparation']['memory_handoff_id']}.items()):
                         raise RuntimeError('Correlated successor receipt does not match checkpoint/context/ai-memory')
                     validate_memory_receipt(op,v)
-                    op['receiver_receipt']=receipt;op['state']='received';op['history']['source']=history_mark(bindings.engine().Binding(**op['source']));save(store,op)
+                    op['receiver_receipt']=receipt;op['state']='received'
+                    if exited:
+                        op['predecessor_exit']={'session':op['source']['session'],'at':time.time()}
+                        op['stage']='release';save(store,op)
+                        if bindings.verify(target).get('agent_status') in ('idle','done'):
+                            transfer(store,op,api or Herdr())
+                        return op
+                    op['history']['source']=history_mark(bindings.engine().Binding(**op['source']));save(store,op)
                     prompt=(f"Verified successor receipt for Clean sessions {identity}; checkpoint {op['checkpoint']}; successor {target.session}. "
                         'Relinquish project coordination now; preserve all panes and agents. After this completed release response remain parked. '
                         'Watchdog will transfer Tasks/Progress/Orchestrate ownership; do not change TODO or Git.'
@@ -539,6 +634,14 @@ def advance(store,identity,*,api=None):
                     op['stage']='release';save(store,op)
             elif stage=='release':
                 target=bindings.engine().Binding(**op['target']);verify_successor(op,target)
+                if not exited and op.pop('predecessor_exit',None) and 'release' not in op['effects']:
+                    op['stage']='receipt';save(store,op)
+                    return op
+                if exited and op.get('receiver_receipt'):
+                    if bindings.verify(target).get('agent_status') not in ('idle','done'):return op
+                    op['predecessor_exit']={'session':op['source']['session'],'at':time.time()}
+                    save(store,op);transfer(store,op,api or Herdr())
+                    return op
                 receipt=op.get('release_receipt') or completed_reply(store,op,'source','released',bindings.engine().Binding(**op['source']))
                 if receipt:
                     if receipt['value'].get('checkpoint')!=op['checkpoint'] or receipt['value'].get('successor')!=target.session:

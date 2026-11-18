@@ -87,9 +87,9 @@ class CleanSessionsTests(unittest.TestCase):
         payload={'operation_id':op['operation_id'],'token':op['tokens'][kind],'kind':kind,**extra}
         with Path(binding.history).open('a') as f:
             f.write(json.dumps({'type':'event_msg','payload':{'type':'task_complete','turn_id':str(uuid.uuid4()),'last_agent_message':'WATCHDOG_CLEAN '+json.dumps(payload)}})+'\n')
-    def prepared(self):
+    def prepared(self,**extra):
         self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=str(uuid.uuid4()),
-                   memory_scope=clean.load(self.store,self.op['operation_id'])['memory_scope'],memory_handoff_list_verified=True,summary='Continue pending work',open_questions=['Question'],unfinished_tasks=['Unfinished'],next_steps=['Next'],references=[])
+                   memory_scope=clean.load(self.store,self.op['operation_id'])['memory_scope'],memory_handoff_list_verified=True,summary='Continue pending work',open_questions=['Question'],unfinished_tasks=['Unfinished'],next_steps=['Next'],references=[],**extra)
     def to_receipt(self):
         self.op=self.request();self.prepared();self.tick() # verified preparation, commit/integrate/push checkpoint
         self.tick() # split and startup command
@@ -102,6 +102,46 @@ class CleanSessionsTests(unittest.TestCase):
                    memory_receipt={'method':'exact_id_tool_accept','operation_id':op['operation_id'],'project':str(self.repo),'memory_scope':op['preparation']['memory_scope'],
                                    'accepted_handoff_id':op['preparation']['memory_handoff_id']})
         return self.tick()
+
+    def test_automatic_checkpoint_includes_only_leader_confirmed_work(self):
+        (self.repo/'owned.py').write_text('foreign changes')
+        self.op=clean.request(self.session,self.policy,automatic=True,confirmed=True,store=self.store)
+        (self.repo/'TODO.md').write_text('reconciled')
+        self.prepared(owned_paths=['TODO.md'])
+        op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
+        self.assertEqual(git(self.remote,'show','main:owned.py'),'old')
+        self.assertEqual(git(self.remote,'show','main:TODO.md'),'reconciled')
+        self.assertEqual(self.tick()['stage'],'successor')
+
+    def test_live_leader_in_sibling_worktree_cannot_push_this_branch(self):
+        sibling=self.root/'other'
+        git(self.repo,'worktree','add','-b','other',str(sibling))
+        with patch.object(self.session,'verify',return_value={'foreground_cwd':str(sibling)}):
+            with self.assertRaisesRegex(RuntimeError,'worktree'):
+                self.request()
+        self.assertFalse(self.runtime.deliveries)
+
+    def test_checkpoint_accepts_concurrent_owned_commit_without_duplicate(self):
+        self.op=self.request()
+        (self.repo/'TODO.md').write_text('updated')
+        git(self.repo,'commit','-am','Updated TODO')
+        head=git(self.repo,'rev-parse','HEAD')
+        self.prepared()
+        op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
+        self.assertEqual(git(self.remote,'rev-parse','main'),head)
+        self.assertNotIn('commit-owned',op['effects'])
+
+    def test_checkpoint_rejects_foreign_file_even_if_later_reverted(self):
+        self.op=self.request()
+        (self.repo/'foreign').write_text('foreign')
+        git(self.repo,'add','foreign')
+        git(self.repo,'commit','-m','foreign')
+        git(self.repo,'revert','--no-edit','HEAD')
+        self.prepared()
+        self.assertEqual(self.tick()['state'],'partial')
+        self.assertEqual(git(self.remote,'rev-parse','main'),self.op['base_sha'])
 
     def test_requires_explicit_confirmation_and_requests_exact_current_leader(self):
         with self.assertRaisesRegex(RuntimeError,'confirmation'):clean.request(self.session,self.policy,store=self.store)
@@ -184,6 +224,39 @@ class CleanSessionsTests(unittest.TestCase):
         self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(self.old),'nothing transferred')
         self.api.panel=real;clean.retry(self.store,op['operation_id'])
         op=self.tick();self.assertEqual(op['state'],'released',op.get('problem'))
+
+    def test_closed_predecessor_transfers_after_real_correlated_receipt(self):
+        self.to_receipt()
+        del self.runtime.actors[self.old.session]
+        call=self.api.call
+        def inventory(*args):
+            if args==('pane','list'):return {'panes':[{'pane_id':self.new.pane}]}
+            if args==('agent','list'):return {'agents':[{'agent':'codex','pane_id':self.new.pane,
+                'agent_session':{'kind':'id','value':self.new.session}}]}
+            return call(*args)
+        self.api.call=inventory
+        with Path(self.new.history).open('a') as f:
+            f.write(json.dumps({'type':'event_msg','payload':{'text':'x'*90000}})+'\n')
+        op=self.receive()
+        self.assertEqual(op['state'],'released',op.get('problem'))
+        self.assertIn('receiver_receipt',op)
+        self.assertIn('predecessor_exit',op)
+        self.assertNotIn('release_receipt',op)
+        self.assertEqual(json.loads(self.file.read_text())['ownership'],'released')
+
+    def test_missing_predecessor_requires_absent_pane_and_no_resumed_agent(self):
+        op=self.to_receipt()
+        call=self.api.call
+        inventories=(
+            ([{'pane_id':self.old.pane}],[]),
+            ([],[{'agent':'codex','agent_session':{'value':self.old.session}}]),
+            ([],[{'agent':'codex','workspace_id':self.old.workspace}]),
+        )
+        for panes,agents in inventories:
+            with self.subTest(panes=panes,agents=agents):
+                self.api.call=lambda *args: ({'panes':panes} if args==('pane','list') else
+                    {'agents':agents} if args==('agent','list') else call(*args))
+                self.assertFalse(clean.predecessor_exited(op,self.api))
 
     def test_missing_memory_handoff_is_partial_not_false_transferred(self):
         self.op=self.request();self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=None)

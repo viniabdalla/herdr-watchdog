@@ -119,7 +119,8 @@ class Session:
         value = json.loads(path.read_text())
         outgoing = data.get('outgoing_transfer_operation', data.get('transfer_operation'))
         if (not outgoing or value.get('transfer_operation') != outgoing or
-                value.get('predecessor_binding') != asdict(self.binding)):
+                value.get('predecessor_binding') != data['binding'] or
+                (data['binding'] != asdict(self.binding) and asdict(self.binding) not in data.get('reopened', []))):
             raise RuntimeError('Successor panel transfer correlation changed')
         return Session.for_panel(path, self.repo).file
 

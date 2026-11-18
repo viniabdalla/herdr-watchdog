@@ -71,9 +71,18 @@ class Controller:
         self.repo=Path(repo);self.store=store or Store();self.operation=None
         self.thread=None;self.result=None;self.next_poll=0
 
-    def start(self,session,policy):
-        self.operation=backend.request(session,copy.deepcopy(policy),confirmed=True,store=self.store)
+    def start(self,session,policy,*,automatic=False):
+        self.operation=backend.request(session,copy.deepcopy(policy),confirmed=True,store=self.store,automatic=automatic)
         return self.operation
+
+    def poll_file(self,binding_file):
+        # A restarted Tasks pane can still drive the saved handoff after the old
+        # leader exits. Dispatch remains unavailable until the redirect verifies.
+        state=backend.handoff.read_json(binding_file)
+        if state.get('repo')!=str(self.repo.resolve()):return
+        binding=backend.bindings.engine().Binding(**state['binding'])
+        if Path(binding_file).resolve()==(self.store.root/(binding.key+'.json')).resolve():
+            self.poll(binding)
 
     def poll(self,binding):
         if self.thread is not None:
@@ -83,7 +92,7 @@ class Controller:
         if time.monotonic()<self.next_poll:return
         self.next_poll=time.monotonic()+2
         relevant=[op for op in backend.operations(self.store,self.repo)
-                  if asdict(binding) in (op['source'],op.get('target'))]
+                  if asdict(binding) in (op['source'],op.get('original_source'),op.get('target'))]
         if relevant:self.operation=max(relevant,key=lambda op:op['created'])
         if not self.operation or self.operation['state'] in ('partial','blocked')+backend.SETTLED:return
         identity=self.operation['operation_id']
@@ -127,6 +136,9 @@ class Controller:
             return [('Clean sessions done · new leader '+str(op.get('target',{}).get('pane','')),'Done',None),('',None,None)]
         color='Blocked' if op['state'] in ('blocked','partial') else 'In progress'
         rows=[('Clean sessions · '+op['state']+' · '+op['stage']+' · '+op['operation_id'],color,None)]
+        if op.get('problem')=='Preparation base changed before Git authorization':
+            rows.append(('Commit recebido durante o handoff. Pressione c para conferir e continuar.',color,None))
+            return rows+[('',None,None)]
         if op.get('problem'):rows.append((op['problem'],color,None))
         if op.get('checkpoint'):rows.append(('Verified checkpoint: '+op['checkpoint'],None,None))
         if op.get('left_uncommitted'):rows.append(('Left uncommitted (not in the list): '+', '.join(op['left_uncommitted']),None,None))

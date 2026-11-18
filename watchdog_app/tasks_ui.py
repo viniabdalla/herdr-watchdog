@@ -97,6 +97,8 @@ class TasksUI:
         self.targets, self.mouse_armed = [], None
         self.palette = colors()
         self.clean = Controller(self.repo)
+        self.binding_file = binding_file
+        self.next_reconnect = 0
         self.can_confirm = False
         try:
             self.session = Session.for_panel(binding_file, self.repo) if binding_file else Session(None, self.repo)
@@ -108,6 +110,10 @@ class TasksUI:
 
     def refresh(self):
         try:
+            if self.binding_file and not self.session.binding and time.monotonic()>=self.next_reconnect:
+                self.next_reconnect=time.monotonic()+2
+                self.clean.poll_file(self.binding_file)
+                self.session=Session.for_panel(self.binding_file,self.repo)
             target = self.session.successor_file()
             if target:
                 self.job.close()
