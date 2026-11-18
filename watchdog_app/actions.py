@@ -126,15 +126,15 @@ class Session:
     @contextmanager
     def routing(self):
         """Serialize new coordination/task sends against a project leader transfer."""
-        from .clean_sessions import lease, operations
+        from .clean_sessions import SETTLED, lease, operations
         from .store import Store
         if not self.file:
             self.verify()
         store = Store(self.file.parent)
         with lease(store, self.repo):
             for operation in operations(store, self.repo):
-                if operation['state'] != 'released':
-                    raise RuntimeError('Clean sessions '+operation['state']+'; inspect the transfer before sending new work')
+                if operation['state'] not in SETTLED:
+                    raise RuntimeError('Clean sessions '+operation['state']+'; press c in Tasks to retry or close it before sending new work')
             yield
 
     def dispatch(self, snapshot, ids, queued=False):

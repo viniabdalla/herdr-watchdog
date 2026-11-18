@@ -45,6 +45,7 @@ class NativeSimulation:
 class HerdrSimulation:
     def __init__(self):self.calls=[];self.fail=None
     def checked(self,pane):return pane
+    def panel(self,pane,repo):return pane
     def call(self,*args):
         self.calls.append(args)
         if self.fail==args[:2]:raise RuntimeError('simulated Herdr uncertainty')
@@ -141,17 +142,48 @@ class CleanSessionsTests(unittest.TestCase):
         self.policy['integrate']=['approved'];self.op=self.request();self.prepared();op=self.tick()
         self.assertEqual(op['checkpoint'],candidate);self.assertEqual(git(self.remote,'rev-parse','main'),candidate)
 
-    def test_dirty_unowned_or_staged_files_block_without_commit_or_push(self):
+    def test_dirty_unowned_or_staged_files_are_left_untouched_and_never_committed(self):
         for staged in (False,True):
             with self.subTest(staged=staged):
                 (self.repo/'foreign').write_text('not ours')
                 if staged:git(self.repo,'add','foreign')
+                (self.repo/'owned.py').write_text('ours '+str(staged)+'\n')
                 self.op=self.request();self.prepared();op=self.tick()
-                self.assertEqual(op['state'],'partial');self.assertIn('unowned',op['problem'])
-                self.assertEqual(git(self.repo,'rev-parse','HEAD'),op['base_sha'])
-                self.assertEqual(self.api.calls,[])
-                # Fresh fixture operation after explicit removal of blocked operation, not automatic recovery.
-                clean.path(self.store,self.op['operation_id']).unlink();git(self.repo,'reset');(self.repo/'foreign').unlink()
+                self.assertEqual(op['stage'],'launch',op.get('problem'));self.assertEqual(op['left_uncommitted'],['foreign'])
+                self.assertNotIn('foreign',git(self.repo,'ls-tree','-r','--name-only','HEAD').split())
+                self.assertEqual(git(self.remote,'rev-parse','main'),op['checkpoint'])
+                self.assertEqual((self.repo/'foreign').read_text(),'not ours')
+                self.assertEqual(bool(git(self.repo,'diff','--cached','--name-only')),staged,'foreign index state is preserved')
+                clean.close(self.store,self.op['operation_id']);git(self.repo,'reset');(self.repo/'foreign').unlink()
+
+    def test_partial_operation_retries_from_saved_reply_or_closes_with_evidence(self):
+        (self.repo/'owned.py').write_text('ours\n')
+        self.op=self.request();self.prepared()
+        real=clean.prepare_checkpoint;calls=[]
+        def flaky(store,op,receipt):
+            calls.append(receipt)
+            if len(calls)==1:raise RuntimeError('transient checkpoint problem')
+            return real(store,op,receipt)
+        with patch.object(clean,'prepare_checkpoint',side_effect=flaky):
+            op=self.tick();self.assertEqual(op['state'],'partial')
+            with self.assertRaisesRegex(RuntimeError,'press c'):self.request()
+            clean.retry(self.store,self.op['operation_id']);op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'));self.assertEqual(calls[0],calls[1],'same leader reply reused')
+        self.assertEqual(len([d for d in self.runtime.deliveries if d[0]==self.old.session]),1,'leader is not asked again')
+        self.api.fail=('pane','split');op=self.tick();self.assertEqual(op['state'],'partial')
+        with self.assertRaisesRegex(RuntimeError,'half-run'):clean.retry(self.store,self.op['operation_id'])
+        op=clean.close(self.store,self.op['operation_id']);self.assertEqual(op['state'],'closed')
+        self.assertEqual(op['closed']['stage'],'launch');self.assertIn('split',op['effects'])
+        self.api.fail=None;self.assertEqual(self.request()['state'],'pending')
+
+    def test_transfer_problem_after_release_retries_without_a_new_release_reply(self):
+        op=self.to_receipt();self.receive();op=clean.load(self.store,self.op['operation_id'])
+        self.reply(self.old,'released',checkpoint=op['checkpoint'],successor=self.new.session)
+        real=self.api.panel;self.api.panel=lambda pane,repo:(_ for _ in ()).throw(RuntimeError('Panel wD:p8 was replaced'))
+        op=self.tick();self.assertEqual(op['state'],'partial');self.assertIn('replaced',op['problem'])
+        self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(self.old),'nothing transferred')
+        self.api.panel=real;clean.retry(self.store,op['operation_id'])
+        op=self.tick();self.assertEqual(op['state'],'released',op.get('problem'))
 
     def test_missing_memory_handoff_is_partial_not_false_transferred(self):
         self.op=self.request();self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=None)
@@ -301,7 +333,7 @@ class CleanSessionsTests(unittest.TestCase):
         with Path(self.old.history).open('a') as f:f.write(json.dumps({'type':'event_msg','payload':{'type':'task_complete','last_agent_message':clean.PREFIX+json.dumps(value)}})+'\n')
         op=self.tick();self.assertEqual(op['state'],'blocked');self.assertIn('ai-memory',op['problem']);self.assertFalse(self.api.calls)
 
-    def test_unowned_index_masked_by_restored_worktree_is_rejected_before_any_git_mutation(self):
+    def test_unowned_index_masked_by_restored_worktree_is_kept_out_of_the_commit(self):
         unowned=self.repo/'unowned.txt';unowned.write_text('base\n')
         git(self.repo,'add','unowned.txt');git(self.repo,'commit','-m','fixture tracked unowned');git(self.repo,'push','origin','main')
         unowned.write_text('unapproved staged content\n');git(self.repo,'add','unowned.txt');unowned.write_text('base\n')
@@ -309,13 +341,12 @@ class CleanSessionsTests(unittest.TestCase):
         self.op=self.request();head=git(self.repo,'rev-parse','HEAD')
         index=subprocess.check_output(['git','-C',str(self.repo),'ls-files','--stage','-z'])
         index_file=self.repo/git(self.repo,'rev-parse','--git-path','index');index_bytes=index_file.read_bytes()
-        remote=git(self.remote,'rev-parse','main');self.prepared();op=self.tick()
-        self.assertEqual(op['state'],'partial');self.assertIn('unowned',op['problem'])
-        self.assertEqual(git(self.repo,'rev-parse','HEAD'),head,'Rejection must precede any commit')
-        self.assertEqual(subprocess.check_output(['git','-C',str(self.repo),'ls-files','--stage','-z']),index,'Index must remain byte-identical')
-        self.assertEqual(index_file.read_bytes(),index_bytes,'Ownership rejection must not write index metadata either')
-        self.assertEqual(git(self.remote,'rev-parse','main'),remote)
-        self.assertEqual(set(op['effects']),{'prepare'});self.assertEqual(self.api.calls,[])
+        self.prepared();op=self.tick()
+        self.assertEqual(op['stage'],'launch',op.get('problem'));self.assertEqual(op['left_uncommitted'],['unowned.txt'])
+        self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base','Unowned staged content never enters the commit')
+        self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'authorized work')
+        self.assertEqual(git(self.repo,'show',':unowned.txt'),'unapproved staged content','Foreign index entry is preserved')
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['checkpoint'])
         self.assertEqual(unowned.read_text(),'base\n')
 
     def test_owned_staged_and_unstaged_edits_commit_only_authorized_worktree_content(self):
@@ -350,10 +381,10 @@ class CleanSessionsTests(unittest.TestCase):
                 unowned.write_text('late foreign index\n');git(self.repo,'add','unowned.txt');unowned.write_text('base\n')
             return result
         with patch.object(clean,'effect',side_effect=inject):op=self.tick()
-        self.assertEqual(op['state'],'partial')
+        self.assertEqual(op['stage'],'launch',op.get('problem'))
         self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base','Bounded commit must never include unrelated index entries')
-        self.assertEqual(git(self.remote,'rev-parse','main'),op['base_sha'])
-        self.assertEqual(self.api.calls,[])
+        self.assertEqual(git(self.repo,'show',':unowned.txt'),'late foreign index')
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['checkpoint'])
 
     def test_bounded_commit_excludes_foreign_index_change_racing_the_commit_itself(self):
         unowned=self.repo/'unowned.txt';unowned.write_text('base\n')
@@ -368,9 +399,9 @@ class CleanSessionsTests(unittest.TestCase):
                 return real_effect(store,op,name,raced)
             return real_effect(store,op,name,action)
         with patch.object(clean,'effect',side_effect=inject):op=self.tick()
-        self.assertEqual(op['state'],'partial');self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base')
+        self.assertEqual(op['stage'],'launch',op.get('problem'));self.assertEqual(git(self.repo,'show','HEAD:unowned.txt'),'base')
         self.assertEqual(git(self.repo,'show','HEAD:owned.py'),'authorized final')
-        self.assertEqual(git(self.remote,'rev-parse','main'),op['base_sha']);self.assertEqual(self.api.calls,[])
+        self.assertEqual(git(self.remote,'rev-parse','main'),op['checkpoint'])
 
     def test_owned_filename_that_looks_like_git_pathspec_is_treated_literally(self):
         name=':(glob)owned*.py';file=self.repo/name;file.write_text('old\n')

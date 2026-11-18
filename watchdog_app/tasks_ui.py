@@ -8,6 +8,7 @@ import time
 from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
+from .clean_sessions import SETTLED
 from .clean_sessions_ui import Controller, Setup, confirmation_rows
 from .checkpoint import pending, describe, conflicted, commit
 
@@ -142,7 +143,7 @@ class TasksUI:
         if self.job.running:
             self.review_status = 'Codex: reviewing the last completed reply…'
         if (self.session.binding and self.snapshot and time.monotonic() >= self.next_check and
-                not (self.clean.operation and self.clean.operation['state'] != 'released')):
+                not (self.clean.operation and self.clean.operation['state'] not in SETTLED)):
             self.next_check = time.monotonic() + 5
             try:
                 source = latest_reply(self.session.binding)
@@ -160,6 +161,8 @@ class TasksUI:
             offer = self.pending
             if offer['kind'] == 'clean':
                 return confirmation_rows(self.session, offer['policy'])
+            if offer['kind'] == 'clean_stuck':
+                return self.clean.stuck_rows() if self.clean.stuck else [('Clean sessions is no longer stopped.', 'Done', None)]
             title = {'done': 'Confirm completion', 'send': 'Confirm send',
                      'queue': 'Conversation is working — confirm queue',
                      'orchestrate': 'Confirm orchestration',
@@ -365,10 +368,13 @@ class TasksUI:
     def execute(self):
         offer = self.pending
         self.busy('Working…')
-        if (offer['kind'] != 'clean' and self.clean.operation and
-                self.clean.operation['state'] != 'released'):
-            raise RuntimeError('Clean sessions '+self.clean.operation['state']+'; inspect transfer before editing tasks or sending')
-        if offer['kind'] == 'clean':
+        if offer['kind'] == 'clean_stuck':
+            operation = self.clean.retry()
+            self.notice = 'Clean sessions retrying · ' + operation['operation_id'][:8] + ' · see the status above'
+        elif (offer['kind'] != 'clean' and self.clean.operation and
+                self.clean.operation['state'] not in SETTLED):
+            raise RuntimeError('Clean sessions '+self.clean.operation['state']+'; press c to retry or close it')
+        elif offer['kind'] == 'clean':
             self.job.close()
             operation = self.clean.start(self.session, offer['policy'])
             self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
@@ -435,6 +441,15 @@ class TasksUI:
         if key == 'home':
             self.cursor, self.scroll, self.follow_cursor = 0, 0, True
             return True
+        if self.mode == 'confirm' and self.pending and self.pending['kind'] == 'clean_stuck':
+            if key == 'x' and self.clean.stuck:
+                self.busy('Closing…')
+                operation = self.clean.close()
+                self.notice = 'Clean sessions ' + operation['operation_id'][:8] + ' closed · press c to start again'
+                self.mode, self.pending = 'tasks', None
+            elif key in ('y', 'enter') and self.clean.stuck and self.clean.stuck['state'] == 'partial':
+                self.execute()
+            return True
         if self.mode == 'confirm':
             if key in ('y', 'enter') and self.can_confirm:
                 self.execute()
@@ -464,6 +479,9 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif key == 'c' and self.clean.stuck:
+            self.pending = {'kind': 'clean_stuck'}
+            self.mode, self.scroll = 'confirm', 0
         elif key == 'c':
             self.session.verify()
             self.clean_setup = Setup(self.session)

@@ -119,5 +119,23 @@ class LiveTodoTests(unittest.TestCase):
         self.assertIsNone(remap(old, Snapshot.read(self.repo), chosen))
 
 
+class RestoredPanelTests(unittest.TestCase):
+    def api(self, live):
+        from watchdog_app.herdr import Herdr
+        api = Herdr();api.call = lambda *a: {'pane': live}
+        return api
+
+    def test_panel_restored_after_herdr_restart_is_refreshed_but_replaced_one_is_refused(self):
+        repo = test_actions.Path(__file__).resolve().parents[1]
+        stored = {'pane_id': 'wD:p8', 'terminal_id': 'term_old', 'tab_id': 'wD:t2'}
+        live = {'pane_id': 'wD:p8', 'terminal_id': 'term_new', 'tab_id': 'wD:t2', 'cwd': str(repo), 'foreground_cwd': str(repo / 'tools')}
+        fresh = self.api(live).panel(stored, repo)
+        self.assertEqual(fresh['terminal_id'], 'term_new');self.assertEqual(fresh['restored_from'], 'term_old')
+        self.assertIs(self.api(dict(live, terminal_id='term_old')).panel(stored, repo), stored)
+        for other in (dict(live, tab_id='wX:t1'), dict(live, cwd='/tmp', foreground_cwd='/tmp')):
+            with self.assertRaisesRegex(RuntimeError, 'replaced'):
+                self.api(other).panel(stored, repo)
+
+
 if __name__ == '__main__':
     unittest.main()

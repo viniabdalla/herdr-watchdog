@@ -35,6 +35,23 @@ class Herdr:
             raise RuntimeError('Pane terminal changed; refusing to rearrange it')
         return live
 
+    def panel(self, pane, repo):
+        """A Watchdog panel record, refreshed when Herdr restored it after a restart.
+
+        A restart keeps pane ids but issues new terminal ids. The same pane id in
+        the same tab, still inside this project folder, is the restored panel;
+        anything else is treated as replaced and refused.
+        """
+        live = self.call('pane', 'get', pane['pane_id'])['pane']
+        if live['terminal_id'] == pane['terminal_id']:
+            return pane
+        root = Path(repo).resolve()
+        inside = any(value and Path(value).resolve().is_relative_to(root)
+                     for value in (live.get('cwd'), live.get('foreground_cwd')))
+        if live.get('tab_id') != pane.get('tab_id') or not inside:
+            raise RuntimeError('Panel ' + pane['pane_id'] + ' was replaced by another terminal; reopen Watchdog panels')
+        return dict(pane, terminal_id=live['terminal_id'], restored_from=pane['terminal_id'])
+
     def export(self, tab):
         if self.session:
             path = Path.home() / '.config/herdr/sessions' / self.session / 'herdr.sock'

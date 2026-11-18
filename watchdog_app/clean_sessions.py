@@ -50,6 +50,9 @@ def folder(store,identity):return path(store,identity).with_suffix('')
 def load(store,identity):return handoff.read_json(path(store,identity))
 
 
+SETTLED=('released','closed')
+
+
 def operations(store,repo):
     result=[]
     for p in (store.root/'clean-sessions').glob('*.json'):
@@ -79,7 +82,10 @@ def defaults(session):
         remote=git(repo,'config','--get','branch.'+branch+'.remote')
         target=git(repo,'config','--get','branch.'+branch+'.merge').removeprefix('refs/heads/')
     except RuntimeError:remote=target=''
-    return {'remote':remote,'branch':target,'owned_paths':['TODO.md'],'integrate':[],
+    from .checkpoint import pending
+    # Like Orchestrate: files already pending are listed for commit; the user can remove any.
+    owned=['TODO.md']+[name for _,name in (pending(repo) or []) if name!='TODO.md']
+    return {'remote':remote,'branch':target,'owned_paths':owned[:32],'integrate':[],
             'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
             'model':'gpt-6.1-sol','effort':'medium'}
 
@@ -221,7 +227,8 @@ def request(session,policy,*,confirmed=False,store=None):
             raise RuntimeError('Current leader is not a unique verified project frontend')
         if state.get('ownership')=='released':raise RuntimeError('This leader has released ownership; reopen Tasks')
         for previous in operations(store,session.repo):
-            if previous['state']!='released':raise RuntimeError('Inspect existing pending/partial cleanup '+previous['operation_id']+'; no automatic retry')
+            if previous['state'] not in SETTLED:
+                raise RuntimeError('Clean sessions '+previous['operation_id'][:8]+' is '+previous['state']+'; press c to retry or close it')
         native_boundary(store,session.repo)
         approved=policy_for(session,policy)
         op={'version':1,'operation_id':str(uuid.uuid4()),'repo':str(session.repo),'binding_file':str(session.file),
@@ -296,8 +303,8 @@ def checkpoint_current(op):
         handoff.digest(git(repo,'remote','get-url','--push',policy['remote']))!=policy['remote_digest']):
         raise RuntimeError('Approved branch or push remote changed')
     if op.get('checkpoint'):
-        if git(repo,'rev-parse','HEAD')!=op['checkpoint'] or git(repo,'status','--porcelain'):
-            raise RuntimeError('Checkpoint is stale or dirty')
+        if git(repo,'rev-parse','HEAD')!=op['checkpoint'] or owned_changes(repo,policy['owned_paths'])[0]:
+            raise RuntimeError('Checkpoint is stale or its owned files changed')
         remote=git(repo,'ls-remote','--heads',git(repo,'remote','get-url','--push',policy['remote']),'refs/heads/'+policy['branch']).split()
         if not remote or remote[0]!=op['checkpoint']:raise RuntimeError('Remote checkpoint changed')
 
@@ -330,9 +337,9 @@ def owned_changes(repo,allowed):
     changed=git_names(repo,'diff','--cached','--name-only','--no-renames','-z','HEAD')
     changed.update(git_names(repo,'diff','--name-only','--no-renames','-z'))
     changed.update(git_names(repo,'ls-files','--others','--exclude-standard','-z'))
-    unowned=changed-set(allowed)
-    if unowned:raise RuntimeError('Dirty unowned files block cleanup: '+', '.join(sorted(unowned)))
-    return changed
+    # Files outside the authorized list are never committed; they stay untouched
+    # in the worktree (e.g. a note another conversation dropped meanwhile).
+    return changed&set(allowed),changed-set(allowed)
 
 
 def prepare_checkpoint(store,op,receipt):
@@ -353,7 +360,8 @@ def prepare_checkpoint(store,op,receipt):
     references=[handoff.reference(p) for p in refs]
     repo=Path(op['repo']);policy=op['policy'];checkpoint_current(op)
     if git(repo,'rev-parse','HEAD')!=op['base_sha']:raise RuntimeError('Preparation base changed before Git authorization')
-    changed=owned_changes(repo,policy['owned_paths'])
+    changed,unowned=owned_changes(repo,policy['owned_paths'])
+    if unowned:op['left_uncommitted']=sorted(unowned)[:32]
     for name in changed:
         p=repo/name
         if p.is_symlink() or not p.resolve().is_relative_to(repo):raise RuntimeError('Owned file path was replaced')
@@ -363,13 +371,13 @@ def prepare_checkpoint(store,op,receipt):
         effect(store,op,'stage-owned',lambda:git(repo,'--literal-pathspecs','add','--',*sorted(changed)))
         # Recheck after staging, then constrain Git's commit pathspec as well:
         # a concurrent unrelated index entry must never enter this commit.
-        owned_changes(repo,policy['owned_paths'])
+        if owned_changes(repo,policy['owned_paths'])[0]!=changed:raise RuntimeError('Owned files changed while staging')
         effect(store,op,'commit-owned',lambda:git(repo,'--literal-pathspecs','commit','--only','-m',
             'Clean sessions: reconcile owned project checkpoint','--',*sorted(changed)))
     for ref,sha in policy['integration_heads'].items():
         if git(repo,'rev-parse','--verify',ref+'^{commit}')!=sha:raise RuntimeError('Approved integration branch changed')
         effect(store,op,'integrate:'+ref,lambda:git(repo,'merge','--ff-only',sha))
-    if git(repo,'status','--porcelain'):raise RuntimeError('Git checkpoint is dirty after integration')
+    if owned_changes(repo,policy['owned_paths'])[0]:raise RuntimeError('Owned files are dirty after integration')
     head=git(repo,'rev-parse','HEAD')
     effect(store,op,'push',lambda:git(repo,'push',policy['remote'],'HEAD:refs/heads/'+policy['branch']))
     remote=git(repo,'ls-remote','--heads',git(repo,'remote','get-url','--push',policy['remote']),'refs/heads/'+policy['branch']).split()
@@ -434,7 +442,7 @@ def transfer(store,op,api):
     checkpoint_current(op);native_boundary(store,Path(op['repo']))
     state=handoff.read_json(op['binding_file'])
     for role,pane in state.get('panes',{}).items():
-        if role!='left_undone':api.checked(pane)
+        if role!='left_undone':api.panel(pane,op['repo'])
     api.checked(op['pane'])
     rs=RunStore(store.root/'runs');run=policy_run(store,op)
     with handoff.session_leases(rs,run,[op['source'],op['target']]) as slots:
@@ -480,7 +488,7 @@ def advance(store,identity,*,api=None):
     op=load(store,identity)
     with lease(store,op['repo']):
         op=load(store,identity)
-        if op['state'] in ('partial','blocked','released'):return op
+        if op['state'] in ('partial','blocked')+SETTLED:return op
         try:
             from .mission_native import boot_id
             if boot_id()!=op['boot_id']:raise RuntimeError('Cleanup belongs to a previous boot')
@@ -489,8 +497,12 @@ def advance(store,identity,*,api=None):
                 raise RuntimeError('Interrupted or uncertain operation retained; inspect exact side effect before recovery')
             stage=op['stage']
             if stage=='preparation':
-                receipt=completed_reply(store,op,'source','prepared',bindings.engine().Binding(**op['source']))
-                if receipt:prepare_checkpoint(store,op,receipt)
+                # The reply is kept so a retry after a fixable checkpoint problem
+                # does not ask the leader to prepare (and save ai-memory) again.
+                receipt=op.get('prepared_reply') or completed_reply(store,op,'source','prepared',bindings.engine().Binding(**op['source']))
+                if receipt:
+                    op['prepared_reply']=receipt;save(store,op)
+                    prepare_checkpoint(store,op,receipt)
             elif stage=='launch':launch(store,op,api or Herdr())
             elif stage=='successor':
                 target=successor(store,op)
@@ -527,7 +539,7 @@ def advance(store,identity,*,api=None):
                     op['stage']='release';save(store,op)
             elif stage=='release':
                 target=bindings.engine().Binding(**op['target']);verify_successor(op,target)
-                receipt=completed_reply(store,op,'source','released',bindings.engine().Binding(**op['source']))
+                receipt=op.get('release_receipt') or completed_reply(store,op,'source','released',bindings.engine().Binding(**op['source']))
                 if receipt:
                     if receipt['value'].get('checkpoint')!=op['checkpoint'] or receipt['value'].get('successor')!=target.session:
                         raise RuntimeError('Predecessor release does not match exact successor/checkpoint')
@@ -535,6 +547,33 @@ def advance(store,identity,*,api=None):
             else:raise RuntimeError('Unknown cleanup stage')
         except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:
             op.update(state='blocked' if isinstance(error,LeaderBlocked) else 'partial',problem=str(error));save(store,op)
+        return op
+
+
+def retry(store,identity):
+    """Resume a partial operation from the step that failed; side effects are never repeated."""
+    op=load(store,identity)
+    with lease(store,op['repo']):
+        op=load(store,identity)
+        if op['state']!='partial':raise RuntimeError('Only a partial operation can be retried; close this one instead')
+        unsure=[k for k,e in op['effects'].items() if e['state'] in ('sending','uncertain')]
+        if unsure:raise RuntimeError('Step '+', '.join(unsure)+' may have half-run; close this operation instead of retrying')
+        from .mission_native import boot_id
+        op.setdefault('retries',[]).append({'at':time.time(),'problem':op.get('problem')})
+        op.update(state='pending',boot_id=boot_id());op.pop('problem',None);save(store,op)
+        return op
+
+
+def close(store,identity,reason='closed by user in Tasks'):
+    """Stop a stuck operation so new work can flow; its record stays as evidence."""
+    op=load(store,identity)
+    with lease(store,op['repo']):
+        op=load(store,identity)
+        if op['state'] in SETTLED:return op
+        if op['effects'].get('rebind',{}).get('state') in ('sending','uncertain'):
+            raise RuntimeError('Panel transfer was interrupted mid-way; inspect the binding files before closing')
+        op['closed']={'at':time.time(),'reason':reason,'state':op['state'],'stage':op['stage'],'problem':op.get('problem')}
+        op['state']='closed';save(store,op)
         return op
 
 

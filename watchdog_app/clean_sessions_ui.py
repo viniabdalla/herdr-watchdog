@@ -85,7 +85,7 @@ class Controller:
         relevant=[op for op in backend.operations(self.store,self.repo)
                   if asdict(binding) in (op['source'],op.get('target'))]
         if relevant:self.operation=max(relevant,key=lambda op:op['created'])
-        if not self.operation or self.operation['state'] in ('partial','blocked','released'):return
+        if not self.operation or self.operation['state'] in ('partial','blocked')+backend.SETTLED:return
         identity=self.operation['operation_id']
         def work():
             try:self.result=backend.advance(self.store,identity)
@@ -95,13 +95,37 @@ class Controller:
                 self.result['problem']=str(error)
         self.thread=threading.Thread(target=work,daemon=True);self.thread.start()
 
+    @property
+    def stuck(self):
+        return self.operation if self.operation and self.operation['state'] in ('partial','blocked') else None
+
+    def retry(self):
+        self.operation=backend.retry(self.store,self.stuck['operation_id']);self.next_poll=0
+        return self.operation
+
+    def close(self):
+        self.operation=backend.close(self.store,self.stuck['operation_id'])
+        return self.operation
+
+    def stuck_rows(self):
+        op=self.stuck
+        rows=[('Clean sessions stopped · '+op['state']+' at '+op['stage'],'Blocked',None),
+              ('Operation '+op['operation_id'],None,None),('Problem: '+str(op.get('problem','unknown')),'Blocked',None)]
+        if op.get('left_uncommitted'):rows.append(('Left uncommitted (not in the list): '+', '.join(op['left_uncommitted']),None,None))
+        rows.append(('',None,None))
+        if op['state']=='partial':rows.append(('y: retry from the step that stopped (nothing already done is repeated)',None,None))
+        rows+=[('x: close it — the record stays as evidence; then press c to start a new Clean sessions',None,None),
+               ('Esc: back',None,None)]
+        return rows
+
     def rows(self):
         op=self.operation
-        if not op:return []
+        if not op or op['state']=='closed':return []
         color='Blocked' if op['state'] in ('blocked','partial') else 'In progress'
         rows=[('Clean sessions · '+op['state']+' · '+op['stage']+' · '+op['operation_id'],color,None)]
         if op.get('problem'):rows.append((op['problem'],color,None))
         if op.get('checkpoint'):rows.append(('Verified checkpoint: '+op['checkpoint'],None,None))
+        if op.get('left_uncommitted'):rows.append(('Left uncommitted (not in the list): '+', '.join(op['left_uncommitted']),None,None))
         if op['state'] in ('partial','blocked'):
-            rows.append(('Inspect retained operation and exact queue/panes. Nothing is resent or relaunched automatically.',color,None))
+            rows.append(('Press c to retry or close it.',color,None))
         return rows+[('',None,None)]

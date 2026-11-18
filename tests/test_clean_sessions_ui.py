@@ -49,6 +49,25 @@ class CleanSessionsUITests(unittest.TestCase):
         body='\n'.join(x[0] for x in self.ui.body())
         self.assertIn('partial',body);self.assertIn('ai-memory unavailable',body)
 
+    def test_stopped_operation_offers_retry_and_close_then_c_starts_again(self):
+        self.ui.handle('c');self.ui.clean_setup.policy=self.f.policy;self.ui.handle('enter');self.ui.can_confirm=True;self.ui.handle('y')
+        op=self.ui.clean.operation;op.update(state='partial',problem='Owned files changed while staging');fixture.clean.save(self.f.store,op)
+        self.ui.handle('c');self.assertEqual(self.ui.mode,'confirm')
+        body='\n'.join(x[0] for x in self.ui.body())
+        self.assertIn('Owned files changed while staging',body);self.assertIn('y: retry',body);self.assertIn('x: close',body)
+        self.ui.handle('y');self.assertEqual(fixture.clean.load(self.f.store,op['operation_id'])['state'],'pending')
+        op=fixture.clean.load(self.f.store,op['operation_id']);op.update(state='blocked',problem='Leader reports blocked');fixture.clean.save(self.f.store,op)
+        self.ui.clean.operation=op;self.ui.handle('c')
+        self.assertNotIn('y: retry','\n'.join(x[0] for x in self.ui.body()))
+        self.ui.handle('x');self.assertEqual(fixture.clean.load(self.f.store,op['operation_id'])['state'],'closed')
+        self.assertIn('closed',self.ui.notice);self.assertEqual(self.ui.mode,'tasks')
+        self.ui.handle('c');self.assertEqual(self.ui.mode,'clean_setup')
+
+    def test_setup_lists_pending_project_files_for_commit(self):
+        (self.f.repo/'note.md').write_text('dropped by another conversation\n')
+        self.ui.handle('c');self.assertIn('note.md',self.ui.clean_setup.policy['owned_paths'])
+        self.assertEqual(self.ui.clean_setup.policy['owned_paths'][0],'TODO.md')
+
     def test_editing_owned_files_keeps_comma_separators_and_spaces(self):
         self.ui.handle('c');self.ui.clean_setup.index=2
         self.ui.handle('\x15')

@@ -99,11 +99,11 @@ class Store:
                 raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
             if state.get('operation') not in (None, 'ready'):
                 raise RuntimeError('Panel layout operation is unfinished; transfer was withheld')
-            for role, pane in state.get('panes', {}).items():
-                if role != 'left_undone':
-                    api.checked(pane)
+            panes = {role: (pane if role == 'left_undone' else api.panel(pane, repo))
+                     for role, pane in state.get('panes', {}).items()}
             conversation = api.checked({'pane_id':new.pane, 'terminal_id':new.terminal})
             successor = copy.deepcopy(state)
+            successor['panes'] = panes
             successor['conversation'] = conversation
             successor.update(binding=asdict(new), binding_file=str(target), ownership='active',
                              transfer_operation=operation_id, predecessor_binding=asdict(old))
