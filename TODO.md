@@ -13,7 +13,6 @@ Each project uses its own TODO.md with these sections. Progress counts the
 tasks currently listed here; it is not an estimate of the entire project.
 
 ## In progress
-- [ ] Clean sessions live fix: successor Codex now starts with `--yolo`; 50 focused tests were reported passing. Previous operation f356165e initially hit an approval rejection, then exact-ID ai-memory acceptance succeeded after permission correction; its backend record is released and this session owns the active Watchdog binding. Validate automatic successor receipt, explicit predecessor release and binding transfer in the new live operation f486dba6-d4aa-4c76-8de6-825fd47737ef before marking this fix Done. Preserve prior blocked attempts as historical evidence.
 
 ## Next
 - [ ] Watchdog UI language: English/Portuguese selector in Tasks applies to Tasks, Progress, Artifacts and Agents; use LLM assistance for UI translations while preserving canonical project files, protocols and Yazi.
@@ -28,6 +27,7 @@ tasks currently listed here; it is not an estimate of the entire project.
 ## Blocked
 
 ## Done
+- [x] 2026-11-17 Clean sessions live fix: successor started with `--yolo`; operation f486dba6-d4aa-4c76-8de6-825fd47737ef completed automatic successor receipt through exact-ID ai-memory acceptance, explicit predecessor release and Watchdog binding transfer to session 01a1ec04-f266-74c1-a435-78501c4286a7 at checkpoint 1e9b0110701cc277b9c0bde46fcff1dfbf8dc30d. All 50 focused tests passed on verification. Prior blocked attempts, including f356165e approval rejection and subsequent successful acceptance, remain preserved as historical evidence.
 - [x] 2026-11-17 Clean sessions workflow: automate verified Herdr split, fresh leader startup, bounded handoff delivery and explicit receipt in the handoff backend; expose a clear UI action. Reuse the observed live procedure, preserve native/legacy boundaries and leave current agents intact. Command-layer handoff alone does not complete this task.
 - [x] 2026-11-17 Run scope: validate only the tasks selected for a run so unrelated TODO edits do not block active work; preserve identity, Git and exact-candidate QA checks.
 - [x] 2026-11-17 Leader handoff command layer: bounded export, explicit native preview/adoption and clean-session purpose guards; P1 corrected and independently approved at 0e7125f. Host suite: 222 tests, no failures, 7 skipped. Live legacy Gossip runs remain export-only; this does not complete the UI flow.
