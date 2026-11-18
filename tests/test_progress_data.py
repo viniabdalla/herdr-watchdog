@@ -107,7 +107,7 @@ class ProgressTests(unittest.TestCase):
             raise AssertionError(args)
         state={'binding':{'workspace':'w'},'binding_file':str(self.file),'repo':str(self.repo),
             'yazi_client_id':'123','panes':{r:{'pane_id':r} for r in ('tasks','progress','artifacts','files')}}
-        api=SimpleNamespace(call=call,checked=lambda pane:pane)
+        api=SimpleNamespace(call=call,checked=lambda pane:pane,panel=lambda pane,repo:pane)
         with patch('watchdog_app.app.panel_process',side_effect=lambda api,pane,role,state:(role in started,[])):
             ensure_panels(api,state,lambda:None)
         argv=commands['progress']

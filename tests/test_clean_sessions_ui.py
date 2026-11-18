@@ -68,6 +68,13 @@ class CleanSessionsUITests(unittest.TestCase):
         self.ui.handle('c');self.assertIn('note.md',self.ui.clean_setup.policy['owned_paths'])
         self.assertEqual(self.ui.clean_setup.policy['owned_paths'][0],'TODO.md')
 
+    def test_finished_operation_is_one_line_then_disappears(self):
+        self.ui.clean.operation={'state':'released','stage':'released','operation_id':'x','updated':__import__('time').time(),
+                                 'target':{'pane':'wD:p1P'},'left_uncommitted':['old.py']}
+        body='\n'.join(x[0] for x in self.ui.clean.rows())
+        self.assertIn('done',body);self.assertIn('wD:p1P',body);self.assertNotIn('old.py',body)
+        self.ui.clean.operation['updated']-=601;self.assertEqual(self.ui.clean.rows(),[])
+
     def test_editing_owned_files_keeps_comma_separators_and_spaces(self):
         self.ui.handle('c');self.ui.clean_setup.index=2
         self.ui.handle('\x15')

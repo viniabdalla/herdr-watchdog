@@ -121,6 +121,10 @@ class Controller:
     def rows(self):
         op=self.operation
         if not op or op['state']=='closed':return []
+        if op['state']=='released':
+            # Finished: one short line, then gone; the record stays in Watchdog state.
+            if time.time()-op.get('updated',0)>600:return []
+            return [('Clean sessions done · new leader '+str(op.get('target',{}).get('pane','')),'Done',None),('',None,None)]
         color='Blocked' if op['state'] in ('blocked','partial') else 'In progress'
         rows=[('Clean sessions · '+op['state']+' · '+op['stage']+' · '+op['operation_id'],color,None)]
         if op.get('problem'):rows.append((op['problem'],color,None))

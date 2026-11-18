@@ -55,8 +55,8 @@ def ensure_panels(api, state, save):
     workspace = state['binding']['workspace']
     for role in ('tasks', 'progress', 'artifacts', 'files'):
         if role in state['panes']:
-            pane = state['panes'][role]
-            api.checked(pane)
+            # A Herdr restart keeps pane ids but issues new terminal ids.
+            pane = state['panes'][role] = api.panel(state['panes'][role], state['repo'])
             running, foreground = panel_process(api, pane, role, state)
             # Shell prompt hooks can briefly be foreground during startup.
             # Wait for them to finish, but never interrupt or overwrite a busy pane.
@@ -125,8 +125,11 @@ def apply(binding, repo, preset):
         # Native LU can have replaced or closed its old panel since last time.
         reconcile_companion(binding, api, state)
         # Ownership checks happen before creating or moving any terminal.
-        for pane in state['panes'].values():
-            api.checked(pane)
+        for role, pane in state['panes'].items():
+            if role == 'left_undone':
+                api.checked(pane)
+            else:
+                state['panes'][role] = api.panel(pane, repo)
         conversation = api.call('pane', 'get', binding.pane)['pane']
         state['conversation'] = conversation
         save()
