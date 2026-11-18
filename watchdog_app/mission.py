@@ -12,7 +12,110 @@ from .todo import locked
 from .mission_scope import capture, overlaps
 
 LABELS = {'ready': 'Ready to start', 'working': 'Working', 'blocked': 'Needs help',
-          'review': 'Checking the result', 'done': 'Done', 'unavailable': 'Unavailable'}
+          'review': 'Checking the result', 'done': 'Done', 'unavailable': 'Unavailable',
+          'closed': 'Closed'}
+FINISHED = ('done', 'closed')
+STALL_SECONDS = 20 * 60
+
+
+def alive(pid):
+    return bool(pid) and (Path('/proc') / str(pid)).exists()
+
+
+def last_activity(run):
+    stamps = [run.get('created', 0), run.get('monitor_updated', 0), run.get('observed', 0)]
+    stamps += [t.get('updated', 0) for t in run['tasks'].values()]
+    stamps += [e.get('received', 0) for e in (run.get('events') or {}).values()]
+    return max(stamps)
+
+
+def stalled(run, *, now=None):
+    """A forgotten run: unfinished, no live monitor and no activity for a while."""
+    if run['phase'] in FINISHED or run.get('operation'):
+        return False
+    if run['phase'] in ('active', 'blocked') and alive(run.get('monitor_pid')):
+        return False
+    now = time.time() if now is None else now
+    return now - last_activity(run) > STALL_SECONDS
+
+
+def accepted_in_todo(run, snapshot):
+    """Every selected task now appears completed in TODO.md (the user's acceptance)."""
+    done = {t.text for t in snapshot.tasks if t.done}
+    return bool(run['tasks']) and all(t['title'] in done for t in run['tasks'].values())
+
+
+def run_status(run, *, now=None):
+    """One honest state for the whole run: label, detail, colour and section."""
+    phase, tasks = run['phase'], list(run['tasks'].values())
+    when = time.strftime('%H:%M', time.localtime(last_activity(run)))
+    if phase == 'done':
+        return dict(key='done', label='Done', detail='accepted', section='Done', color='done', finished=True)
+    if phase == 'closed':
+        return dict(key='closed', label='Closed', detail=run.get('closed', {}).get('reason', ''),
+                    section=None, color='unavailable', finished=True)
+    if phase in ('requested', 'launching') and stalled(run, now=now):
+        return dict(key='stalled', label='Stalled', detail='no activity since ' + when +
+                    ' · close it in Progress (x)', section='Blocked', color='blocked', finished=False)
+    if phase == 'requested':
+        detail = ('request not confirmed · inspect the main queue' if run.get('request_delivery') != 'sent'
+                  else 'main is preparing the brief')
+        return dict(key='preparing', label='Preparing', detail=detail, section='Next', color='ready', finished=False)
+    if phase == 'launching':
+        return dict(key='preparing', label='Preparing', detail='opening the team · ' + (run.get('operation') or ''),
+                    section='Next', color='ready', finished=False)
+    problem = run.get('reason') or run.get('monitor_problem')
+    if phase == 'blocked' or any(t['state'] == 'blocked' for t in tasks):
+        blocked = next((t['summary'] for t in tasks if t['state'] == 'blocked'), problem or '')
+        return dict(key='decision', label='Needs your decision', detail=blocked[:160],
+                    section='Blocked', color='blocked', finished=False)
+    if stalled(run, now=now):
+        return dict(key='stalled', label='Stalled', detail='no activity since ' + when +
+                    ' · close it in Progress (x)', section='Blocked', color='blocked', finished=False)
+    qa = run.get('qa') or {}
+    if tasks and all(t['state'] in ('review', 'done') for t in tasks):
+        if qa.get('verdict') == 'pass' and run.get('qa_finished'):
+            return dict(key='decision', label='Waiting for approval', detail='QA passed ' +
+                        str(run.get('candidate') or '')[:8], section='Blocked', color='review', finished=False)
+        return dict(key='verifying', label='Verifying', detail='QA is checking the result',
+                    section='In progress', color='review', finished=False)
+    if problem:
+        return dict(key='running', label='Running', detail='monitor: ' + problem[:140],
+                    section='In progress', color='working', finished=False)
+    return dict(key='running', label='Running', detail='last update ' + when,
+                section='In progress', color='working', finished=False)
+
+
+def close(store, identity, reason):
+    """Retire a run without deleting evidence; finished runs never block new work."""
+    with store.lock(identity):
+        run = store.load(identity)
+        if run['phase'] in FINISHED:
+            return run
+        now = time.time()
+        run['closed'] = {'from_phase': run['phase'], 'reason': reason, 'at': now}
+        run['phase'] = 'closed'
+        for task in run['tasks'].values():
+            if task['state'] != 'done':
+                task.update(state='closed', summary='Run closed: ' + reason, updated=now)
+        store.save(run)
+        return run
+
+
+def blocking(store, repo, scope, tasks, snapshot):
+    """Split overlapping unfinished runs into settled (auto-closable) and live ones."""
+    settle, live = [], []
+    for previous in store.list(repo):
+        if previous['phase'] in FINISHED or not overlaps(previous, scope, tasks):
+            continue
+        if accepted_in_todo(previous, snapshot):
+            settle.append((previous, 'tasks were accepted as Done in TODO'))
+        elif stalled(previous):
+            settle.append((previous, 'stalled with no activity since ' +
+                           time.strftime('%H:%M', time.localtime(last_activity(previous)))))
+        else:
+            live.append(previous)
+    return settle, live
 
 
 class SupersededReview(RuntimeError):
@@ -54,7 +157,7 @@ class RunStore:
             yield
 
 
-def request(session, snapshot, ids, *, confirmed=False, store=None):
+def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=None):
     if not confirmed:
         raise RuntimeError('Explicit confirmation is required')
     store = store or RunStore()
@@ -65,9 +168,12 @@ def request(session, snapshot, ids, *, confirmed=False, store=None):
         session.verify()
         if session.binding.kind != 'codex':
             raise RuntimeError('Orchestrate needs an exact Codex thread')
-        for previous in store.list(snapshot.repo):
-            if previous['phase'] != 'done' and overlaps(previous, scope, tasks):
-                raise RuntimeError('These tasks already have a run: ' + previous['id'] + '. Inspect Progress.')
+        settle, live = blocking(store, snapshot.repo, scope, tasks, snapshot)
+        if live:
+            raise RuntimeError('These tasks already have a running team ' + live[0]['id'][:8] +
+                               '. Follow it in Progress, or close it there with x to start over.')
+        for previous, reason in settle:
+            close(store, previous['id'], reason)
         now = time.time()
         from .mission_native import boot_id
         run = {'transport': {'kind':'native','boot_id':boot_id()}, 'version': 1, 'id': str(uuid.uuid4()), 'repo': str(snapshot.repo),
@@ -76,10 +182,13 @@ def request(session, snapshot, ids, *, confirmed=False, store=None):
                'participants': {}, 'resources': {}, 'events': {}, 'cursor': 0, 'candidate': None, 'qa': None,
                'tasks': {t.id: {'title': t.text, 'state': 'ready', 'agent': 'main', 'updated': now,
                                 'summary': 'Waiting for the main conversation to prepare the brief'} for t in tasks}}
+        if checkpoint:
+            run['checkpoint'] = checkpoint
         snapshot.assert_current()
         store.save(run)
         message = (f"Watchdog Mission Control run {run['id']} was explicitly confirmed.\n"
                    f"Project: {run['repo']}\nMain: {session.binding.session}\n"
+                   + (f"Committed checkpoint (use as base_sha): {checkpoint['sha']}\n" if checkpoint else '') +
                    'Approved team: one new Codex worker and one new Codex QA, in one execution tab.\n'
                    'Prepare an explicit brief with allowed files, acceptance criteria, test commands, '
                    'dependencies, clean base SHA and the approved accounts/executable. '

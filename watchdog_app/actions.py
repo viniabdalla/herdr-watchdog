@@ -40,16 +40,48 @@ class Session:
         data = json.loads(self.file.read_text())
         if data.get('ownership') in ('released', 'transferring'):
             raise RuntimeError('Panel ownership was released; follow the verified successor in Tasks')
-        if data.get('binding') != asdict(self.binding) or Path(data['repo']).resolve() != self.repo:
+        if Path(data['repo']).resolve() != self.repo:
             raise RuntimeError('Conversation binding changed; reopen Tasks before sending or reviewing')
+        if data.get('binding') != asdict(self.binding):
+            stored = self.runtime.Binding(**data['binding'])
+            same = lambda b: (b.kind, b.account, b.session)
+            if same(stored) != same(self.binding):
+                raise RuntimeError('Conversation binding changed; reopen Tasks before sending or reviewing')
+            self.binding = stored  # Same conversation reopened in another pane.
         try:
             live = self.runtime.verify(self.binding)
         except RuntimeError as error:
-            raise RuntimeError('Conversation identity changed or is unavailable; reopen Watchdog.') from error
+            if not self.reattach():
+                raise RuntimeError('Conversation identity is unavailable: the watched conversation is closed or replaced. '
+                                   'Reopen it (codex resume ' + self.binding.session + ') in this project and Watchdog follows it.') from error
+            live = self.runtime.verify(self.binding)
         project = bindings.project_for(self.binding)
         if project is None or Path(project).resolve() != self.repo:
             raise RuntimeError('Conversation project association changed; reopen Watchdog')
         return live
+
+    def reattach(self):
+        """Follow the same verified conversation after its pane was closed and resumed."""
+        from .store import Store, atomic
+        if (Path('/proc') / str(self.binding.pid)).exists():
+            return False  # The original process still runs: a different pane is not a reopen.
+        try:
+            candidates, _ = bindings.discover(self.repo)
+        except Exception:
+            return False
+        same = [b for b in candidates if (b.kind, b.account, b.session) == (self.binding.kind, self.binding.account, self.binding.session)]
+        if len(same) != 1 or not isinstance(getattr(same[0], 'key', None), str):
+            return False
+        with Store(self.file.parent).lock(same[0]):
+            data = json.loads(self.file.read_text())
+            if data.get('ownership') in ('released', 'transferring') or data.get('binding') != asdict(self.binding):
+                return False
+            data.setdefault('reopened', []).append(data['binding'])
+            data['reopened'] = data['reopened'][-5:]
+            data['binding'] = asdict(same[0])
+            atomic(self.file, data)
+        self.binding = same[0]
+        return True
 
     @classmethod
     def for_panel(cls, file, repo):

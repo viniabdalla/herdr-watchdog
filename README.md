@@ -102,6 +102,12 @@ exact Codex thread. Send keeps its existing current-conversation behavior. The
 main prepares the task contracts; the launcher does not invent a plan. Neither
 requesting work nor approving a run edits TODO.md.
 
+**Checkpoint.** The confirmation lists every modified and new project file. `y`
+saves exactly that list in one local commit (never pushed) and the run starts from
+it; a list that changed after confirmation is refused. Merge conflicts must be
+resolved first. While the main prepares the brief, editing TODO.md (new ideas,
+reordering) does not block the launch; other dirty files do, with their names.
+
 New requests pin versioned selected task blocks and sections. After a clean
 launch, unrelated TODO edits and new ideas may shift rows without blocking the
 run; selected content, notes, completion and section changes require a new
@@ -110,11 +116,18 @@ candidate QA remain pinned. Existing runs retain whole-TODO digest validation
 and are never migrated. See [selected run scope](docs/mission-control.md#selected-scope-for-new-runs)
 for compatibility, strict matching and Git boundary details.
 
-Progress now reads the run ledger: **Ready to start** (blue), **Working** (yellow),
-**Needs help** (red), **Checking the result** (purple), **Done** (green), and
-**Unavailable** when contact cannot be verified. It shows task, agent, last update,
-reason and execution-tab navigation with Enter/click. Project TODO counts are a
-separate section. Actual colors follow the terminal palette.
+Progress reads the run ledger. Each run has one state: **Preparing**, **Running**,
+**Verifying**, **Waiting for approval**, **Needs your decision**, **Stalled** (no
+monitor and no activity for 20 minutes), **Done** or **Closed**; Tasks shows the
+same line for unfinished runs. Tasks show agent, last update and reason, and
+Enter/click opens the execution tab. `x` twice closes a run: agents are not
+stopped and evidence is kept. Finished runs collapse to one line. A run never
+blocks new work once its tasks are marked Done in TODO.md or it is stalled:
+Orchestrate closes it, visibly, in the confirmation. Late or superseded reports
+are kept as history without notifying the main. Moving a task that belongs to an
+unfinished run explains how to continue instead of silently breaking the run.
+If the watched conversation pane is closed, `codex resume <session>` in the
+project is followed automatically. Actual colors follow the terminal palette.
 
 Each launch records an explicit model and reasoning effort. The brief template
 uses gpt-6.1-sol with medium effort for worker and routine QA, with actual CLI

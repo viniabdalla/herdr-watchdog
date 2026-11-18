@@ -9,6 +9,7 @@ from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
 from .clean_sessions_ui import Controller, Setup, confirmation_rows
+from .checkpoint import pending, describe, conflicted, commit
 
 
 def safe(text):
@@ -43,6 +44,23 @@ def colors():
     except curses.error:
         pass
     return palette
+
+
+def remap(old, new, ids):
+    """Selected task IDs in the new snapshot, or None if a selected block changed."""
+    lines_old = old.raw.decode('utf-8').splitlines(keepends=True)
+    lines_new = new.raw.decode('utf-8').splitlines(keepends=True)
+    blocks = {}
+    for task in new.tasks:
+        blocks.setdefault(''.join(lines_new[task.start:task.end]), []).append(task)
+    result = set()
+    for task in old.tasks:
+        if task.id in ids:
+            matches = blocks.get(''.join(lines_old[task.start:task.end]), [])
+            if len(matches) != 1 or matches[0].section != task.section:
+                return None
+            result.add(matches[0].id)
+    return result
 
 
 class TasksUI:
@@ -86,12 +104,21 @@ class TasksUI:
         try:
             snapshot = Snapshot.read(self.repo)
             if self.snapshot and snapshot.digest != self.snapshot.digest:
-                self.selected.clear();self.result = None;self.proposal_selected.clear()
+                # Keep the selection when only other tasks changed (ideas added, rows moved).
+                kept = remap(self.snapshot, snapshot, self.selected)
+                changed = kept is None
+                self.selected = kept or set()
+                self.result = None;self.proposal_selected.clear()
                 self.job.close()
                 if self.session.binding:
                     self.review_status = 'Codex: tasks changed · press r to review'
-                if self.mode != 'tasks':
-                    self.notice = 'Task list changed; confirmation cancelled'
+                if self.mode == 'confirm' and self.pending and self.pending.get('ids') is not None and not changed:
+                    self.pending.update(snapshot=snapshot, ids=set(self.selected))
+                    if self.pending['kind'] == 'orchestrate':
+                        self.pending['changes'] = pending(self.repo)
+                    self.notice = 'TODO changed elsewhere; selected tasks unchanged, confirmation updated'
+                elif self.mode not in ('tasks', 'clean_setup'):
+                    self.notice = 'A selected task changed; confirmation cancelled. Select again.'
                     self.mode, self.pending = 'tasks', None
             self.snapshot = snapshot
         except (OSError, RuntimeError, UnicodeError) as error:
@@ -146,7 +173,20 @@ class TasksUI:
                     ('Main conversation: ' + self.session.binding.session, None, None),
                     ('Team: one Codex worker + one Codex QA', None, None),
                     ('One new execution tab; each agent gets an isolated worktree.', None, None),
-                    ('Main prepares the brief and coordinates. TODO stays open.', None, None)])
+                    ('Main prepares the brief and coordinates. TODO stays open.', None, None),
+                    ('', None, None)])
+                changes = offer.get('changes')
+                if changes is None:
+                    rows.append(('Checkpoint: not a Git repository; nothing will be committed.', None, None))
+                elif not changes:
+                    rows.append(('Checkpoint: project is clean; the run starts from HEAD.', 'Done', None))
+                else:
+                    rows.append((f'Checkpoint: y saves these {len(changes)} change(s) in one local commit '
+                                 '(no push), then starts the run:', 'In progress', None))
+                    rows.extend(('  ' + line, None, None) for line in describe(changes))
+                for previous, reason in offer.get('settle', []):
+                    rows.append(('Closes earlier run ' + previous['id'][:8] + ': ' + reason, 'Blocked', None))
+                rows.append(('', None, None))
             if offer['kind'] == 'apply':
                 for index in sorted(offer['indices']):
                     action = offer['result']['actions'][index]
@@ -181,6 +221,7 @@ class TasksUI:
                 rows.append(('Withheld: ' + error, 'Blocked', None))
             return rows
         rows.extend(self.clean.rows())
+        rows.extend(self.run_rows())
         if not self.snapshot:
             return rows + [('TODO.md is unavailable. Create or fix it in the project folder.', None, None)]
         suggestions = {a['id']: a for a in (self.result or {}).get('actions', []) if 'id' in a}
@@ -276,10 +317,54 @@ class TasksUI:
         if kind in ('send', 'orchestrate'):
             self.session.verify()
         self.pending = {'kind': kind, 'snapshot': self.snapshot, 'ids': set(self.selected)}
+        if kind == 'orchestrate':
+            from .mission import RunStore, blocking
+            from .mission_scope import capture
+            tasks = self.snapshot.selected(self.selected)
+            settle, live = blocking(RunStore(), self.repo, capture(self.snapshot, tasks), tasks, self.snapshot)
+            if live:
+                raise RuntimeError('These tasks already have a running team ' + live[0]['id'][:8] +
+                                   '. Follow it in Progress, or close it there with x to start over.')
+            changes = pending(self.repo)
+            if changes and conflicted(changes):
+                raise RuntimeError('Resolve merge conflicts before Orchestrate: ' + ', '.join(conflicted(changes)))
+            self.pending.update(changes=changes, settle=settle)
         self.mode, self.scroll = 'confirm', 0
+
+    def busy(self, text):
+        """Immediate visible feedback before a slow confirmed action."""
+        self.notice = text
+        try:
+            self.draw()
+        except Exception:
+            pass  # Feedback is best effort; the action itself still runs.
+
+    def run_rows(self):
+        """Live state of this project's unfinished runs, so every click has visible effect."""
+        from .mission import RunStore, run_status
+        rows = []
+        try:
+            for run in RunStore().list(self.repo):
+                status = run_status(run)
+                if status['finished']:
+                    continue
+                rows.append(('RUN ' + run['id'][:8] + ' · ' + status['label'] + ' · ' + status['detail'],
+                             status['section'], None))
+        except (OSError, ValueError, KeyError, RuntimeError) as error:
+            rows.append(('Runs unavailable: ' + str(error), 'Blocked', None))
+        return rows + ([('', None, None)] if rows else [])
+
+    def in_live_run(self, ids):
+        from .mission import RunStore, FINISHED
+        texts = {t.text for t in self.snapshot.selected(ids)}
+        for run in RunStore().list(self.repo):
+            if run['phase'] not in FINISHED and texts & {t['title'] for t in run['tasks'].values()}:
+                return run
+        return None
 
     def execute(self):
         offer = self.pending
+        self.busy('Working…')
         if (offer['kind'] != 'clean' and self.clean.operation and
                 self.clean.operation['state'] != 'released'):
             raise RuntimeError('Clean sessions '+self.clean.operation['state']+'; inspect transfer before editing tasks or sending')
@@ -299,8 +384,14 @@ class TasksUI:
             self.notice = 'Queued selected tasks to this Codex thread; they remain open.'
         elif offer['kind'] == 'orchestrate':
             from .mission import request
-            run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True)
-            self.notice = 'Coordination requested · ' + run['id'][:8] + ' · see Progress'
+            self.busy('Saving checkpoint and starting the run…')
+            saved = None
+            if offer.get('changes') is not None:
+                saved = commit(self.repo, offer['changes'], 'chore: Watchdog checkpoint before Orchestrate\n\n' +
+                               '\n'.join('- ' + t.text for t in offer['snapshot'].selected(offer['ids'])))
+            run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True, checkpoint=saved)
+            self.notice = ('Checkpoint ' + saved['sha'][:8] + ' saved · ' if saved and saved['created'] else '') + \
+                'Run ' + run['id'][:8] + ' · preparing the brief · see Progress'
         elif offer['kind'] == 'done':
             change(offer['snapshot'], [{'kind': 'done', 'id': key} for key in sorted(offer['ids'])])
             self.notice = f"Marked {len(offer['ids'])} task done" if len(offer['ids']) == 1 else f"Marked {len(offer['ids'])} tasks done"
@@ -385,6 +476,10 @@ class TasksUI:
             self.confirm('done')
         elif key in ('i', 'n'):
             self.require_selection()
+            run = self.in_live_run(self.selected)
+            if run:
+                raise RuntimeError('Task is part of run ' + run['id'][:8] + '; moving it would change its '
+                                   'contract. Finish it, or close the run in Progress (x) and Orchestrate again.')
             change(self.snapshot, [{'kind': 'start' if key == 'i' else 'next', 'id': k} for k in self.selected])
             self.notice = 'Moved selected tasks to ' + ('In progress' if key == 'i' else 'Next')
             self.selected.clear()

@@ -169,8 +169,16 @@ class ScopeTests(unittest.TestCase):
             launch.source_current(legacy)
         self.assertEqual(legacy,before)
 
-    def test_initial_launch_still_requires_clean_repo_before_native_resources(self):
+    def test_todo_only_edits_do_not_block_launch_clean_check(self):
+        # Regression: adding ideas to TODO.md while the main prepares the brief
+        # must not make the launch fail with a dirty-repository error.
         run = self.request(); self.write('# Ideas\n'+self.original)
+        brief = copy.deepcopy(self.fixture.brief)
+        brief.update(transport='native',run_id=run['id'],base_sha=self.base)
+        launch.clean_base(self.store.load(run['id']),brief)
+
+    def test_initial_launch_still_requires_clean_repo_before_native_resources(self):
+        run = self.request(); (self.repo/'other.py').write_text('dirty = True\n')
         brief = copy.deepcopy(self.fixture.brief)
         brief.update(transport='native',run_id=run['id'],base_sha=self.base)
         brief['tasks'] = [dict(brief['tasks'][0],id=next(iter(run['tasks'])))]

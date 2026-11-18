@@ -264,6 +264,25 @@ def tick(store, identity):
         forward(store,run);return run
 
 
+def history_reason(run, role, report, delivery):
+    """Why a report belongs to history instead of the live run, or None."""
+    from .mission import FINISHED
+    if run['phase'] in FINISHED:
+        return 'Run already ' + run['phase'] + '; report kept as history'
+    attempt=report.get('attempt_id')
+    if not attempt or delivery.get('role')!=role:
+        return None
+    if role=='worker':
+        task=run['tasks'].get(delivery.get('payload',{}).get('task_id'),{})
+        if task.get('state')=='done':
+            return 'Task already accepted; report kept as history'
+        if task.get('attempt_id') and task['attempt_id']!=attempt:
+            return 'Superseded attempt; report kept as history'
+    elif run.get('qa_task') and run['qa_task']!=attempt:
+        return 'Superseded QA attempt; report kept as history'
+    return None
+
+
 def handle(store, identity, role, proof, method, data, *, recheck=None):
     """Host broker only: its immutable proof and live caller ancestry precede this."""
     from . import mission_transport as transport
@@ -295,8 +314,15 @@ def handle(store, identity, role, proof, method, data, *, recheck=None):
             if (previous['report']!=report or previous.get('role')!=role or
                     previous.get('generation')!=proof['generation']):raise RuntimeError('Event identity was reused for different evidence')
             return {'event_id':event_id,'persisted':True,'duplicate':True,'notification':previous['delivery']}
-        transport.source_current(run)
         delivery=run.get('deliveries',{}).get(report.get('attempt_id'),{})
+        late=history_reason(run,role,report,delivery)
+        if late:
+            # Late or superseded evidence is kept, but never blocks, notifies or restarts work.
+            run['events'][event_id]={'report':report,'delivery':'history','received':time.time(),
+                'role':role,'generation':proof['generation'],'history':late}
+            store.save(run)
+            return {'event_id':event_id,'persisted':True,'notification':'history','note':late}
+        transport.source_current(run)
         if (delivery.get('role')!=role or delivery.get('generation')!=proof['generation'] or
                 delivery.get('recipient')!=proof['native']):
             raise RuntimeError('Report attempt recipient or actor generation differs')
@@ -307,8 +333,8 @@ def handle(store, identity, role, proof, method, data, *, recheck=None):
             if not accept_event(run,event):raise RuntimeError('Native report did not match the assignment attempt')
         except SupersededReview as error:
             # Preserve ended stale QA as rejected evidence, never approval.
-            run['events'][event_id]={'report':report,'delivery':'pending','received':time.time(),
-                'role':role,'generation':proof['generation'],'rejected':str(error)}
+            run['events'][event_id]={'report':report,'delivery':'history','received':time.time(),
+                'role':role,'generation':proof['generation'],'rejected':str(error),'history':str(error)}
         store.save(run)
         try:forward(store,run)
         except (RuntimeError,OSError,ValueError) as error:

@@ -56,3 +56,31 @@ class OrchestrateUITests(unittest.TestCase):
                                '--run',identity,'--state-dir',str(store.root)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(json.loads(result.stdout)['id'],identity)
+
+
+class CheckpointUITests(unittest.TestCase):
+    """Real curses + real git: o, y commits exactly the listed changes, then requests the run."""
+    setUp=test_tasks_ui.TasksUITests.setUp
+    bound_terminal=test_tasks_ui.TasksUITests.bound_terminal
+
+    def git(self,*args):
+        return subprocess.run(['git','-C',str(self.repo),*args],check=True,capture_output=True,text=True).stdout
+
+    def test_dirty_repo_is_checkpointed_inside_orchestrate(self):
+        (self.repo/'.gitignore').write_text('state/\nclean-sessions/\nbinding.json\nrecord.jsonl\ndelivery.json\n')
+        self.git('init','-q');self.git('config','user.name','t');self.git('config','user.email','t@t')
+        self.git('add','-A');self.git('commit','-qm','base')
+        (self.repo/'feature.py').write_text('ready = True\n')
+        terminal=self.bound_terminal()
+        self.assertTrue(terminal.wait_for('Orchestrate'),terminal.output.decode(errors='replace'))
+        os.write(terminal.master,b' o')
+        self.assertTrue(terminal.wait_for('New: feature.py'),terminal.output.decode(errors='replace'))
+        self.assertEqual(self.git('log','--oneline').count('\n'),1)
+        os.write(terminal.master,b'y')
+        self.assertTrue(terminal.wait_for('saved'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('see Progress'),terminal.output.decode(errors='replace'))
+        self.assertIn('Watchdog checkpoint before Orchestrate',self.git('log','-1','--format=%s'))
+        self.assertEqual(self.git('status','--porcelain'),'')
+        run=RunStore(self.repo/'state'/'runs').list(self.repo)[0]
+        self.assertEqual(run['checkpoint']['sha'],self.git('rev-parse','HEAD').strip())
+        self.assertIn(run['checkpoint']['sha'],json.loads((self.repo/'delivery.json').read_text())['text'])

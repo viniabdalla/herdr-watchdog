@@ -8,6 +8,21 @@ from collections import defaultdict
 from .todo import SECTIONS, TASK, Snapshot
 
 
+REVIEW = ('Restore its text to continue, or close the run in Progress (x) and Orchestrate again '
+          'so the main reviews a new contract. Other tasks and new ideas can change freely.')
+LEGACY = ('Task list changed and this older run pins the whole TODO.md. Close it in Progress (x) and '
+          'Orchestrate again; new runs only pin the selected tasks.')
+
+
+def explain(problem):
+    """User-facing guidance for older stored monitor problems."""
+    if problem.startswith('Task list changed; request a fresh contract'):  # Stored by older versions.
+        return LEGACY
+    if 'request a fresh contract' in problem:
+        return problem.replace('request a fresh contract', REVIEW)
+    return problem
+
+
 def blocks(snapshot):
     lines = snapshot.raw.decode('utf-8').splitlines(keepends=True)
     return {t.id: ''.join(lines[t.start:t.end]) for t in snapshot.tasks}
@@ -51,7 +66,7 @@ def resolve(run, snapshot=None):
     snapshot = snapshot or Snapshot.read(run['repo'])
     if selected is None:
         if snapshot.digest != run['source_digest']:
-            raise RuntimeError('Task list changed; request a fresh contract')
+            raise RuntimeError(LEGACY)
         return None
     occurrences = defaultdict(list)
     content = blocks(snapshot)
@@ -60,10 +75,19 @@ def resolve(run, snapshot=None):
     result = {}
     for key, expected in selected.items():
         matches = occurrences[expected['block']]
+        title = TASK.match(expected['block'].splitlines()[0])[3].strip()
         if len(matches) > 1:
-            raise RuntimeError('Run scope is ambiguous for selected task ' + key + '; request a fresh contract')
-        if not matches or matches[0].done or matches[0].section != expected['section']:
-            raise RuntimeError('Selected run scope changed for task ' + key + '; request a fresh contract')
+            raise RuntimeError('Run scope: selected task "' + title[:60] + '" is ambiguous: it now appears twice in TODO.md. '
+                               'Remove the duplicate to continue this run.')
+        if not matches:
+            raise RuntimeError('Run scope: selected task "' + title[:60] + '" was edited or removed in TODO.md. '
+                               + REVIEW)
+        if matches[0].done:
+            raise RuntimeError('Run scope: selected task "' + title[:60] + '" was marked done in TODO.md. '
+                               'If you accepted it, close the run in Progress (x); otherwise reopen it.')
+        if matches[0].section != expected['section']:
+            raise RuntimeError('Run scope: selected task "' + title[:60] + '" moved from ' + expected['section'] +
+                               ' to ' + matches[0].section + '. Move it back, or ' + REVIEW[0].lower() + REVIEW[1:])
         result[key] = matches[0]
     return result
 

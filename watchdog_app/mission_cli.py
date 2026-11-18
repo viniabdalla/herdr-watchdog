@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import time
 
-from .mission import RunStore, finish
+from .mission import RunStore, finish, FINISHED
 from .mission_launch import launch, main_session, open_run, participant, git, owned_worktree, source_current
 from . import mission_transport as transport
 
@@ -20,6 +20,19 @@ def template(run):
                  for key in run['tasks']]}
 
 
+def accepted(store, identity):
+    """Close a run whose selected tasks the user already accepted as Done in TODO."""
+    from .mission import accepted_in_todo, close
+    from .todo import Snapshot
+    run=store.load(identity)
+    if run['phase'] in FINISHED:return True
+    try:snapshot=Snapshot.read(run['repo'])
+    except (OSError,RuntimeError,UnicodeError):return False
+    if accepted_in_todo(run,snapshot):
+        close(store,identity,'tasks were accepted as Done in TODO');return True
+    return False
+
+
 def watch(store, identity):
     # One monitor per run, independently of the short-lived launcher process.
     import fcntl
@@ -28,8 +41,9 @@ def watch(store, identity):
         except BlockingIOError:raise RuntimeError('This run already has a monitor')
         while True:
             try:
+                if accepted(store,identity):return
                 run=transport.tick(store,identity)
-                if run['phase']=='done':return
+                if run['phase'] in FINISHED:return
                 # Only the first independent task is automatic. Main accepts its
                 # result and supplies a fresh verified executor for every later task.
                 if run['phase']=='active' and not any(t.get('delivery') for t in run['tasks'].values()):

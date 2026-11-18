@@ -259,14 +259,21 @@ class NativeTransportTests(unittest.TestCase):
         text='\n'.join(row[0] for row in rows(self.repo,self.store))
         self.assertIn('Main notification uncertain',text)
 
-    def test_report_from_previous_attempt_after_followup_is_rejected(self):
+    def test_report_from_previous_attempt_after_followup_is_history_only(self):
+        # Regression: a late report from a superseded attempt must not block,
+        # notify the main or change the current attempt's state.
+        from watchdog_app.progress_ui import rows
         transport.dispatch(self.store,self.identity,self.task);old=self.report('blocked')
         transport.followup(self.store,self.identity,self.task,'Current fixture only')
-        with self.assertRaisesRegex(RuntimeError,'attempt'):
-            self.record(old)
-        self.assertFalse(self.store.load(self.identity)['events'])
+        before=self.store.load(self.identity)['tasks'][self.task]['state'];calls=len(self.calls)
+        self.record(old)
+        run=self.store.load(self.identity);event=run['events'][old['event_id']]
+        self.assertEqual(event['delivery'],'history');self.assertIn('Superseded',event['history'])
+        self.assertEqual(run['tasks'][self.task]['state'],before);self.assertEqual(len(self.calls),calls)
+        text='\n'.join(row[0] for row in rows(self.repo,self.store))
+        self.assertIn('kept in history',text);self.assertNotIn('Report needs attention',text)
 
-    def test_superseded_qa_is_retained_as_rejected_evidence_in_main_notification(self):
+    def test_superseded_qa_is_retained_as_history_without_main_notification(self):
         transport.dispatch(self.store,self.identity,self.task)
         self.record(self.report('result',commits=[self.base],tests=['Observed check']))
         run=self.store.load(self.identity);run['tasks']={self.task:run['tasks'][self.task]}
@@ -279,7 +286,9 @@ class NativeTransportTests(unittest.TestCase):
         self.record(report,'qa')
         run=self.store.load(self.identity)
         self.assertIsNone(run['qa']);self.assertTrue(run['qa_finished'])
-        self.assertIn('superseded',self.calls[-1][1]['rejected'])
+        event=next(e for e in run['events'].values() if e['report'].get('summary')=='Stale QA evidence')
+        self.assertEqual(event['delivery'],'history')  # Kept, never re-sent to the main.
+        self.assertFalse(any('Stale QA evidence' in json.dumps(c,default=str) for c in self.calls))
 
     def test_plain_cli_report_uses_the_native_scoped_bridge_without_gossip(self):
         from watchdog_app import mission_cli

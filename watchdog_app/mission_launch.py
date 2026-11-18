@@ -124,8 +124,16 @@ def clean_base(run, brief):
     resolve(run, snapshot)
     if 'scope' not in run:
         snapshot.selected(run['tasks'])
-    if git(run['repo'], 'status', '--porcelain'):
-        raise RuntimeError('Launch requires a clean committed repository')
+    from .checkpoint import pending
+    dirty = [path for _, path in pending(run['repo']) or []]
+    if 'scope' in run:
+        # Worktrees start from the committed base SHA, so live TODO.md edits (new ideas,
+        # reordering) do not affect the team; selected tasks were validated above.
+        dirty = [path for path in dirty if path != 'TODO.md']
+    if dirty:
+        raise RuntimeError('Launch requires a clean committed repository; these files changed after the '
+                           'checkpoint: ' + ', '.join(dirty[:8]) +
+                           '. Commit them, or Orchestrate again so Watchdog saves a new checkpoint.')
     if git(run['repo'], 'rev-parse', 'HEAD') != brief['base_sha']:
         raise RuntimeError('Repository no longer matches the approved base SHA')
 
