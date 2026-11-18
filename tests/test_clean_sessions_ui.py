@@ -34,6 +34,21 @@ class CleanSessionsUITests(unittest.TestCase):
         self.assertEqual(self.f.runtime.deliveries[0][0],self.f.old.session)
         self.assertIn('pending',self.ui.notice.lower());self.assertEqual((self.f.repo/'TODO.md').read_bytes(),before)
 
+    def test_open_panel_advances_with_current_backend_from_disk(self):
+        op=self.f.request()
+        controller=self.ui.clean
+        with patch('subprocess.run') as run:
+            run.return_value.returncode=0
+            controller.poll(self.f.old)
+            controller.thread.join(3)
+        self.assertFalse(controller.thread.is_alive())
+        run.assert_called_once()
+        argv=run.call_args.args[0]
+        self.assertEqual(argv[2:],['clean-sessions','advance','--state-dir',str(self.f.store.root),
+                                   '--operation',op['operation_id']])
+        self.assertTrue(fixture.Path(argv[1]).is_file())
+        self.assertEqual(controller.result['operation_id'],op['operation_id'])
+
     def test_released_panels_follow_successor_and_new_orchestrate_session(self):
         self.f.to_receipt();self.f.receive();op=fixture.clean.load(self.f.store,self.f.op['operation_id'])
         self.f.reply(self.f.old,'released',checkpoint=op['checkpoint'],successor=self.f.new.session);self.f.tick()

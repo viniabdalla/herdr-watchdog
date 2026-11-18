@@ -2,6 +2,8 @@
 import copy
 from dataclasses import asdict
 from pathlib import Path
+import subprocess
+import sys
 import threading
 import time
 
@@ -97,7 +99,15 @@ class Controller:
         if not self.operation or self.operation['state'] in ('partial','blocked')+backend.SETTLED:return
         identity=self.operation['operation_id']
         def work():
-            try:self.result=backend.advance(self.store,identity)
+            try:
+                # Both panels may outlive a code update. The operation lock and
+                # state machine must come from the current checkout on every tick.
+                command=[sys.executable,str(backend.ROOT/'watchdog'),'clean-sessions','advance',
+                         '--state-dir',str(self.store.root),'--operation',identity]
+                result=subprocess.run(command,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+                if result.returncode:
+                    raise RuntimeError(result.stderr.strip() or 'Clean sessions advance failed')
+                self.result=backend.load(self.store,identity)
             except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:
                 # Includes busy locks; preserve the durable state and show error.
                 self.result=copy.deepcopy(self.operation)
