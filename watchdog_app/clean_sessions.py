@@ -484,6 +484,24 @@ def policy_run(store,op):
             'session_policy':{'registry_dir':str(store.root/'runs/session-policy')}}
 
 
+def predates_leader(agent,source,api):
+    """Recognize an already-running Codex process in a different Herdr pane."""
+    pane=agent.get('pane_id')
+    if not pane or pane==source['pane']:return False
+    info=api.call('pane','process-info','--pane',pane)['process_info']
+    processes=info.get('foreground_processes',[])
+    if len(processes)!=1:return False
+    process=processes[0]
+    argv=process.get('argv',[])
+    if process.get('name')!='codex' or not argv or 'resume' in argv:return False
+    try:
+        stat=Path('/proc',str(process['pid']),'stat').read_text()
+        started=int(stat.rsplit(')',1)[1].split()[19])
+        return started<int(source['started'])
+    except (OSError,KeyError,IndexError,ValueError):
+        return False
+
+
 def predecessor_exited(op, api):
     """Distinguish a closed leader from a busy, unregistered or resumed thread."""
     source=op['source']
@@ -504,7 +522,8 @@ def predecessor_exited(op, api):
     for agent in agents:
         if agent.get('agent')!='codex':continue
         sid=(agent.get('agent_session') or {}).get('value')
-        if sid==source['session'] or (not sid and agent.get('workspace_id')==source['workspace']):
+        if sid==source['session']:return False
+        if not sid and agent.get('workspace_id')==source['workspace'] and not predates_leader(agent,source,api):
             return False
     return True
 

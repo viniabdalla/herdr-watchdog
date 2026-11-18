@@ -71,7 +71,11 @@ These remain receiver attestations, not an independent audit of service state.
 The live predecessor receives an explicit release request, replies with the exact
 operation/checkpoint/successor and parks. If the predecessor already exited, Watchdog first validates
 the successor's completed receipt, checks the original process and pane are gone,
-and checks Herdr for a resumed or unidentified predecessor. It records observed
+and checks Herdr for a resumed predecessor. For a Codex pane without a session ID
+in the same workspace, it checks the foreground process. A single Codex process
+launched before the predecessor in another pane, without a resume argument,
+can remain open during transfer. Ambiguous or newer processes still require
+identification. Watchdog records observed
 exit separately from a release reply and repeats the checks before transferring
 ownership. A verified resume of the same session follows its new pane and uses
 the normal explicit release. Final idle, native identity and Git checks precede

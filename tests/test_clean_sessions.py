@@ -258,6 +258,27 @@ class CleanSessionsTests(unittest.TestCase):
                     {'agents':agents} if args==('agent','list') else call(*args))
                 self.assertFalse(clean.predecessor_exited(op,self.api))
 
+    def test_unidentified_older_codex_frontend_does_not_block_receipt(self):
+        op=self.to_receipt()
+        del self.runtime.actors[self.old.session]
+        call=self.api.call
+        def inventory(*args):
+            if args==('pane','list'):return {'panes':[op['pane']]}
+            if args==('agent','list'):return {'agents':[{'agent':'codex','workspace_id':self.old.workspace,'pane_id':'other'}]}
+            if args==('pane','process-info','--pane','other'):
+                return {'process_info':{'foreground_processes':[{'pid':os.getpid(),'name':'codex','argv':['codex']}]}}
+            return call(*args)
+        self.api.call=inventory
+        # The fixture frontend exited. Use a start tick after this test process.
+        op['source']['started']=str(int(Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19])+1)
+        state=clean.handoff.read_json(self.file)
+        state['binding']=op['source']
+        clean.atomic(self.file,state)
+        self.assertTrue(clean.predecessor_exited(op,self.api))
+        op['source']['started']='1'
+        state['binding']=op['source'];clean.atomic(self.file,state)
+        self.assertFalse(clean.predecessor_exited(op,self.api))
+
     def test_missing_memory_handoff_is_partial_not_false_transferred(self):
         self.op=self.request();self.reply(self.old,'prepared',todo_reconciled=True,memory_handoff_id=None)
         op=self.tick();self.assertEqual(op['state'],'partial');self.assertIn('ai-memory',op['problem']);self.assertFalse(self.api.calls)
