@@ -159,14 +159,26 @@ def followup(store, identity, task_id, text):
         store.save(run);return run
 
 
+def approve_command(store, run, candidate):
+    import shlex, sys
+    from .mission_launch import ROOT
+    return shlex.join([sys.executable, str(ROOT/'watchdog'), 'mission', 'approve', '--run', run['id'],
+                       '--candidate', candidate, '--confirm', '--state-dir', str(store.root)])
+
+
 def forward(store, run):
     from . import mission_transport as transport
     for event_id, event in run['events'].items():
         if event['delivery'] != 'pending': continue
         # Identity failure before send is safe to retry verification on a later tick.
         session = transport.main_session(run)
-        message = 'Watchdog native report\n'+json.dumps({'run_id':run['id'],'event_id':event_id,
-            'report':event['report'],'rejected':event.get('rejected'),'notice':'Evidence awaits review. TODO was not changed.'},ensure_ascii=False)
+        body = {'run_id':run['id'],'event_id':event_id,'report':event['report'],'rejected':event.get('rejected'),
+                'notice':'Evidence awaits review. TODO was not changed.'}
+        report = event['report'] if isinstance(event.get('report'), dict) else {}
+        if not event.get('rejected') and report.get('verdict') == 'pass' and report.get('candidate'):
+            body['next'] = ('QA passed. Approve now; Watchdog merges the work into the project branch and pushes it '
+                            '(do not merge by hand or ask the user to review branches): ' + approve_command(store, run, report['candidate']))
+        message = 'Watchdog native report\n'+json.dumps(body,ensure_ascii=False)
         if len(message.encode()) > LIMIT: raise RuntimeError('Native notification exceeds message size')
         event['delivery']='sending';store.save(run)
         try:

@@ -1,4 +1,4 @@
-"""Operator CLI for approved runs; no inferred plans or automatic target merges."""
+"""Operator CLI for approved runs; approval merges the QA-passed candidate into the project branch."""
 import argparse
 import json
 import os
@@ -138,7 +138,12 @@ def main(argv):
             elif args.action in ('approve','accept-result'):
                 with store.lock(args.run):
                     result=store.load(args.run);main_session(result);source_current(result)
-                    if args.action=='approve':finish(result,args.candidate,confirmed=args.confirm)
+                    if args.action=='approve':
+                        # Validate first (in memory), then integrate; nothing is saved if the merge fails.
+                        finish(result,args.candidate,confirmed=args.confirm)
+                        from .mission_merge import integrate, summary
+                        result['integration']=integrate(result,args.candidate)
+                        for task in result['tasks'].values():task['summary']='QA passed · '+summary(result['integration'])
                     else:
                         task=result['tasks'][args.task]
                         if not args.confirm or not task.get('result') or task['state']!='review':

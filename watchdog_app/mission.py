@@ -194,7 +194,9 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
                    'dependencies, clean base SHA and the approved accounts/executable. '
                    'Use `watchdog mission template --run ' + run['id'] + '` for the JSON contract, '
                    'then `watchdog mission launch --run ' + run['id'] + ' --brief FILE --confirm`.\n'
-                   'Coordinate; delegate implementation. No extra agents, target-branch merge or push. '
+                   'Coordinate; delegate implementation. No extra agents. Never merge or push by hand and never ask '
+                   'the user to review branches: when QA passes, run the approve command Watchdog sends you; it merges '
+                   'the approved work into the project branch and pushes it. '
                    'Dispatch does not complete TODO. Return compact results and concrete blockers.\n'
                    + '\n'.join(f"{t.id}: {t.text}" for t in tasks))
         try:
