@@ -155,8 +155,11 @@ source snapshots, assignments, results and owned resource mappings.
 ## Leader handoff / Clean sessions
 
 Tasks' **c / Clean sessions** requests the verified current leader to reconcile
-TODO and save a real ai-memory MCP handoff. Review the exact project/thread and
-explicit owned-file, approved-branch, push and fresh-frontend scope, then confirm.
+TODO and save a real ai-memory MCP handoff in one action. The leader identifies
+owned changes in the verified Herdr worktree. Commits made during preparation
+are accepted if every intervening commit is linear and touches only those files.
+Use **Shift+C** to choose files, destination, approved branches or startup settings
+explicitly. A worktree without an upstream opens the destination form.
 The backend commits owned changes, fast-forwards only approved branches, verifies
 the pushed checkpoint, creates a fresh Herdr split/Codex frontend, delivers bounded
 context to its exact thread and waits for actual receiver receipt and predecessor
@@ -176,3 +179,112 @@ The clean-session policy supersedes older transport-probe examples: never use a
 real-task executor for a probe. The current grandfathered worker finishes only
 Leader handoff. Native policy claims reject known executor/QA/probe reuse;
 separate probe RunStores must explicitly share the main session-policy registry.
+
+## Formato único do TODO.md
+
+O formato antigo continua aceito, sem conversão automática. Para adotar o formato
+versionado, o frontmatter declara `watchdog_todo: 1`. Cada tarefa tem UUID fixo,
+título na linha do checkbox, resumo, origem, execução e aceite no próprio TODO:
+
+```markdown
+---
+watchdog_todo: 1
+---
+# TODO
+
+## Próximo
+- [ ] Recuperar os áudios
+  ID: 613821eb-e1d7-4ae6-9f71-88534c73c843
+  Resumo: Recuperar a fila para continuar o atendimento.
+  Origem: pedido-humano
+  Referência: pedido explícito na conversa do projeto
+  Execução:
+    Investigar a fila e preservar os arquivos originais.
+  Aceite:
+    Demonstrar recuperação com evidências verificáveis.
+
+## Feito
+```
+
+Gramática determinística, implementada em Python sem dependências adicionais:
+
+- Seções de estado: `Em andamento`, `Próximo`, `Bloqueado`, `Feito`, ou seus nomes
+  atuais em inglês. Só Feito aceita `[x]`; as demais usam `[ ]`.
+- Título: uma linha de 1–500 caracteres imprimíveis. O UUID canônico no campo
+  `ID` é único no documento e permanece igual ao editar título, detalhes ou estado.
+- Campos obrigatórios: `ID`, `Resumo`, `Origem`, `Execução`, `Aceite`.
+  Opcionais: `Referência`, `Motivo`. Nomes e capitalização são exatos.
+- Campos começam com dois espaços. Resumo, Execução e Aceite aceitam conteúdo
+  multilinha com quatro espaços, incluindo checklists e código. Linhas em branco
+  são permitidas dentro desses campos. Demais campos têm uma linha.
+- Origem: `pedido-humano`, `sugestao-agente` ou `legado-nao-confirmado`.
+  Uma sugestão não se autoriza por existir no arquivo. Referência só registra
+  evidência disponível; a importação não inventa autoria, aceite ou benefício.
+- Campos repetidos/desconhecidos, UUIDs duplicados, estados incoerentes e versões
+  desconhecidas produzem erro com linha. Exemplos em cercas Markdown são ignorados.
+  Adicionar uma tarefa v1 exige os campos completos; a proposta antiga de adição
+  contendo apenas título precisa ser completada antes de poder ser aplicada.
+
+O painel mostra somente títulos com `▸`. Clicar na setinha ou no título, ou
+pressionar Enter, abre `Resumo` e `Situação` com espaçamento e quebras de linha;
+outro clique ou Enter recolhe. Setas direita/esquerda também abrem/recolhem.
+O checkbox e Espaço continuam selecionando tarefas independentemente da expansão.
+Os detalhes técnicos permanecem completos na confirmação e no envio ao executor.
+Arquivos antigos mostram apenas seu `Resumo:` declarado, sem expor instruções
+como substituto de resumo. A instalação de orientações para agentes permanece
+uma tarefa separada.
+
+Validação e migração explícita de um projeto:
+
+```bash
+./watchdog todo validate --repo /caminho/do/projeto
+./watchdog todo preview --repo /caminho/do/projeto > /tmp/todo-proposta.json
+# Revisar o JSON e preencher os campos vazios em tasks; conservar original,
+# source_digest, old_id e IDs atribuídos pela prévia.
+./watchdog todo render --repo /caminho/do/projeto --proposal /tmp/todo-proposta.json
+./watchdog todo apply --repo /caminho/do/projeto --proposal /tmp/todo-proposta.json --confirm
+```
+
+`preview`, `render` e `validate` não alteram o TODO. A prévia JSON é um artefato
+de revisão; o painel continua lendo exclusivamente TODO.md. `render` mostra o
+Markdown exato que será aplicado e acusa campos ausentes. A proposta conserva a
+versão original para revisão. As instruções antigas permanecem integralmente em
+Execução; critérios e resumo já declarados são copiados, sem inferência.
+
+`apply` exige confirmação, a mesma origem e nenhuma execução afetada inacabada;
+informa os IDs que bloqueiam. `blocked_runs` na prévia é informativo: os registros
+são consultados novamente ao aplicar. Primeiro termine ou encerre explicitamente
+essas execuções pelos controles existentes. Nenhum run ou agente é encerrado pela
+migração. `--state-dir` permite selecionar o diretório de runs, como no comando
+`mission`; sem ele, usa o diretório normal do Watchdog.
+
+A escrita usa trava, comparação do documento original, troca atômica e backups
+em `$WATCHDOG_STATE_DIR/todo-backups` (normalmente
+`~/.local/state/herdr-watchdog/todo-backups`). Edições concorrentes são preservadas
+e interrompem a operação. Notas e conclusões importadas permanecem no documento;
+conclusões antigas são delimitadas por `<!-- watchdog-history:begin -->` e
+`<!-- watchdog-history:end -->`, contadas como histórico e nunca executáveis.
+Estados antigos incoerentes precisam de revisão explícita antes da conversão.
+Comentários `watchdog-migration` contêm a versão, digest de origem e mapa de IDs.
+O arquivo original também fica preservado integralmente no backup.
+
+Novas execuções de tarefas v1 guardam escopo v2: UUID, formato, bloco aprovado e
+estado. Alterar o texto conserva o UUID, mas exige revisão do contrato antes de
+continuar a execução. Reordenar linhas sem mudar o bloco aprovado é permitido.
+Contratos antigos conservam suas regras e seus registros; nunca são atualizados
+silenciosamente. Contratos inacabados de formatos diferentes exigem resolução
+explícita antes de iniciar trabalho que poderia se sobrepor.
+
+Para substituir intencionalmente a identidade de uma tarefa já migrada:
+
+```bash
+./watchdog todo preview --repo /caminho/do/projeto --task UUID_ATUAL > /tmp/todo-identidade.json
+./watchdog todo render --repo /caminho/do/projeto --proposal /tmp/todo-identidade.json
+./watchdog todo apply --repo /caminho/do/projeto --proposal /tmp/todo-identidade.json --confirm
+```
+
+A prévia atribui outro UUID; `--new-id UUID_NOVO` permite especificá-lo. O mapa
+antigo→novo fica no TODO; IDs aposentados não podem ser reutilizados. Execuções
+afetadas em aberto impedem a troca e seus registros históricos ficam intactos.
+Editar diretamente um ID não faz correspondência por título: contratos que o
+referenciam acusam identidade ausente, exigindo revisão explícita.

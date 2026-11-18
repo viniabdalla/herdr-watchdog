@@ -8,7 +8,7 @@ import time
 from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
-from .clean_sessions import SETTLED
+from .clean_sessions import SETTLED, defaults as clean_defaults
 from .clean_sessions_ui import Controller, Setup, confirmation_rows
 from .checkpoint import pending, describe, conflicted, commit
 
@@ -49,6 +49,8 @@ def colors():
 
 def remap(old, new, ids):
     """Selected task IDs in the new snapshot, or None if a selected block changed."""
+    if old.format_version != new.format_version:
+        return None
     lines_old = old.raw.decode('utf-8').splitlines(keepends=True)
     lines_new = new.raw.decode('utf-8').splitlines(keepends=True)
     blocks = {}
@@ -58,10 +60,24 @@ def remap(old, new, ids):
     for task in old.tasks:
         if task.id in ids:
             matches = blocks.get(''.join(lines_old[task.start:task.end]), [])
+            if old.format_version:
+                matches = [match for match in matches if match.id == task.id]
             if len(matches) != 1 or matches[0].section != task.section:
                 return None
             result.add(matches[0].id)
     return result
+
+
+def task_summary(snapshot, task):
+    """Show only declared human summary; never fall back to technical task.text."""
+    if task.summary:
+        return task.summary
+    lines = snapshot.raw.decode('utf-8').splitlines()
+    for line in lines[task.start + 1:task.end]:
+        text = line.strip()
+        if text.startswith('Resumo:'):
+            return text[len('Resumo:'):].strip() or 'Resumo ainda não informado.'
+    return 'Conclusão registrada no histórico.' if task.done else 'Resumo ainda não informado.'
 
 
 class TasksUI:
@@ -69,6 +85,7 @@ class TasksUI:
         self.screen, self.repo = screen, Path(repo).resolve()
         self.snapshot = None
         self.selected, self.proposal_selected = set(), set()
+        self.expanded = set()
         self.cursor, self.scroll = 0, 0
         self.mode, self.pending = 'tasks', None
         self.notice, self.review_status = '', 'Codex: waiting for a completed reply'
@@ -105,6 +122,10 @@ class TasksUI:
         try:
             snapshot = Snapshot.read(self.repo)
             if self.snapshot and snapshot.digest != self.snapshot.digest:
+                if self.snapshot.format_version == snapshot.format_version == 1:
+                    self.expanded.intersection_update(t.id for t in snapshot.tasks)
+                else:
+                    self.expanded = remap(self.snapshot, snapshot, self.expanded) or set()
                 # Keep the selection when only other tasks changed (ideas added, rows moved).
                 kept = remap(self.snapshot, snapshot, self.selected)
                 changed = kept is None
@@ -233,9 +254,26 @@ class TasksUI:
             rows.append((section.upper() + f' ({len(tasks)})', section, None))
             for task in tasks:
                 marker = '[x]' if task.done else '[+]' if task.id in self.selected else '[ ]'
-                rows.append((marker + ' ' + task.text, 'Done' if task.done else section, task.id))
+                opened = task.id in self.expanded
+                arrow = '▾' if opened else '▸'
+                title = task.title.split(' — Blocked: ', 1)[0]
+                rows.append((marker + ' ' + arrow + ' ' + title, 'Done' if task.done else section, task.id))
+                if opened:
+                    rows.append(('', None, None))
+                    rows.append(('    Resumo:', None, None))
+                    for line in task_summary(self.snapshot, task).splitlines():
+                        rows.append(('      ' + line if line else '', None, None))
+                    rows.append(('', None, None))
+                    status = {'Next': 'Pendente', 'In progress': 'Em andamento',
+                              'Blocked': 'Bloqueada', 'Done': 'Concluída'}[section]
+                    rows.append(('    Situação: ' + status, section, None))
+                    reason = task.reason or (task.title.split(' — Blocked: ', 1)[1]
+                                            if ' — Blocked: ' in task.title else '')
+                    if reason:
+                        rows.append(('      Motivo: ' + reason, section, None))
+                    rows.append(('', None, None))
                 suggestion = suggestions.get(task.id)
-                if suggestion:
+                if suggestion and opened:
                     status = 'Done' if suggestion['kind'] == 'done' else 'Blocked'
                     detail = ': ' + suggestion['reason'] if status == 'Blocked' else ''
                     rows.append(('  ? Suggested ' + status + detail, status, task.id))
@@ -269,7 +307,7 @@ class TasksUI:
         else:
             buttons = [('Clean sessions c', 'c'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
-            hint = 'Space: select · j/k: move · PgUp/PgDn'
+            hint = 'Space: select · Enter/▸: resumo · C: opções de Clean sessions · PgUp/PgDn'
         packed, x, line = [], 0, 0
         for label, action in buttons:
             label = '[' + label + ']'
@@ -280,7 +318,10 @@ class TasksUI:
         room = max(1, footer - 4)
         rows = []
         for text, section, identity in self.body():
-            for part in textwrap.wrap(safe(text), max(4, w - 2), subsequent_indent='  ') or ['']:
+            indent = max(2, len(text) - len(text.lstrip()))
+            if self.mode == 'tasks' and identity is not None:
+                indent = 6
+            for part in textwrap.wrap(safe(text), max(4, w - 2), subsequent_indent=' ' * indent) or ['']:
                 rows.append((part, section, identity))
         identifiers = list(dict.fromkeys(identity for _, _, identity in rows if identity is not None))
         self.cursor = min(self.cursor, max(0, len(identifiers) - 1))
@@ -297,10 +338,16 @@ class TasksUI:
             attr = self.palette.get(section, 0)
             if identity is not None and identity == focus:
                 attr |= curses.A_REVERSE
+            if text.strip() == 'Resumo:' or text.strip().startswith('Situação:'):
+                attr |= curses.A_BOLD
             y = index + 4
             put(screen, y, text, attr)
             if identity is not None:
-                self.targets.append((0, y, w - 1, ('item', identity)))
+                if self.mode == 'tasks':
+                    self.targets.append((4, y, w - 5, ('toggle', identity)))
+                    self.targets.append((0, y, 4, ('item', identity)))
+                else:
+                    self.targets.append((0, y, w - 1, ('item', identity)))
         for offset, x, label, action in packed:
             y = footer + offset
             put(screen, y, label, curses.A_REVERSE, x)
@@ -361,7 +408,9 @@ class TasksUI:
         from .mission import RunStore, FINISHED
         texts = {t.text for t in self.snapshot.selected(ids)}
         for run in RunStore().list(self.repo):
-            if run['phase'] not in FINISHED and texts & {t['title'] for t in run['tasks'].values()}:
+            stable_overlap = (self.snapshot.format_version == 1 and run.get('scope', {}).get('version') == 2
+                              and set(ids) & set(run['tasks']))
+            if run['phase'] not in FINISHED and (stable_overlap or texts & {t['title'] for t in run['tasks'].values()}):
                 return run
         return None
 
@@ -454,6 +503,17 @@ class TasksUI:
             if key in ('y', 'enter') and self.can_confirm:
                 self.execute()
             return True
+        if self.mode == 'tasks' and key in ('enter', 'toggle', 'left', 'right'):
+            identities = getattr(self, 'visible_identifiers', [])
+            if identities:
+                identity = identities[min(self.cursor, len(identities) - 1)]
+                if key == 'right':
+                    self.expanded.add(identity)
+                elif key == 'left':
+                    self.expanded.discard(identity)
+                else:
+                    self.expanded.symmetric_difference_update({identity})
+            return True
         if key in (' ', 'enter'):
             identities = getattr(self, 'visible_identifiers', [])
             if not identities:
@@ -479,10 +539,27 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif key == 'c' and self.clean.stuck and self.clean.stuck.get('problem') == 'Preparation base changed before Git authorization':
+            self.pending = {'kind': 'clean_stuck'}
+            self.execute()
         elif key == 'c' and self.clean.stuck:
             self.pending = {'kind': 'clean_stuck'}
             self.mode, self.scroll = 'confirm', 0
         elif key == 'c':
+            self.session.verify()
+            if self.clean.operation and self.clean.operation['state'] not in SETTLED:
+                self.notice = 'Clean sessions · ' + self.clean.operation['stage']
+            else:
+                self.job.close()
+                policy = clean_defaults(self.session)
+                if not policy['remote'] or not policy['branch']:
+                    self.clean_setup = Setup(self.session)
+                    self.mode, self.scroll = 'clean_setup', 0
+                    self.notice = 'Escolha o destino do push para esta worktree'
+                    return True
+                operation = self.clean.start(self.session, policy, automatic=True)
+                self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
+        elif key == 'C':
             self.session.verify()
             self.clean_setup = Setup(self.session)
             self.mode, self.scroll = 'clean_setup', 0
@@ -533,7 +610,7 @@ class TasksUI:
             identities = getattr(self, 'visible_identifiers', [])
             if value in identities:
                 self.cursor = identities.index(value)
-                return ' '
+                return 'toggle' if kind == 'toggle' else ' '
         return None
 
     def loop(self):
@@ -546,6 +623,7 @@ class TasksUI:
         curses.mouseinterval(150)
         curses.mousemask(curses.ALL_MOUSE_EVENTS)
         keys = {curses.KEY_UP: 'up', curses.KEY_DOWN: 'down', curses.KEY_NPAGE: 'pagedown',
+                curses.KEY_LEFT: 'left', curses.KEY_RIGHT: 'right',
                 curses.KEY_PPAGE: 'pageup', curses.KEY_HOME: 'home', curses.KEY_ENTER: 'enter',
                 curses.KEY_BACKSPACE: 'backspace', curses.KEY_BTAB: 'backtab',
                 '\n': 'enter', '\r': 'enter', '\x1b': 'escape'}

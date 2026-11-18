@@ -41,6 +41,11 @@ def stalled(run, *, now=None):
 
 def accepted_in_todo(run, snapshot):
     """Every selected task now appears completed in TODO.md (the user's acceptance)."""
+    if run.get('scope', {}).get('version') == 2:
+        from .mission_scope import descriptors
+        descriptors(run)
+        done = {t.id for t in snapshot.tasks if t.done and not t.historical}
+        return snapshot.format_version == 1 and bool(run['tasks']) and set(run['tasks']) <= done
     done = {t.text for t in snapshot.tasks if t.done}
     return bool(run['tasks']) and all(t['title'] in done for t in run['tasks'].values())
 

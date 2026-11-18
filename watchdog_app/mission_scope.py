@@ -1,11 +1,12 @@
-"""Immutable selected TODO evidence for new runs; positional ledger IDs stay pinned.
+"""Immutable selected TODO evidence: legacy blocks or versioned stable UUIDs.
 
-No markers, fuzzy matching or title normalization: an exact block must have one
-occurrence in the current parsed TODO and retain its section and open state.
+Identity never approves revised instructions: both formats pin their exact block
+and open state. Existing positional run ledgers are never rewritten or upgraded.
 """
 from collections import defaultdict
 
 from .todo import SECTIONS, TASK, Snapshot
+from .todo_format import canonical_id
 
 
 REVIEW = ('Restore its text to continue, or close the run in Progress (x) and Orchestrate again '
@@ -33,13 +34,16 @@ def descriptors(run):
     if 'scope' not in run:
         return None
     scope = run['scope']
-    if not isinstance(scope, dict) or type(scope.get('version')) is not int or scope['version'] != 1:
+    if not isinstance(scope, dict) or type(scope.get('version')) is not int or scope['version'] not in (1, 2):
         raise RuntimeError('Unsupported or malformed run scope version')
     tasks = scope.get('tasks')
-    if (set(scope) != {'version', 'tasks'} or not isinstance(tasks, dict) or
+    stable = scope['version'] == 2
+    if stable and (type(scope.get('format')) is not int or scope['format'] != 1):
+        raise RuntimeError('Malformed run scope: unsupported TODO format')
+    if (set(scope) != ({'version', 'format', 'tasks'} if stable else {'version', 'tasks'}) or not isinstance(tasks, dict) or
             not tasks or set(tasks) != set(run['tasks'])):
         raise RuntimeError('Malformed run scope: expected exactly the selected task IDs')
-    for value in tasks.values():
+    for key, value in tasks.items():
         if not isinstance(value, dict) or set(value) != {'block', 'section'}:
             raise RuntimeError('Malformed run scope task descriptor')
         block = value['block']
@@ -49,12 +53,21 @@ def descriptors(run):
         match = TASK.match(block.splitlines(keepends=True)[0])
         if not match or match[2] != ' ':
             raise RuntimeError('Malformed run scope: selected task must be open')
+        if stable:
+            try:
+                parsed = Snapshot.parse(run['repo'], ('---\nwatchdog_todo: 1\n---\n## ' + value['section'] + '\n' + block).encode())
+            except RuntimeError as error:
+                raise RuntimeError('Malformed run scope: invalid versioned task block') from error
+            if not canonical_id(key) or len(parsed.tasks) != 1 or parsed.tasks[0].id != key:
+                raise RuntimeError('Malformed run scope: ID differs from approved task block')
     return tasks
 
 
 def capture(snapshot, tasks):
     content = blocks(snapshot)
     scope = {'version': 1, 'tasks': {t.id: {'block': content[t.id], 'section': t.section} for t in tasks}}
+    if snapshot.format_version:
+        scope.update(version=2, format=snapshot.format_version)
     # Reject ambiguous identity at confirmation, even when positional IDs differ.
     resolve({'repo': str(snapshot.repo), 'tasks': scope['tasks'], 'scope': scope}, snapshot)
     return scope
@@ -68,6 +81,23 @@ def resolve(run, snapshot=None):
         if snapshot.digest != run['source_digest']:
             raise RuntimeError(LEGACY)
         return None
+    if run['scope']['version'] == 2:
+        if snapshot.format_version != run['scope']['format']:
+            raise RuntimeError('Run scope: formato do TODO mudou; revisar contrato explicitamente')
+        by_id = {task.id: task for task in snapshot.tasks}
+        content = blocks(snapshot)
+        result = {}
+        for key, expected in selected.items():
+            task = by_id.get(key)
+            if task is None:
+                raise RuntimeError('Run scope: identidade removida ou substituída: ' + key + '. ' + REVIEW)
+            if task.done or task.section != expected['section'] or content[key] != expected['block']:
+                raise RuntimeError('Run scope: conteúdo ou estado mudou para ID ' + key +
+                                   '; identidade preservada, revisar contrato. ' + REVIEW)
+            result[key] = task
+        return result
+    if snapshot.format_version:
+        raise RuntimeError('Run scope: TODO foi migrado; contrato antigo preservado, revisar migração explicitamente. ' + REVIEW)
     occurrences = defaultdict(list)
     content = blocks(snapshot)
     for task in snapshot.tasks:
@@ -99,6 +129,10 @@ def overlaps(previous, scope, tasks):
     duplicate evidence only, never authority to resolve or upgrade their scope.
     """
     selected = descriptors(previous)
+    if previous.get('scope', {}).get('version') == 2 or scope.get('version') == 2:
+        if previous.get('scope', {}).get('version') != scope.get('version'):
+            return True  # An unfinished cross-format contract needs explicit operator review.
+        return bool(set(previous['tasks']) & set(scope['tasks']))
     if selected is None:
         titles = {task['title'] for task in previous['tasks'].values()}
         return bool(set(previous['tasks']) & set(scope['tasks']) or any(t.text in titles for t in tasks))

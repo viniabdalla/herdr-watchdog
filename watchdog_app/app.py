@@ -168,6 +168,9 @@ def open_selector(api, repo, binding=None, *, pane=None, session=None, preset=No
 def main(argv=None):
     os.umask(0o077)
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ['todo']:
+        from .todo_cli import main as todo_main
+        return todo_main(argv[1:])
     if argv[:1] == ['clean-sessions']:
         from .clean_sessions import main as clean_main
         return clean_main(argv[1:])
