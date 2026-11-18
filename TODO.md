@@ -13,6 +13,7 @@ Each project uses its own TODO.md with these sections. Progress counts the
 tasks currently listed here; it is not an estimate of the entire project.
 
 ## In progress
+- [ ] Clean sessions live fix: successor Codex now starts with `--yolo` (memory_handoff_accept was rejected under approval=never when the SessionStart hook did not carry the handoff, op f356165e). 50 Clean sessions tests pass; press `c` live to confirm receipt and release. Blocked ops are terminal; finish f356165e by hand.
 
 ## Next
 - [ ] Watchdog UI language: English/Portuguese selector in Tasks applies to Tasks, Progress, Artifacts and Agents; use LLM assistance for UI translations while preserving canonical project files, protocols and Yazi.

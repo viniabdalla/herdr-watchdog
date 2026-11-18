@@ -549,7 +549,7 @@ def leader(store,identity):
     os.close(fd) # Duplicate wrappers cannot create another frontend.
     env={k:v for k,v in os.environ.items() if not k.startswith(('CODEX_','AI_MEMORY_','OPENAI_','ANTHROPIC_','CLAUDE_CODE_')) and k!='CLAUDECODE'}
     env['CODEX_HOME']=op['source']['account']
-    argv=[policy['executable'],'-C',op['repo'],'--model',policy['model'],'--sandbox','workspace-write','--ask-for-approval','never',
+    argv=[policy['executable'],'-C',op['repo'],'--model',policy['model'],'--yolo',
           '-c','model_reasoning_effort='+json.dumps(policy['effort']),
           'You are a fresh project leader awaiting a bounded Clean sessions handoff. Reply READY and wait. Do not lead, edit, create actors, or change Git until verified successor receipt, explicit predecessor release and Watchdog binding transfer.']
     terminal=TerminalLease(sys.stdout.fileno())
