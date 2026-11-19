@@ -4,7 +4,7 @@ status: ativo
 area: pessoal
 prioridade: alta
 resumo: Painéis Herdr para tarefas de projetos, progresso das sessões e arquivos criados pela IA
-atualizado: 2026-11-18
+atualizado: 2026-11-19
 motivo:
 ---
 
@@ -53,6 +53,7 @@ os pedidos e as conclusões anteriores foram preservados na migração.
     Aceite: escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
     Proposta de interface: ação Despachar com opções Para um agente e Orquestrar equipe. Na primeira, escolher o executor identificado pelo painel, confirmar o destinatário e acompanhar o resultado em Progresso. Preservar o envio simples já existente.
     Entrega verificada em 2026-11-18: menu Despachar, seleção por painel/conta/sessão, confirmação separada e Progresso com revisão pelo líder; uma tarefa lógica por execução. Equipe e envio simples preservados. 385 testes sem falhas, 7 opt-in ignorados; teclado/mouse e fluxo em PTY real, integração Git temporária com rejeição de aprovação sem revisão. Painel real recarregado e menu conferido nos terminais existentes. A lista ao vivo não encontrou executor elegível; falta uma sessão dedicada ociosa em worktree limpa para validar uma execução real de modelo. Tarefa permanece aberta para aceite.
+    Reconciliação em 2026-11-19: implementação commitada em 98c09e4529ea9d8a1d053aae74de5deef6637004 e enviada ao origin/main por autorização do usuário antes desta passagem de contexto. Suíte repetida: 385 testes, sem falhas, 7 ignorados. Execução com modelo real e aceite do usuário continuam pendentes; commit, push e abertura dos painéis não concluem a tarefa.
   Aceite:
     escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
 - [ ] Abrir uma auditoria independente do projeto
