@@ -77,6 +77,13 @@ def run_status(run, *, now=None):
     if stalled(run, now=now):
         return dict(key='stalled', label='Stalled', detail='no activity since ' + when +
                     ' · close it in Progress (x)', section='Blocked', color='blocked', finished=False)
+    from .mission_single import is_single, review_valid
+    if is_single(run) and tasks and all(t['state'] in ('review', 'done') for t in tasks):
+        approved = review_valid(run, run.get('candidate'))
+        return dict(key='decision' if approved else 'verifying',
+            label='Aguardando aprovação' if approved else 'Verificando',
+            detail=('Revisão do líder aprovada · ' + str(run.get('candidate') or '')[:8]) if approved else 'Aguardando revisão do líder',
+            section='Blocked' if approved else 'In progress', color='review', finished=False)
     qa = run.get('qa') or {}
     if tasks and all(t['state'] in ('review', 'done') for t in tasks):
         if qa.get('verdict') == 'pass' and run.get('qa_finished'):
@@ -162,7 +169,7 @@ class RunStore:
             yield
 
 
-def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=None):
+def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=None, mode='team', executor=None):
     if not confirmed:
         raise RuntimeError('Explicit confirmation is required')
     store = store or RunStore()
@@ -171,6 +178,14 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
         tasks = snapshot.selected(ids)
         scope = capture(snapshot, tasks)
         session.verify()
+        if mode not in ('team', 'single'):
+            raise RuntimeError('Unknown execution mode')
+        if mode == 'single':
+            from .mission_single import validate_executor, available
+            if len(tasks) != 1:
+                raise RuntimeError('Para um agente: selecione uma tarefa por execução')
+            validate_executor(snapshot.repo, asdict(session.binding), executor)
+            available(store, snapshot.repo, executor)
         if session.binding.kind != 'codex':
             raise RuntimeError('Orchestrate needs an exact Codex thread')
         settle, live = blocking(store, snapshot.repo, scope, tasks, snapshot)
@@ -187,6 +202,8 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
                'participants': {}, 'resources': {}, 'events': {}, 'cursor': 0, 'candidate': None, 'qa': None,
                'tasks': {t.id: {'title': t.text, 'state': 'ready', 'agent': 'main', 'updated': now,
                                 'summary': 'Waiting for the main conversation to prepare the brief'} for t in tasks}}
+        run['execution_mode'] = mode
+        if mode == 'single': run['executor'] = executor
         if checkpoint:
             run['checkpoint'] = checkpoint
         snapshot.assert_current()
@@ -194,15 +211,20 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
         message = (f"Watchdog Mission Control run {run['id']} was explicitly confirmed.\n"
                    f"Project: {run['repo']}\nMain: {session.binding.session}\n"
                    + (f"Committed checkpoint (use as base_sha): {checkpoint['sha']}\n" if checkpoint else '') +
-                   'Approved team: one new Codex worker and one new Codex QA, in one execution tab.\n'
+                   (('Approved mode: single existing executor, reviewed by main; no QA actor.\n'
+                       'Confirmed executor: ' + json.dumps(executor, ensure_ascii=False) + '\n') if mode == 'single' else
+                       'Approved team: one new Codex worker and one new Codex QA, in one execution tab.\n') +
                    'Prepare an explicit brief with allowed files, acceptance criteria, test commands, '
                    'dependencies, clean base SHA and the approved accounts/executable. '
                    'Use `watchdog mission template --run ' + run['id'] + '` for the JSON contract, '
                    'then `watchdog mission launch --run ' + run['id'] + ' --brief FILE --confirm`.\n'
                    'Coordinate; delegate implementation. No extra agents. Never merge or push by hand and never ask '
-                   'the user to review branches: when QA passes, run the approve command Watchdog sends you; it merges '
+                   'the user to review branches: after the required exact-candidate review passes, use mission approve; it merges '
                    'the approved work into the project branch and pushes it. '
                    'Dispatch does not complete TODO. Return compact results and concrete blockers.\n'
+                   + ('In single mode, inspect the result and run the declared tests yourself. Record a leader-review '
+                      'with --candidate SHA --file JSON --confirm (run_id, candidate, result_version, verdict, summary, tests) '
+                      'before approval. Never invent QA or review evidence.\n' if mode == 'single' else '')
                    + '\n'.join(f"{t.id}: {t.text}" for t in tasks))
         try:
             session.runtime.queue(session.binding, message)
@@ -336,6 +358,14 @@ def task_view(run, task_id, *, now=None):
 def finish(run, candidate, *, confirmed=False):
     if not confirmed:
         raise RuntimeError('Explicit approval is required')
+    from .mission_single import is_single, review_valid
+    if is_single(run):
+        if not review_valid(run, candidate):
+            raise RuntimeError('Completion requires passing leader review for this exact candidate and result version')
+        for task in run['tasks'].values():
+            task.update(state='done', summary='Leader reviewed; main approved ' + candidate, updated=time.time())
+        run['phase'] = 'done'
+        return
     qa = run.get('qa') or {}
     contract = run.get('review_contract') or {}
     if (run.get('qa_finished') is not True or qa.get('status') != 'qa' or

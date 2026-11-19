@@ -1,6 +1,7 @@
 """Interactive project tasks, explicit routing and confirmed Codex suggestions."""
 import curses
 from pathlib import Path
+from dataclasses import asdict
 import signal
 import textwrap
 import time
@@ -182,6 +183,21 @@ class TasksUI:
 
     def body(self):
         rows = []
+        if self.mode == 'dispatch':
+            return [('Despachar', 'In progress', None),
+                    ('Para um agente · revisão pelo líder', None, 'single'),
+                    ('Orquestrar equipe · executor + QA', None, 'team')]
+        if self.mode == 'executors':
+            rows = [('Escolher executor · uma tarefa por execução', 'In progress', None),
+                    ('Somente sessões Codex ociosas em worktree limpa deste repositório.', None, None)]
+            if not self.executor_choices:
+                rows.append(('Nenhum executor elegível. Abra uma sessão dedicada em uma worktree limpa e isolada do projeto.', 'Blocked', None))
+            for index, executor in enumerate(self.executor_choices):
+                actor = executor['binding']
+                rows.extend([(actor['pane'] + ' · ' + actor['session'], None, index),
+                    ('Conta: ' + actor['account'], None, index),
+                    ('Worktree: ' + executor['worktree'], None, index)])
+            return rows
         if self.mode == 'clean_setup':
             return self.clean_setup.rows(self.session)
         if self.mode == 'confirm':
@@ -192,12 +208,20 @@ class TasksUI:
                 return self.clean.stuck_rows() if self.clean.stuck else [('Clean sessions is no longer stopped.', 'Done', None)]
             title = {'done': 'Confirm completion', 'send': 'Confirm send',
                      'queue': 'Conversation is working — confirm queue',
-                     'orchestrate': 'Confirm orchestration',
+                     'orchestrate': 'Confirm orchestration', 'single': 'Confirmar envio para um agente',
                      'apply': 'Confirm reviewed changes'}[offer['kind']]
             rows.append((title, 'In progress', None))
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
+            if offer['kind'] == 'single':
+                actor = offer['executor']['binding']
+                rows.extend([('Executor: ' + actor['pane'] + ' · ' + actor['session'], None, None),
+                    ('Conta do executor: ' + actor['account'], None, None),
+                    ('Worktree: ' + offer['executor']['worktree'], None, None),
+                    ('Revisão pelo líder · evidências e commit exato antes de aprovar.', None, None),
+                    ('A sessão escolhida será usada sem abrir outro agente. TODO continua aberto.', None, None),
+                    ('', None, None)])
             if offer['kind'] == 'orchestrate':
                 rows.extend([(str(self.repo), None, None),
                     ('Main conversation: ' + self.session.binding.session, None, None),
@@ -304,6 +328,9 @@ class TasksUI:
         if self.mode == 'confirm':
             buttons = [('Confirm y', 'y'), ('Cancel Esc', 'escape')]
             hint = 'y: confirm · Esc: cancel · j/k: scroll'
+        elif self.mode in ('dispatch', 'executors'):
+            buttons = [('Escolher Enter', 'enter'), ('Cancelar Esc', 'escape')]
+            hint = 'Setas/j/k: escolher · Enter/clique: continuar · Esc: cancelar'
         elif self.mode == 'clean_setup':
             buttons = [('Review Enter', 'enter'), ('Cancel Esc', 'escape')]
             hint = 'Tab/Up/Down: field · type to edit · Ctrl+U: clear · Enter: review'
@@ -311,7 +338,7 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         else:
-            buttons = [('Clean sessions c', 'c'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
+            buttons = [('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · C: opções de Clean sessions · PgUp/PgDn'
         packed, x, line = [], 0, 0
@@ -368,11 +395,23 @@ class TasksUI:
             raise RuntimeError('TODO.md is unavailable')
         self.snapshot.selected(self.selected)
 
-    def confirm(self, kind):
+    def confirm(self, kind, executor=None):
         self.require_selection()
-        if kind in ('send', 'orchestrate'):
+        if kind in ('send', 'orchestrate', 'single'):
             self.session.verify()
         self.pending = {'kind': kind, 'snapshot': self.snapshot, 'ids': set(self.selected)}
+        if kind == 'single':
+            from .mission_single import validate_executor, available
+            from .mission_launch import git
+            from .mission import RunStore
+            if len(self.selected) != 1:
+                raise RuntimeError('Para um agente: selecione uma tarefa por execução')
+            validate_executor(self.repo, asdict(self.session.binding), executor, base=git(self.repo, 'rev-parse', 'HEAD'))
+            available(RunStore(), self.repo, executor)
+            changes = pending(self.repo) or []
+            if any(path != 'TODO.md' for _, path in changes):
+                raise RuntimeError('Salve as alterações do projeto antes de despachar para a worktree existente')
+            self.pending['executor'] = executor
         if kind == 'orchestrate':
             from .mission import RunStore, blocking
             from .mission_scope import capture
@@ -443,6 +482,11 @@ class TasksUI:
                     return
                 raise RuntimeError('The conversation is working; wait until idle. Selection kept.') from error
             self.notice = 'Queued selected tasks to this Codex thread; they remain open.'
+        elif offer['kind'] == 'single':
+            from .mission import request
+            run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True,
+                          mode='single', executor=offer['executor'])
+            self.notice = 'Execução ' + run['id'][:8] + ' · preparando contrato · acompanhe em Progresso'
         elif offer['kind'] == 'orchestrate':
             from .mission import request
             self.busy('Saving checkpoint and starting the run…')
@@ -509,6 +553,25 @@ class TasksUI:
             if key in ('y', 'enter') and self.can_confirm:
                 self.execute()
             return True
+        if self.mode in ('dispatch', 'executors'):
+            if key in ('enter', ' '):
+                identities = getattr(self, 'visible_identifiers', [])
+                if not identities:
+                    return True
+                identity = identities[min(self.cursor, len(identities) - 1)]
+                if self.mode == 'dispatch':
+                    if identity == 'team':
+                        self.confirm('orchestrate')
+                    else:
+                        self.require_selection()
+                        if len(self.selected) != 1:
+                            raise RuntimeError('Para um agente: selecione uma tarefa por execução')
+                        from .mission_single import choices
+                        self.executor_choices, _ = choices(self.repo, asdict(self.session.binding))
+                        self.mode, self.cursor, self.scroll = 'executors', 0, 0
+                else:
+                    self.confirm('single', self.executor_choices[identity])
+            return True
         if self.mode == 'tasks' and key in ('enter', 'toggle', 'left', 'right'):
             identities = getattr(self, 'visible_identifiers', [])
             if identities:
@@ -569,6 +632,9 @@ class TasksUI:
             self.session.verify()
             self.clean_setup = Setup(self.session)
             self.mode, self.scroll = 'clean_setup', 0
+        elif key == 'p':
+            self.require_selection(); self.session.verify()
+            self.mode, self.cursor, self.scroll = 'dispatch', 0, 0
         elif key == 'o':
             self.confirm('orchestrate')
         elif key == 's':

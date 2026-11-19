@@ -175,7 +175,16 @@ def forward(store, run):
         body = {'run_id':run['id'],'event_id':event_id,'report':event['report'],'rejected':event.get('rejected'),
                 'notice':'Evidence awaits review. TODO was not changed.'}
         report = event['report'] if isinstance(event.get('report'), dict) else {}
-        if not event.get('rejected') and report.get('verdict') == 'pass' and report.get('candidate'):
+        from .mission_single import is_single
+        if is_single(run) and not event.get('rejected') and report.get('status') == 'result':
+            body['next'] = ('Inspect the complete result and run the declared tests as leader. Record observed evidence with '
+                'mission leader-review --run ' + run['id'] + ' --candidate FULL_SHA --file REVIEW.json --confirm '
+                '--state-dir ' + str(store.root) + '. Only then approve that exact candidate. No QA actor is assigned.')
+            body['leader_review_schema'] = {'run_id':run['id'], 'candidate':'Full exact reviewed commit SHA',
+                'result_version':run.get('result_version',0), 'verdict':'pass | fail',
+                'summary':'Leader findings and limitations', 'tests':['Command and independently observed result']}
+        if (not is_single(run) and event.get('role') == 'qa' and not event.get('rejected') and
+                report.get('verdict') == 'pass' and report.get('candidate')):
             body['next'] = ('QA passed. Approve now; Watchdog merges the work into the project branch and pushes it '
                             '(do not merge by hand or ask the user to review branches): ' + approve_command(store, run, report['candidate']))
         message = 'Watchdog native report\n'+json.dumps(body,ensure_ascii=False)
@@ -355,6 +364,9 @@ def handle(store, identity, role, proof, method, data, *, recheck=None):
 
 
 def review(store, identity, candidate, context=None):
+    from .mission_single import is_single
+    if is_single(store.load(identity)):
+        raise RuntimeError('Single mode requires mission leader-review with observed evidence; no QA actor is assigned')
     from . import mission_transport as transport
     with store.lock(identity):
         run=store.load(identity);transport.main_session(run);transport.source_current(run)
@@ -396,6 +408,11 @@ def participant_prompt(store, run, role):
     from .mission_launch import ROOT
     import shlex, sys
     identity=run['id'];part=run['participants'][role]
+    from .mission_single import is_single
+    review_policy = ('A result awaits leader review and approval; TODO remains open. ' if is_single(run) else
+                     'A result awaits main and independent QA; it does not complete TODO. ')
+    provisioning = ('Main supplies a NEW executor for each later task; the leader reviews results. ' if is_single(run) else
+        'Main supplies a NEW executor for every later task at the preceding accepted commit, a NEW QA conversation for each review, and dedicated disposable conversations for probes, never real task executors. ')
     command=[sys.executable,str(ROOT/'watchdog'),'mission']
     scope=['--run',identity,'--role',role,'--state-dir',str(store.root)]
     return (part['role_context']+'\nNative Mission Control participant. Only main talks to the user. '
@@ -403,12 +420,13 @@ def participant_prompt(store, run, role):
         'No source edits before an explicit queued contract. Queue delivery targets this exact thread/account. '
         'Never change CODEX_THREAD_ID, forge a peer, use pane text injection or operate Gossip. '
         'Reports require the supplied run/task/attempt IDs and a stable event_id UUID per report; '
-        'reuse that UUID on retry. A result awaits main and independent QA; it does not complete TODO.\n'
+        'reuse that UUID on retry. '+review_policy+'\n'
         f"Run: {identity}\nRole: {role}\nWorktree: {part['worktree']}\n"
         'Enroll: '+shlex.join(command+['enroll']+scope)+'\n'
         'Receive: '+shlex.join(command+['receive']+scope)+' --after 0\n'
         'Report: '+shlex.join(command+['report']+scope+['--file','/tmp/watchdog-'+role+'-'+identity+'-report.json'])+'\n'
-        'One executor conversation handles only one logical task and its corrections. Main supplies a NEW executor for every later task at the preceding accepted commit, a NEW QA conversation for each review, and dedicated disposable conversations for probes, never real task executors. Never transfer a full transcript or create actors yourself. '
+        'One executor conversation handles only one logical task and its corrections. '+provisioning+
+        'Never transfer a full transcript or create actors yourself. '
         'Use the scoped host bridge. Read only new native messages when notified; do not spin or repeat work. '
         'Do not close tasks or edit source outside the assigned contract.')
 
@@ -485,7 +503,13 @@ def host_bridge(store, identity, role, *, confirmed=False):
 def serve(store, identity, role, *, confirmed=False):
     bridge=host_bridge(store,identity,role,confirmed=confirmed)
     try:
-        while bridge.child.poll() is None:time.sleep(.5)
+        while bridge.child.poll() is None:
+            from .mission_single import is_single
+            from .mission import FINISHED
+            run = store.load(identity)
+            if is_single(run) and run['phase'] in FINISHED:
+                break  # Close only our bridge; the selected actor and pane stay alive.
+            time.sleep(.5)
     except KeyboardInterrupt:pass
     finally:
         bridge.close()

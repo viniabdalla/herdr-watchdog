@@ -60,9 +60,20 @@ def validate_brief(run, brief):
         raise RuntimeError('Brief run/project identity differs')
     if not re.fullmatch('[0-9a-f]{40}', brief.get('base_sha', '')):
         raise RuntimeError('Brief needs a full committed base SHA')
-    if set(brief.get('participants', {})) != {'worker', 'qa'}:
+    from .mission_single import is_single
+    single = is_single(run)
+    if brief.get('execution_mode', 'team') != run.get('execution_mode', 'team'):
+        raise RuntimeError('Brief execution mode differs from the confirmed run')
+    if single:
+        if (brief.get('transport', 'native') != 'native' or len(run['tasks']) != 1 or
+                set(brief.get('participants', {})) != {'worker'}):
+            raise RuntimeError('Single mode requires one native executor and one task')
+        part = brief['participants']['worker']; executor = run['executor']
+        if any(part.get(k) != executor.get(k) for k in ('worktree', 'branch')) or part.get('native') != executor['binding'] or part.get('account') != executor['binding']['account']:
+            raise RuntimeError('Brief executor differs from the confirmed recipient')
+    elif set(brief.get('participants', {})) != {'worker', 'qa'}:
         raise RuntimeError('Exactly one approved worker and QA are required')
-    for participant in brief['participants'].values():
+    for participant in (() if single else brief['participants'].values()):
         for field in ('account', 'executable'):
             value = participant.get(field)
             if not isinstance(value, str) or not Path(value).is_absolute():
@@ -232,6 +243,10 @@ def resumable_worktrees(run, store, brief):
 def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
     if not confirmed:
         raise RuntimeError('Explicit launch confirmation is required')
+    from .mission_single import is_single, launch_existing
+    if is_single(store.load(identity)):
+        if resume: raise RuntimeError('Existing executor attachment cannot be retried blindly')
+        return launch_existing(store, identity, brief, api=api)
     with store.lock(identity):
         run = store.load(identity)
         if not resume and (run['phase'] != 'requested' or run.get('operation')):
@@ -321,6 +336,11 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
 
 
 def open_run(run, api=None):
+    from .mission_single import is_single
+    if is_single(run):
+        from .mission_native import verify_participant
+        actor = verify_participant(run, 'worker')
+        return (api or Herdr(run.get('herdr_session'))).call('agent', 'focus', actor.pane)
     if not run.get('tab') or set(run['resources']) != {'worker', 'qa'}:
         raise RuntimeError('Execution tab has not been created completely')
     api = api or Herdr(run.get('herdr_session'))

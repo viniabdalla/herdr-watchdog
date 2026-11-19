@@ -12,6 +12,14 @@ from . import mission_transport as transport
 
 
 def template(run):
+    from .mission_single import is_single
+    if is_single(run):
+        executor = run['executor']
+        return {'execution_mode':'single', 'transport':'native', 'run_id':run['id'], 'repo':run['repo'],
+            'base_sha':git(run['repo'],'rev-parse','HEAD'),
+            'participants':{'worker':{'account':executor['binding']['account'], 'native':executor['binding'],
+                'worktree':executor['worktree'], 'branch':executor['branch'], 'purpose':'implementation'}},
+            'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]} for key in run['tasks']]}
     return {'transport':run.get('transport',{}).get('kind','native'),'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
         'participants':{role:{'account':run['main']['account'],
             'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
@@ -63,7 +71,7 @@ def main(argv):
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('list','inspect','template','launch','monitor','watch','poll','open',
-                                         'handoff-export','handoff-preview','handoff-adopt','participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','approve'))
+                                         'handoff-export','handoff-preview','handoff-adopt','participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','leader-review','approve'))
     parser.add_argument('--run')
     parser.add_argument('--repo',type=Path,default=Path.cwd())
     parser.add_argument('--state-dir',type=Path,help='Watchdog run ledger directory')
@@ -87,7 +95,7 @@ def main(argv):
         else:
             if not args.run:parser.error('--run is required')
             if args.action in ('dispatch','followup','accept-result') and not args.task:parser.error('--task is required')
-            if args.action in ('review','approve') and not args.candidate:parser.error('--candidate is required')
+            if args.action in ('review','leader-review','approve') and not args.candidate:parser.error('--candidate is required')
             if args.action in ('participant','native-host','enroll','receive','recover-unstarted','recover-identity','report') and not args.role:parser.error('--role is required')
             if args.action=='launch' and not args.brief:parser.error('--brief is required')
             if args.action=='report' and not args.file:parser.error('--file is required')
@@ -134,16 +142,22 @@ def main(argv):
             elif args.action=='dispatch':result=transport.dispatch(store,args.run,args.task)
             elif args.action=='followup':result=transport.followup(store,args.run,args.task,args.text)
             elif args.action=='report':result=transport.report(store,args.run,args.role,json.loads(args.file.read_text()))
+            elif args.action=='leader-review':
+                if not args.file:parser.error('--file is required for leader review evidence')
+                from .mission_single import review
+                result=review(store,args.run,args.candidate,json.loads(args.file.read_text()),confirmed=args.confirm)
             elif args.action=='review':result=transport.review(store,args.run,args.candidate,context=args.text)
             elif args.action in ('approve','accept-result'):
                 with store.lock(args.run):
                     result=store.load(args.run);main_session(result);source_current(result)
                     if args.action=='approve':
                         # Validate first (in memory), then integrate; nothing is saved if the merge fails.
+                        from .mission_single import is_single, verify_candidate
+                        if is_single(result):verify_candidate(result,args.candidate)
                         finish(result,args.candidate,confirmed=args.confirm)
                         from .mission_merge import integrate, summary
                         result['integration']=integrate(result,args.candidate)
-                        for task in result['tasks'].values():task['summary']='QA passed · '+summary(result['integration'])
+                        for task in result['tasks'].values():task['summary']=('Leader review passed' if is_single(result) else 'QA passed')+' · '+summary(result['integration'])
                     else:
                         task=result['tasks'][args.task]
                         if not args.confirm or not task.get('result') or task['state']!='review':

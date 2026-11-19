@@ -43,6 +43,10 @@ def rows(repo, store=None, *, progress=None, width=80):
                 result.append(('RUN '+run['id'][:8]+' · '+status['label']+(' · '+status['detail'] if status['detail'] else ''),status['color'],run))
             continue
         result.append(('RUN '+run['id'][:8]+' · '+status['label'].upper()+' · '+status['detail'],status['color'],run))
+        from .mission_single import is_single
+        if is_single(run):
+            actor = run.get('executor', {}).get('binding', {})
+            result.append(('Para um agente · Revisão do líder · ' + actor.get('pane', 'painel indisponível'), None, run))
         if run.get('reason') and run['phase']=='blocked':result.append((run['reason'],'blocked',run))
         if run.get('monitor_problem'):result.append(('Monitor: '+explain(run['monitor_problem']),'blocked',run))
         current={t.get('attempt_id') for t in run['tasks'].values()}|{t.get('gossip_task') for t in run['tasks'].values()}|{run.get('qa_task')}
@@ -74,7 +78,8 @@ def rows(repo, store=None, *, progress=None, width=80):
             result.append((role+' · '+part.get('model','Model unavailable')+' · '+
                            part.get('effort','Effort unavailable'),None,run))
             if part.get('problem'):result.append((role+': '+part['problem'],'blocked',run))
-        result.append(('Enter: open execution tab · x: close run' if run.get('tab') else 'x: close run',None,run))
+        result.append((('Enter: abrir painel do executor · x: fechar execução' if run.get('resources', {}).get('worker') else 'x: fechar execução') if is_single(run) else
+                       ('Enter: open execution tab · x: close run' if run.get('tab') else 'x: close run'),None,run))
         result.append(('',None,None))
     if finished>3:result.append((f'{finished-3} older finished run(s) hidden',None,None))
     if finished:result.append(('',None,None))

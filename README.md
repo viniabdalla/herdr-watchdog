@@ -96,7 +96,9 @@ links and keeps state; it does not close running panels or stop Herdr.
 
 ## Mission Control pilot
 
-Select open tasks in Tasks, press **o / Orchestrate**, and confirm the project,
+Select open tasks in Tasks and press **p / Despachar**. Choose **Para um agente**
+for one existing executor with leader review, or **Orquestrar equipe** for worker
+and QA. **o / Orchestrate** still opens the team confirmation directly. Confirm the project,
 main conversation, account and team. This queues a coordination request to that
 exact Codex thread. Send keeps its existing current-conversation behavior. The
 main prepares the task contracts; the launcher does not invent a plan. Neither
@@ -133,7 +135,7 @@ Each launch records an explicit model and reasoning effort. The brief template
 uses gpt-6.1-sol with medium effort for worker and routine QA, with actual CLI
 overrides; Progress displays those choices.
 
-The initial team is exactly one worker and one QA. Both terminals share one new
+In team mode, the initial team is exactly one worker and one QA. Both terminals share one new
 tab; each has its own worktree. Each later implementation task requires a NEW
 executor conversation at the preceding accepted commit; every review requires a
 NEW QA conversation. Probes require dedicated disposable conversations and must
@@ -144,12 +146,62 @@ reports by default; Gossip is an explicit legacy adapter. Existing runs retain
 their transport. See [Native transport](docs/native-transport.md) for delivery
 receipts, identity boundaries and the safe idle test path. Main reviews each result before dispatching the next
 contract. QA reviews the complete integrated candidate at its full commit SHA.
-The main/user approves completion separately. No command merges or pushes code.
+The main/user approves completion separately. `mission approve --confirm` integrates
+the approved exact candidate into the project branch and pushes to its configured
+upstream; a missing upstream leaves a local integration with an explicit notice.
 
 The operator lifecycle is documented in [Mission Control](docs/mission-control.md).
 The run ledger is in `$WATCHDOG_STATE_DIR/runs` (normally
 `~/.local/state/herdr-watchdog/runs`). Keep it: it contains exact native identities,
 source snapshots, assignments, results and owned resource mappings.
+
+
+### Para um agente
+
+Choose one open task, then **p → Para um agente**, select the executor by its
+verified panel, account and session, and confirm. It must be an idle Codex session
+dedicated to this task in a clean linked worktree of the same repository, at the
+project's committed HEAD. Main and executor must be distinct. No agent, pane or
+worktree is created or restarted by this mode. Existing conversations used for
+another task/review/purpose cannot be reused. Commit project code first; unrelated
+TODO changes retain the existing selected-scope rules.
+
+The leader receives the confirmed recipient, prepares the explicit contract with
+`mission template`, and launches it with `mission launch --brief FILE --confirm`.
+The native host attaches to the selected actor; enrollment and delivery keep the
+existing exact-thread, role, attempt and receipt checks. An uncertain attachment
+or queue delivery is retained for inspection and never blindly retried. Progress
+shows the chosen panel and **Aguardando revisão do líder**; Enter opens that
+existing executor. Closing the run preserves its actor, pane and evidence.
+
+After reading the complete result and independently running the relevant checks,
+the leader records observed evidence (values below are placeholders):
+
+```json
+{
+  "run_id": "RUN_UUID",
+  "candidate": "FULL_40_CHARACTER_COMMIT_SHA",
+  "result_version": 1,
+  "verdict": "pass",
+  "summary": "Findings from the leader's review, including limitations",
+  "tests": ["Command actually run and observed output/exit status"]
+}
+```
+
+Use the current `result_version` from `mission inspect`, then:
+
+```sh
+watchdog mission leader-review --run RUN_UUID --candidate FULL_SHA --file REVIEW.json --confirm
+watchdog mission approve --run RUN_UUID --candidate FULL_SHA --confirm
+```
+
+Both commands verify the selected task source; review also verifies worker
+commit ancestry and clean HEAD. Approval rechecks that same HEAD and requires a
+passing leader review for the exact commit, current result version and current
+leader identity. Follow-ups and newer reports invalidate earlier reviews. A
+failed review blocks approval. Sending, reviewing and approving leave TODO open
+until the user's separate acceptance. Ledgers without `execution_mode: single`
+retain the original independent-QA requirement, including legacy runs.
 
 
 ## Leader handoff / Clean sessions

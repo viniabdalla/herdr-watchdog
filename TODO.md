@@ -49,9 +49,10 @@ os pedidos e as conclusões anteriores foram preservados na migração.
   Origem: pedido-humano
   Execução:
     Resumo: oferecer um modo econômico explícito com um único executor e revisão pelo líder, reduzindo o consumo de cota.
-    O lançador atual exige executor e QA; o suporte a um único executor ainda precisa ser implementado. Definir esse modo e seus critérios de revisão sem afrouxar a validação atual nem afirmar que o suporte já existe.
+    O fluxo de equipe mantém executor e QA. O modo Para um agente foi implementado: seleciona um executor Codex ocioso pelo painel em uma worktree limpa do projeto; o líder registra revisão com evidências para o commit e a versão exatos do resultado. Aguarda aceite do usuário.
     Aceite: escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
     Proposta de interface: ação Despachar com opções Para um agente e Orquestrar equipe. Na primeira, escolher o executor identificado pelo painel, confirmar o destinatário e acompanhar o resultado em Progresso. Preservar o envio simples já existente.
+    Entrega verificada em 2026-11-18: menu Despachar, seleção por painel/conta/sessão, confirmação separada e Progresso com revisão pelo líder; uma tarefa lógica por execução. Equipe e envio simples preservados. 385 testes sem falhas, 7 opt-in ignorados; teclado/mouse e fluxo em PTY real, integração Git temporária com rejeição de aprovação sem revisão. Painel real recarregado e menu conferido nos terminais existentes. A lista ao vivo não encontrou executor elegível; falta uma sessão dedicada ociosa em worktree limpa para validar uma execução real de modelo. Tarefa permanece aberta para aceite.
   Aceite:
     escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
 - [ ] Abrir uma auditoria independente do projeto

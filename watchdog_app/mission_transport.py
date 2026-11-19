@@ -157,6 +157,9 @@ def register(run, store, peers):
 
 
 def assignment(run, task_id):
+    from .mission_single import is_single
+    review_policy = ('Result waits for leader review and approval; TODO remains unchanged.' if is_single(run) else
+                     'Result waits for independent QA and main approval; TODO remains unchanged.')
     contract = next(t for t in run['brief']['tasks'] if t['id'] == task_id)
     part = run['participants']['worker']
     return json.dumps({'run_id': run['id'], 'task_id': task_id, 'title': run['tasks'][task_id]['title'],
@@ -164,7 +167,7 @@ def assignment(run, task_id):
         **contract, 'return_to': {'main':run.get('main',{}), ('transport' if native_backend.enabled(run) else 'gossip'):run['transport']},
         'instructions':'Implement only this contract. Report concrete blockers. Return ordered commit SHAs and tests. '
             'No additional agents, global changes, target branch merges or pushes. Keep task ID for follow-ups. '
-            'Result waits for independent QA and main approval; TODO remains unchanged.',
+            + review_policy,
         'report_schema':{'run_id':run['id'],'task_id':task_id,'status':'working | blocked | result',
                          'summary':'Concrete progress or blocker','commits':['40-character SHA for result'],
                          'tests':['command and result for result']}})
@@ -345,6 +348,9 @@ def verify_result_commits(run, candidate):
 
 
 def review(store, identity, candidate, context=None):
+    from .mission_single import is_single
+    if is_single(store.load(identity)):
+        raise RuntimeError('Single mode requires mission leader-review with observed evidence; no QA actor is assigned')
     if native_backend.enabled(store.load(identity)): return native_backend.review(store, identity, candidate, context)
     with store.lock(identity):
         run=store.load(identity);main_session(run);source_current(run);verify_participant(run,'qa')

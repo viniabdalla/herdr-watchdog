@@ -39,7 +39,8 @@ def integrate(run, candidate, *, push=True):
                                (merged.stderr or merged.stdout).strip()[-400:])
         how = 'fast-forward'
     else:
-        message = 'Merge Watchdog run ' + run['id'][:8] + ' (QA passed ' + candidate[:8] + ')\n\n' + titles
+        review_label = 'Leader review passed' if run.get('execution_mode') == 'single' else 'QA passed'
+        message = 'Merge Watchdog run ' + run['id'][:8] + ' (' + review_label + ' ' + candidate[:8] + ')\n\n' + titles
         merged = git(repo, 'merge', '--no-ff', '-m', message, candidate, check=False)
         if merged.returncode:
             conflicts = out(repo, 'diff', '--name-only', '--diff-filter=U').split()
