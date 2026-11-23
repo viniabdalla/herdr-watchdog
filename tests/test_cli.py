@@ -65,3 +65,30 @@ class CliTests(unittest.TestCase):
                     self.assertEqual(terminal.process.wait(timeout=3), 0)
                 finally:
                     terminal.close()
+
+    def test_project_setup_commands_require_explicit_project_and_action(self):
+        for command in ('project-instructions','project-plan','artifacts'):
+            result=subprocess.run(['python3','-B',str(ROOT/'watchdog'),command,'--help'],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('--repo',result.stdout)
+            result=subprocess.run(['python3','-B',str(ROOT/'watchdog'),command],capture_output=True,text=True)
+            self.assertEqual(result.returncode,2)
+
+    def test_instruction_cli_requires_confirmed_unchanged_displayed_preview(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            repo=Path(folder);preview=repo/'preview.json'
+            env=dict(os.environ,WATCHDOG_STATE_DIR=str(repo/'state'))
+            def run(*args):
+                return subprocess.run(['python3','-B',str(ROOT/'watchdog'),'project-instructions',*args,
+                                       '--repo',str(repo)],env=env,capture_output=True,text=True)
+            result=run('preview');self.assertEqual(result.returncode,0,result.stderr)
+            preview.write_text(result.stdout)
+            self.assertEqual(run('apply','--preview-file',str(preview)).returncode,1)
+            self.assertFalse((repo/'AGENTS.md').exists())
+            result=run('apply','--preview-file',str(preview),'--confirm')
+            self.assertEqual(result.returncode,0,result.stderr);self.assertIn('+++ AGENTS.md',result.stderr)
+            self.assertEqual(json.loads(result.stdout)['status'],'current')
+            self.assertEqual(run('apply','--preview-file',str(preview),'--confirm').returncode,1)
+            self.assertIn('Agent reading: manual-unobserved',run('check','--human').stdout)

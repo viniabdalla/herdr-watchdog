@@ -39,14 +39,28 @@ def bar(done, total, width):
 
 
 def artifact_path(repo, name):
-    path = (repo / name).resolve()
-    if not path.is_relative_to(repo) or not path.is_file():
+    from watchdog_app.artifacts import safe_path
+    path = safe_path(repo, name)
+    if path is None or not path.is_file():
         raise ValueError('Artifact must be an existing file inside this project')
     return path
 
 
-def contents(repo, mode, width):
+def contents(repo, mode, width, binding_file=None):
     if mode == 'artifacts':
+        if binding_file:
+            from watchdog_app.actions import Session
+            from watchdog_app.artifacts import discover
+            evidence = discover(Session.for_panel(binding_file,repo),repo)
+            rows = [('AI tool evidence · current file bytes have independent provenance',None),('',None)]
+            for item in evidence['artifacts']:
+                target = item['path'] if item['state']=='present' else None
+                rows.extend([(item['path']+' · '+item['summary'],target),
+                             ('  '+item['evidence'][-1],target),('',None)])
+            for issue in evidence['issues']:
+                rows.append((issue,None))
+            if evidence['incomplete']:rows.append(('Partial transcript; incomplete records withheld',None))
+            return rows
         entries = json.loads((repo / 'docs/preview-artifacts.json').read_text())
         rows = [('Manual artifact list — automatic tracking not connected', None), ('', None)]
         for item in entries:
@@ -95,7 +109,7 @@ def browse(path, client_id):
                    stderr=subprocess.PIPE, text=True)
 
 
-def panel(screen, repo, mode, yazi_client_id=None):
+def panel(screen, repo, mode, yazi_client_id=None, binding_file=None):
     try:
         curses.curs_set(0)
     except curses.error:
@@ -111,8 +125,8 @@ def panel(screen, repo, mode, yazi_client_id=None):
         draw_text(screen, 0, 0, 'WATCHDOG MVP / ' + mode.upper(), curses.A_BOLD)
         draw_text(screen, 1, 0, repo.name + ' · disposable preview')
         try:
-            source = contents(repo, mode, width)
-        except (OSError, ValueError, KeyError, TypeError) as error:
+            source = contents(repo, mode, width, binding_file)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
             source = [('Cannot read source: ' + str(error), None)]
         rows = []
         for text, path in source:
@@ -162,9 +176,13 @@ def panel(screen, repo, mode, yazi_client_id=None):
             path = rows[selected][1]
             if path:
                 try:
-                    browse(artifact_path(repo, path), yazi_client_id)
+                    receiver = yazi_client_id
+                    if binding_file:
+                        from watchdog_app.artifacts import linked_client
+                        receiver = linked_client(binding_file, repo, yazi_client_id)
+                    browse(artifact_path(repo, path), receiver)
                     message = 'Revealed in Files'
-                except (OSError, ValueError, subprocess.SubprocessError) as error:
+                except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
                     message = str(error)
 
 
@@ -183,7 +201,7 @@ def main():
         from watchdog_app.progress_ui import run
         run(args.repo.resolve(), args.binding_file)
         return
-    curses.wrapper(panel, args.repo.resolve(), args.mode, args.yazi_client_id)
+    curses.wrapper(panel, args.repo.resolve(), args.mode, args.yazi_client_id, args.binding_file)
 
 
 if __name__ == '__main__':

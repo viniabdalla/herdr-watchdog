@@ -109,7 +109,7 @@ def ensure_panels(api, state, save, *, roles=('tasks', 'progress', 'artifacts', 
         else:
             argv = [sys.executable, str(ROOT / 'watchdog'), 'panel', role, '--repo',
                     state['repo'], '--yazi-client-id', state['yazi_client_id']]
-            if role in ('tasks', 'progress', 'agents') and state.get('binding_file'):
+            if role in ('tasks', 'progress', 'agents', 'artifacts') and state.get('binding_file'):
                 argv += ['--binding-file', state['binding_file']]
         pane['launch_state'] = 'starting'
         save()
@@ -187,6 +187,15 @@ def open_selector(api, repo, binding=None, *, pane=None, session=None, preset=No
 def main(argv=None):
     os.umask(0o077)
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ['project-instructions']:
+        from .project_instructions import main as instructions_main
+        return instructions_main(argv[1:])
+    if argv[:1] == ['project-plan']:
+        from .project_plans import main as plan_main
+        return plan_main(argv[1:])
+    if argv[:1] == ['artifacts']:
+        from .artifacts import main as artifacts_main
+        return artifacts_main(argv[1:])
     if argv[:1] == ['audit']:
         from .audit import main as audit_main
         return audit_main(argv[1:])

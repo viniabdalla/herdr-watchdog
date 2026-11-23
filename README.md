@@ -426,3 +426,22 @@ antigo→novo fica no TODO; IDs aposentados não podem ser reutilizados. Execuç
 afetadas em aberto impedem a troca e seus registros históricos ficam intactos.
 Editar diretamente um ID não faz correspondência por título: contratos que o
 referenciam acusam identidade ausente, exigindo revisão explícita.
+
+### Explicit project preparation and evidence
+
+- [Project instructions](docs/project-instructions.md): `watchdog project-instructions
+  preview|check|apply --repo PATH` previews managed AGENTS.md/CLAUDE.md changes and
+  applies only an explicitly confirmed, unchanged preview. Actual agent reading
+  remains a separate observed/manual check.
+- [Project plans](docs/project-plans.md): `watchdog project-plan --repo PATH --source
+  plan.json --format watchdog-plan-v1` emits bounded, non-authorizing contracts from
+  version-1 TODO identities. `--human` displays the preview.
+- [Artifact discovery](docs/artifact-discovery.md): bound panels discover successful
+  tool paths with source references and current filesystem state. Reveal stays in
+  the exact linked Yazi Files pane.
+- [Project progress history](docs/project-progress-history.md): durable observed
+  UUID transitions, explicit recovery after save failures, and recent events in Progress.
+- [Curator validation](docs/curator-validation.md): human-confirmed proposals,
+  source/recipient staleness checks, and honest real-source replay limitations.
+- [Real-run evidence](docs/verification-real-run-2026-11-23.md): read-only observer,
+  observed launch stages, and gates still to be recorded by the coordinator.

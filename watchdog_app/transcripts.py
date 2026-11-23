@@ -87,3 +87,27 @@ class Reader:
         if len(chunks) > 1: self.cursor = self.offset-len(tail)
         batch.incomplete = bool(self.pending) or self.dropping
         return batch
+
+
+def evidence_tail(path, *, limit=4*1024*1024):
+    """Bounded complete records with byte references; partial/malformed data labelled."""
+    import hashlib
+    records=[];issues=[]
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    with os.fdopen(fd,'rb') as stream:
+        info=os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode):raise RuntimeError('Transcript must be regular')
+        start=max(0,info.st_size-limit);stream.seek(start)
+        if start:stream.readline();issues.append('bounded tail; older evidence omitted')
+        offset=stream.tell();raw=stream.read(limit)
+    incomplete=bool(raw and not raw.endswith(b'\n'))
+    for line in raw.splitlines(keepends=True):
+        ref='byte:'+str(offset)+':sha256:'+hashlib.sha256(line).hexdigest();offset+=len(line)
+        if not line.endswith(b'\n'):continue
+        try:
+            row=json.loads(line)
+            if not isinstance(row,dict):raise ValueError('non-object')
+            records.append((row,ref))
+        except (ValueError,UnicodeError,RecursionError):issues.append('malformed record at '+ref)
+    return dict(records=records,incomplete=incomplete,issues=issues,digest=hashlib.sha256(raw).hexdigest(),
+                start=start,identity=(info.st_dev,info.st_ino),size=info.st_size)

@@ -89,6 +89,13 @@ def rows(repo, store=None, *, progress=None, width=80):
         done=sum(t.done for t in snapshot.tasks)
         result.extend([('PROJECT · TODO.md',None,None),(f'{done}/{len(snapshot.tasks)} tasks complete',None,None),
             ('Dispatch and run approval do not change project TODO.',None,None)])
+        if snapshot.format_version == 1:
+            from .project_history import observe
+            history = observe(snapshot)
+            result.append(('PROJECT HISTORY · observed transitions (TODO is authoritative)',None,None))
+            for event in history['events'][-12:]:
+                result.append((event['observed_at']+' · '+event['id'][:8]+' · '+
+                               event['from']+' → '+event['to']+' · '+event['evidence'],None,None))
     except (OSError,RuntimeError,UnicodeError) as error:
         result.append(('PROJECT · '+str(error),'blocked',None))
     return result

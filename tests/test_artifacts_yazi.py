@@ -84,7 +84,9 @@ class ArtifactLinkTests(unittest.TestCase):
             empty = repo / 'empty'
             empty.mkdir()
             client = str(time.time_ns())
-            env = dict(os.environ, TERM='xterm-256color',
+            runtime = repo / 'runtime'
+            runtime.mkdir(mode=0o700)
+            env = dict(os.environ, TERM='xterm-256color', XDG_RUNTIME_DIR=str(runtime),
                        YAZI_CONFIG_HOME=str(repo / 'config'),
                        XDG_STATE_HOME=str(repo / 'state'),
                        XDG_CACHE_HOME=str(repo / 'cache'))

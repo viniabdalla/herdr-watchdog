@@ -225,16 +225,16 @@ def change(snapshot, actions, root=None):
                 else:
                     inserts.setdefault('Next', []).append('- [ ] ' + text + newline)
                 continue
-            if kind not in ('done', 'blocked', 'start', 'next'):
+            if kind not in ('done', 'blocked', 'start', 'next', 'reopen'):
                 raise RuntimeError('Unknown task action')
             key = action['id']
-            if key in touched or key not in by_id or by_id[key].done:
+            if key in touched or key not in by_id or (by_id[key].done != (kind == 'reopen')):
                 raise RuntimeError('Task action conflicts with the current selection')
             touched.add(key)
             task = by_id[key]
             removed.update(range(task.start, task.end))
             title = task.title.split(' — Blocked: ', 1)[0]
-            section = {'done': 'Done', 'blocked': 'Blocked', 'start': 'In progress', 'next': 'Next'}[kind]
+            section = {'done': 'Done', 'blocked': 'Blocked', 'start': 'In progress', 'next': 'Next', 'reopen': 'Next'}[kind]
             if kind == 'blocked':
                 title += ' — Blocked: ' + single_line(action['reason'], 'Blocker')
             if kind == 'done':
@@ -282,7 +282,7 @@ def change(snapshot, actions, root=None):
                     ending = '\r\n' if metadata[index].endswith('\r\n') else '\n'
                     metadata[index] = 'atualizado: ' + date.today().isoformat() + ending
             result = ''.join(metadata)
-        return _replace_locked(snapshot, result.encode('utf-8'), root)
+        return _replace_locked(snapshot, result.encode('utf-8'), root, actions=actions)
 
 
 def replace(snapshot, raw, *, root=None):
@@ -291,9 +291,11 @@ def replace(snapshot, raw, *, root=None):
         return _replace_locked(snapshot, raw, root)
 
 
-def _replace_locked(snapshot, raw, root):
+def _replace_locked(snapshot, raw, root, actions=()):
     Snapshot.parse(snapshot.repo, raw)
     snapshot.assert_current()
+    from . import project_history
+    project_history.prepare(snapshot, raw, root, actions)
     result = raw.decode('utf-8')
     backup = root / 'todo-backups' / hashlib.sha256(str(snapshot.repo).encode()).hexdigest()
     backup.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -335,4 +337,9 @@ def _replace_locked(snapshot, raw, root):
             preserve(temporary, backup)
         else:
             Path(temporary).unlink(missing_ok=True)
-    return Snapshot.read(snapshot.repo)
+    current = Snapshot.read(snapshot.repo)
+    try:
+        project_history.finish(current, root)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise RuntimeError("TODO saved; project history pending recovery: " + str(error)) from error
+    return current

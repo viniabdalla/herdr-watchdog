@@ -1,0 +1,41 @@
+# Project instructions
+
+`watchdog project-instructions preview|check|apply --repo PATH` targets only the
+explicitly selected existing project, and only AGENTS.md and CLAUDE.md. It uses
+TODO format version 1; it neither creates a second task list nor changes TODO.md.
+The project leader owns its content. A worker contract can further restrict edits.
+
+Preview is read-only and includes each file's status, SHA-256, complete proposed
+content and exact unified diff. `--human` renders the diff directly. Check reports
+absent/outdated/current per file. Preserve the JSON preview for confirmation:
+
+```sh
+watchdog project-instructions preview --repo "$project_dir" > /tmp/instructions-preview.json
+watchdog project-instructions preview --repo "$project_dir" --human
+watchdog project-instructions apply --repo "$project_dir" --preview-file /tmp/instructions-preview.json --confirm
+watchdog project-instructions check --repo "$project_dir" --human
+```
+
+Apply displays the supplied diff before writing and requires `--confirm`. It
+recomputes the whole preview under the project lock, so another project, modified
+proposal, changed user rules or stale source fails closed. User text outside the
+managed markers stays byte-for-byte intact, including CRLF and trailing content.
+A second installation is a no-op. Unsupported/fenced/ambiguous marker boundaries,
+unmanaged conflicting copies, symlinks and hard links require manual resolution.
+Concurrent saves are detected at atomic exchange; competing versions are retained
+in Watchdog state. Each file is installed independently. A later-file failure
+reports partial installation and requires a fresh preview rather than rolling back
+a user's concurrent save. A process crash can likewise require preview/check again.
+
+The managed block explains a plain title and Resumo; technical details belong in
+Execução and evidence/criteria in Aceite. Canonical UUIDs survive moves, corrections,
+completion and reopening. It explains open/in-progress/blocked/done states and the
+Origem distinction between human requests, agent suggestions and unconfirmed legacy
+work. Dispatch and approval do not themselves complete TODO work.
+
+After installation, the real agent must read the block in its actual conversation
+and acknowledge version 1, how it records a request during the conversation, how it
+labels a suggestion, and what evidence permits completion. Save that acknowledgement
+as a source reference. `agent_reading: manual-unobserved` is intentional: installation
+and fixture tests cannot attest model reading. This run installed no real project's
+instructions; that actual-agent reading check remains manual/unperformed.

@@ -18,9 +18,15 @@ def atomic(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.with_suffix('.tmp.' + str(os.getpid()))
     try:
-        temporary.write_text(json.dumps(value, indent=2))
+        with temporary.open("w") as stream:
+            stream.write(json.dumps(value, indent=2))
+            stream.flush()
+            os.fsync(stream.fileno())
         temporary.chmod(0o600)
         temporary.replace(path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(directory)
+        finally: os.close(directory)
     finally:
         temporary.unlink(missing_ok=True)
 
