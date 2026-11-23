@@ -98,7 +98,35 @@ class TasksUITests(unittest.TestCase):
         self.assertTrue(terminal.wait_for('No conversation binding'), terminal.output.decode(errors='replace'))
         self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
 
-    def bound_terminal(self, with_reply=False, with_agents=False):
+    def test_audit_action_selects_account_model_then_requires_explicit_confirmation(self):
+        terminal = self.bound_terminal(with_audit=True)
+        self.assertTrue(terminal.wait_for('Auditoria A'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'A')
+        self.assertTrue(terminal.wait_for('Escolha a conta Codex'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'\r')
+        self.assertTrue(terminal.wait_for('Modelo de teste'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('não listado'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'\r')
+        self.assertTrue(terminal.wait_for('nova auditoria'), terminal.output.decode(errors='replace'))
+        self.assertFalse((self.repo/'audit-open.json').exists())
+        os.write(terminal.master, b'y')
+        self.assertTrue(terminal.wait_for('test-audit'), terminal.output.decode(errors='replace'))
+        value = json.loads((self.repo/'audit-open.json').read_text())
+        self.assertTrue(value['confirmed']); self.assertEqual(value['model'], 'fixture-model')
+        self.assertEqual(value['repo'], str(self.repo))
+        self.assertEqual((self.repo/'TODO.md').read_text(), self.original)
+
+    def test_cancel_audit_does_not_launch_or_change_tasks(self):
+        terminal = self.bound_terminal(with_audit=True)
+        self.assertTrue(terminal.wait_for('Auditoria A'))
+        os.write(terminal.master, b'A')
+        self.assertTrue(terminal.wait_for('Escolha a conta Codex'))
+        os.write(terminal.master, b'\x1b')
+        self.assertTrue(terminal.wait_for('Cancelled'))
+        self.assertFalse((self.repo/'audit-open.json').exists())
+        self.assertEqual((self.repo/'TODO.md').read_text(), self.original)
+
+    def bound_terminal(self, with_reply=False, with_agents=False, with_audit=False):
         self.terminal.close()
         history = self.repo / 'record.jsonl'
         history.write_text(json.dumps({'type': 'event_msg', 'timestamp': '2026-11-16T10:00:00Z',
@@ -106,6 +134,16 @@ class TasksUITests(unittest.TestCase):
         binding = self.repo / 'binding.json'
         binding.write_text(json.dumps({'repo':str(self.repo),'binding':asdict(FakeBinding(history=str(history)))}))
         script = BOUND_SCRIPT
+        if with_audit:
+            script = script.replace('from watchdog_app.tasks_ui import run', """from watchdog_app import audit
+from dataclasses import asdict
+audit.accounts=lambda session:[session.binding.account]
+audit.models=lambda *a:[{'model':'fixture-model','label':'Modelo de teste'}]
+def launched(session,account,model,**kw):
+ (repo/'audit-open.json').write_text(json.dumps({'account':account,'model':model,'confirmed':kw['confirmed'],'recipient':asdict(session.binding),'repo':str(session.repo)}))
+ return {'audit_id':'test-audit'}
+audit.launch=launched
+from watchdog_app.tasks_ui import run""")
         if with_agents:
             script = script.replace('from watchdog_app.tasks_ui import run', "from watchdog_app import panes\ndef opened(file, project, role):\n (repo/'agents-open.json').write_text(json.dumps({'file':str(file),'role':role}))\n return {'pane_id':'test-agents'}\npanes.open_pane=opened\nfrom watchdog_app.tasks_ui import run")
         terminal = Terminal(['python3','-c',script,str(self.repo),str(binding),str(ROOT/'tests')],

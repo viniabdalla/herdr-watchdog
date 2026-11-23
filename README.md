@@ -82,6 +82,42 @@ account). It makes model requests; it does not inspect code or prove a completio
 claim. Missing mention is not treated as a blocker. Invalid/conflicting proposals
 are withheld visibly. New replies or task edits invalidate old confirmations.
 
+## Independent project audit
+
+In Tasks, **Auditoria A** opens a separate read-only audit without selecting TODO
+items. Choose a verified Codex account, a model listed by that account's provider,
+and confirm. GPT Astra 6.1 is preferred only when actually listed; otherwise you
+must choose another model. The new Herdr tab starts in the project directory and
+runs a host wrapper with a new Codex app-server session. It displays audit output,
+not an interactive Codex TUI. No leader conversation is copied or resumed.
+
+The provider must confirm the requested model, new empty session, cwd, read-only
+sandbox and approval `never` before execution. Connected tools and account lifecycle hooks are disabled; hooks are disabled before
+app-server initialization. Audit entrypoints verify the original leader without
+reattaching or rewriting its binding.
+Press **A** again to follow running/completed/failed/uncertain status, effective
+model and report path. Reports return to the exact original verified Codex leader;
+a busy leader requires explicit **Entregar ao líder original** after it becomes
+idle. Uncertain deliveries are retained and never automatically resent. A changed
+project keeps the report as historical evidence without delivery. Audits never
+close tasks, accept missions, merge, push or assume leadership.
+
+```sh
+watchdog audit models --account /absolute/codex-account
+watchdog audit open --repo /project --binding-file /watchdog/state/binding.json \
+  --account /absolute/codex-account --model MODEL_FROM_LIST --confirm
+watchdog audit list --repo /project
+watchdog audit inspect --audit-id UUID
+watchdog audit deliver --audit-id UUID  # explicit retry only for busy/unavailable recipient
+```
+
+`--executable` selects an installed Codex binary; the default uses the installed
+mise Codex path, refusing the mise shim itself. `--state-dir` overrides the audits
+folder (default `$WATCHDOG_STATE_DIR/audits`). Passing the same `--audit-id` to
+`open` never launches twice. Read the [audit design](docs/superpowers/specs/2026-11-23-independent-audit-design.md)
+and [verification limits](docs/verification-audit-2026-11-23.md) before treating
+mocked provider evidence as a live-model demonstration.
+
 ## Current limits
 
 The launcher, verified binding, four layouts and artifact-to-Yazi link work.
