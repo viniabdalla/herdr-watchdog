@@ -358,9 +358,17 @@ def handle(store, identity, role, proof, method, data, *, recheck=None):
             return {'published':True,'transport':'native','role':role,'session':part['native']['session']}
         if not part.get('enrolled'):raise RuntimeError('Native role must enroll first')
         if method=='poll' and set(data)=={'after'} and type(data['after']) is int and data['after']>=0:
-            return [dict(seq=i+1,attempt_id=key,contract=d['payload'],state=d['state'])
-                    for i,(key,d) in enumerate(run.get('deliveries',{}).items())
-                    if i>=data['after'] and d['role']==role][:1]
+            for i,(key,d) in enumerate(run.get('deliveries',{}).items()):
+                if i<data['after'] or d['role']!=role:continue
+                task_id=d.get('payload',{}).get('task_id')
+                if role=='qa':
+                    if key!=run.get('qa_task') or run.get('qa_finished'):continue
+                else:
+                    task=run['tasks'].get(task_id,{})
+                    if key!=task.get('attempt_id') or task.get('result') or task.get('state')!='working':continue
+                if not delivery_receipt(run,role,key,task_id=task_id)[0]:continue
+                return [dict(seq=i+1,attempt_id=key,contract=d['payload'],state=d['state'])]
+            return []
         if method!='report' or set(data)!={'report'}:raise RuntimeError('Unsupported native operation or data')
         report=data['report']
         if not isinstance(report,dict) or len(json.dumps(report).encode())>LIMIT//2:

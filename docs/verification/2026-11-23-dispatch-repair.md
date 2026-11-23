@@ -33,3 +33,9 @@ Suíte do controlador em 2026-11-23: `python3 -B -m unittest discover -s tests -
 — 441 testes, sem falhas, 7 ignorados (58,626 s). Seis testes novos de manutenção
 passaram. Os testes de escopo legados e agrupamento também foram repetidos após
 preservar o agrupamento explícito na API e confirmar o pacote pela interface.
+
+Na revisão real do novo QA, Receive retornou um contrato da geração anterior.
+Corrigido por filtro da tentativa ainda ativa, destinatário, geração e receipt
+confirmado; registros históricos permanecem intactos. Duas regressões observaram
+RED antes do ajuste e GREEN depois. Suíte final do controlador: 443 testes,
+sem falhas, 7 ignorados (58,171 s); transporte nativo: 25 passaram.

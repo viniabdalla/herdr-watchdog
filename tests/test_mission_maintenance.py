@@ -58,6 +58,20 @@ class MaintenanceTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):renew_qa(self.store,self.identity,self.base,confirmed=True,api=api)
         self.assertEqual(len(api.calls),calls)
 
+    def test_renewed_qa_cannot_receive_previous_generations_contract(self):
+        r=self.ready()
+        # Register a new identity as bootstrap would; preserve the old delivery.
+        from dataclasses import asdict
+        from test_actions import FakeBinding
+        import uuid
+        actor=FakeBinding(session=str(uuid.uuid4()),account=r['participants']['qa']['account'],
+                          pane=r['resources']['qa']['pane_id'],terminal=r['resources']['qa']['terminal_id'])
+        r['participants']['qa'].update(native=asdict(actor),generation=str(uuid.uuid4()))
+        r['qa_finished']=False  # Exercise recipient/generation, not just the terminal-review filter.
+        self.store.save(r)
+        self.assertEqual(native.handle(self.store,self.identity,'qa',self.proof('qa'),'poll',{'after':0}),[])
+        self.assertTrue(self.store.load(self.identity)['deliveries'])
+
     def test_new_qa_requires_confirmation_and_finished_review(self):
         from watchdog_app.mission_maintenance import renew_qa
         r=self.ready(); r['qa_finished']=False; self.store.save(r)
@@ -105,6 +119,17 @@ class TeamBundleTests(unittest.TestCase):
     proof = native_tests.NativeTransportTests.proof
     record = native_tests.NativeTransportTests.record
     report = native_tests.NativeTransportTests.report
+
+    def test_receive_returns_only_current_authenticated_attempt(self):
+        self.run['grouping']='together';self.store.save(self.run)
+        r=transport.dispatch(self.store,self.identity,self.task)
+        old=r['tasks'][self.task]['attempt_id']
+        r=transport.followup(self.store,self.identity,self.task,'New current attempt')
+        current=r['tasks'][self.task]['attempt_id']
+        records=native.handle(self.store,self.identity,'worker',self.proof(),'poll',{'after':0})
+        self.assertEqual([entry['contract']['attempt_id'] for entry in records],[current])
+        self.assertNotEqual(old,current)
+        self.assertIn(old,self.store.load(self.identity)['deliveries'])
 
     def test_team_bundle_dispatch_and_followup_pin_all_members(self):
         self.run['grouping']='together';self.run['brief']['grouping']='together';self.store.save(self.run)
