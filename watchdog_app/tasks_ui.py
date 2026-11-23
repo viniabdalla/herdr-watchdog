@@ -110,6 +110,12 @@ class TasksUI:
             self.review_status = 'Codex: unbound · open with watchdog to review or send'
 
     def refresh(self):
+        if self.mode == 'audit' and time.monotonic() >= getattr(self, 'audit_refresh', 0):
+            self.audit_refresh = time.monotonic() + 2
+            try:
+                self.audit.refresh(self.session)
+            except (OSError, RuntimeError, ValueError, KeyError) as error:
+                self.notice = str(error)
         try:
             if self.binding_file and not self.session.binding and time.monotonic()>=self.next_reconnect:
                 self.next_reconnect=time.monotonic()+2
@@ -146,7 +152,7 @@ class TasksUI:
                     if self.pending['kind'] in ('orchestrate', 'fresh'):
                         self.pending['changes'] = pending(self.repo)
                     self.notice = 'TODO changed elsewhere; selected tasks unchanged, confirmation updated'
-                elif self.mode not in ('tasks', 'clean_setup'):
+                elif self.mode not in ('tasks', 'clean_setup', 'audit'):
                     self.notice = 'A selected task changed; confirmation cancelled. Select again.'
                     self.mode, self.pending = 'tasks', None
             self.snapshot = snapshot
@@ -183,6 +189,8 @@ class TasksUI:
 
     def body(self):
         rows = []
+        if self.mode == 'audit':
+            return self.audit.rows()
         if self.mode == 'dispatch':
             return [('Despachar', 'In progress', None),
                     ('Para um agente · revisão pelo líder', None, 'single'),
@@ -336,7 +344,10 @@ class TasksUI:
             return
         put(screen, 2, self.review_status)
         put(screen, 3, self.notice, curses.A_BOLD)
-        if self.mode == 'confirm':
+        if self.mode == 'audit':
+            buttons = [('Confirmar y', 'y'), ('Escolher Enter', 'enter'), ('Cancelar Esc', 'escape')]
+            hint = 'Setas/j/k: escolher · Enter/clique: continuar · y: confirmar · Esc: cancelar'
+        elif self.mode == 'confirm':
             buttons = [('Confirm y', 'y'), ('Cancel Esc', 'escape')]
             hint = 'y: confirm · Esc: cancel · j/k: scroll'
         elif self.mode in ('dispatch', 'executors', 'grouping'):
@@ -349,7 +360,7 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         else:
-            buttons = [('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
+            buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · 0: novo agente · P: planejar · C: opções'
         packed, x, line = [], 0, 0
@@ -547,6 +558,24 @@ class TasksUI:
         h, w = self.screen.getmaxyx()
         if h < 10 or w < 24:
             return key != 'q'
+        if self.mode == 'audit':
+            if key in ('up', 'k', 'down', 'j'):
+                self.cursor = max(0, self.cursor + (1 if key in ('down', 'j') else -1))
+                self.follow_cursor = True
+            elif key in ('enter', ' ', 'y'):
+                if self.audit.stage in ('confirm', 'deliver'):
+                    self.busy('Abrindo auditoria…' if self.audit.stage == 'confirm' else 'Entregando relatório…')
+                    self.notice = self.audit.confirm(self.session)
+                    self.mode = 'tasks'
+                elif key != 'y':
+                    ids = getattr(self, 'visible_identifiers', [])
+                    if ids:
+                        self.cursor = self.audit.choose(ids[min(self.cursor, len(ids)-1)])
+                        self.scroll = 0; self.follow_cursor = True
+            elif key in ('pageup', 'pagedown'):
+                self.scroll = max(0, self.scroll + (max(1, h-8) if key == 'pagedown' else -max(1, h-8)))
+                self.follow_cursor = False
+            return True
         if self.mode == 'clean_setup':
             if key == 'enter':
                 self.session.verify()
@@ -642,6 +671,11 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif key == 'A':
+            from .audit_ui import AuditUI
+            self.audit = AuditUI(self.session)
+            self.mode, self.cursor, self.scroll = 'audit', 0, 0
+            self.follow_cursor = True
         elif key in ('m', 'M'):
             self.session.verify()
             from .panes import open_pane
@@ -757,7 +791,7 @@ class TasksUI:
                         return
                 except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
                     self.notice = str(error)
-                    if self.mode == 'confirm':
+                    if self.mode in ('confirm', 'audit'):
                         self.mode, self.pending = 'tasks', None
         finally:
             self.job.close()

@@ -9,6 +9,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CliTests(unittest.TestCase):
+    def test_audit_cli_is_discoverable_and_requires_explicit_selection(self):
+        help_result = subprocess.run(['python3', str(ROOT/'watchdog'), 'audit', '--help'], capture_output=True, text=True)
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn('somente leitura', help_result.stdout)
+        self.assertIn('--model', help_result.stdout)
+        result = subprocess.run(['python3', str(ROOT/'watchdog'), 'audit', 'open', '--confirm'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('--binding-file', result.stderr)
+
     def test_background_picker_preserves_explicit_session_and_layout(self):
         from watchdog_app.app import open_selector
         from types import SimpleNamespace
