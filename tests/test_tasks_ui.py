@@ -46,6 +46,23 @@ class TasksUITests(unittest.TestCase):
                                       WATCHDOG_STATE_DIR=str(self.repo / 'state')))
         self.addCleanup(self.terminal.close)
 
+    def test_agents_button_and_shortcut_do_not_require_task_selection(self):
+        terminal = self.bound_terminal(with_agents=True)
+        self.assertTrue(terminal.wait_for('Agents m'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'm')
+        self.assertTrue(terminal.wait_for('Agents aberto'), terminal.output.decode(errors='replace'))
+        delivered = json.loads((self.repo/'agents-open.json').read_text())
+        self.assertEqual(delivered['role'], 'agents')
+        self.assertEqual(delivered['file'], str(self.repo/'binding.json'))
+        self.assertEqual((self.repo/'TODO.md').read_text(), self.original)
+
+    def test_unbound_agents_shortcut_refuses_a_guessed_session(self):
+        terminal = self.terminal
+        self.assertTrue(terminal.wait_for('Agents m'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'm')
+        self.assertTrue(terminal.wait_for('No conversation binding'), terminal.output.decode(errors='replace'))
+        self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
+
     def test_keyboard_completion_requires_confirmation_and_cancel_preserves_file(self):
         terminal = self.terminal
         self.assertTrue(terminal.wait_for('Space: select'), terminal.output.decode(errors='replace'))
@@ -81,14 +98,17 @@ class TasksUITests(unittest.TestCase):
         self.assertTrue(terminal.wait_for('No conversation binding'), terminal.output.decode(errors='replace'))
         self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
 
-    def bound_terminal(self, with_reply=False):
+    def bound_terminal(self, with_reply=False, with_agents=False):
         self.terminal.close()
         history = self.repo / 'record.jsonl'
         history.write_text(json.dumps({'type': 'event_msg', 'timestamp': '2026-11-16T10:00:00Z',
             'payload': {'type': 'task_complete', 'turn_id': 'turn', 'last_agent_message': 'Colors are implemented.'}})+'\n' if with_reply else '')
         binding = self.repo / 'binding.json'
         binding.write_text(json.dumps({'repo':str(self.repo),'binding':asdict(FakeBinding(history=str(history)))}))
-        terminal = Terminal(['python3','-c',BOUND_SCRIPT,str(self.repo),str(binding),str(ROOT/'tests')],
+        script = BOUND_SCRIPT
+        if with_agents:
+            script = script.replace('from watchdog_app.tasks_ui import run', "from watchdog_app import panes\ndef opened(file, project, role):\n (repo/'agents-open.json').write_text(json.dumps({'file':str(file),'role':role}))\n return {'pane_id':'test-agents'}\npanes.open_pane=opened\nfrom watchdog_app.tasks_ui import run")
+        terminal = Terminal(['python3','-c',script,str(self.repo),str(binding),str(ROOT/'tests')],
                             dict(os.environ,TERM='xterm-256color',WATCHDOG_STATE_DIR=str(self.repo/'state')))
         self.addCleanup(terminal.close)
         return terminal

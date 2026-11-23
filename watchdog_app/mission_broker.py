@@ -73,7 +73,11 @@ def request(store,identity,role,method,**data):
     store.path(identity)
     if role not in ('worker','qa'):raise RuntimeError('Broker role must be worker or qa')
     proof=json.loads((store.root/identity/(role+'-identity.json')).read_text())
-    session=os.environ.get('CODEX_THREAD_ID')
+    if proof['native']['kind'] == 'claude':
+        session = proof['native']['session']
+        authorize(os.getpid(), os.getuid(), proof['native'], session)
+    else:
+        session=os.environ.get('CODEX_THREAD_ID')
     if session!=proof['native']['session']:
         raise RuntimeError('Broker request must originate in its assigned native conversation')
     payload=json.dumps({'run':identity,'role':role,'session':session,'method':method,'data':data}).encode()+b'\n'

@@ -82,6 +82,9 @@ def arrange(api, conversation, panes, preset, save=lambda: None):
         artifacts = move('artifacts', new_label='Watchdog files')
         focus = target
         move('files', panes['artifacts']['tab_id'], artifacts, ratio=.4)
+    if 'agents' in panes:
+        tasks = panes['tasks']
+        move('agents', tasks['tab_id'], panes['progress']['pane_id'], 'down')
     if 'left_undone' in panes:
         files = panes['files']
         move('left_undone', files['tab_id'], files['pane_id'], ratio=.62)

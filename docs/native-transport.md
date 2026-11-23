@@ -143,3 +143,19 @@ unchanged. This step cannot finalize a partially implemented legacy run merely
 because one part received an advisory pass; missing tasks need their actual
 contracts and results. Run-scope changes and leader/session handoff are later
 work. No Left Undone state or global configuration is written.
+
+## Fresh launch contracts
+
+Fresh single workers carry `provisioning: fresh`; `grouping: together` identifies
+a bundle and `purpose: plan` identifies a proposal-only run. Legacy ledgers omit
+these fields and retain their previous behavior. Launch contracts are persisted
+before starting a frontend. Their receipts use `method: launch` and the verified
+frontend PID/start time, never a fabricated Codex queue receipt. Bootstrap and
+enrollment still gate worker reports through the same process-ancestry broker.
+Claude callbacks derive the claimed session from the owned proof; the server
+independently checks actual process ancestry and the exact pinned native identity.
+
+Planning is collected by the owned host wrapper from the provider's native plan
+response, without giving a completion callback to the planner. Proposals cannot
+pass the implementation result/review gate. Gossip is frozen: preserve historical
+compatibility, but do not add new integrations or use it for provider parity.

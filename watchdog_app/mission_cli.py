@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 import time
@@ -13,17 +14,22 @@ from . import mission_transport as transport
 
 def template(run):
     from .mission_single import is_single
-    if is_single(run):
+    single = is_single(run)
+    if single and run.get('provisioning') != 'fresh':
         executor = run['executor']
         return {'execution_mode':'single', 'transport':'native', 'run_id':run['id'], 'repo':run['repo'],
             'base_sha':git(run['repo'],'rev-parse','HEAD'),
             'participants':{'worker':{'account':executor['binding']['account'], 'native':executor['binding'],
                 'worktree':executor['worktree'], 'branch':executor['branch'], 'purpose':'implementation'}},
             'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]} for key in run['tasks']]}
-    return {'transport':run.get('transport',{}).get('kind','native'),'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
+    kind = run['main'].get('kind', 'codex') if single else 'codex'
+    executable = str(Path(shutil.which(kind)).resolve()) if shutil.which(kind) else str(Path.home()/'.local/bin'/kind)
+    return {**({'execution_mode':'single', 'provisioning':'fresh', 'grouping':run.get('grouping','single'), 'purpose':run.get('purpose','implementation')} if single else {}),
+        'transport':run.get('transport',{}).get('kind','native'),'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
         'participants':{role:{'account':run['main']['account'],
-            'executable':str(Path.home()/'.local/share/mise/installs/codex/latest/bin/codex'),
-            'model':'gpt-6.1-sol','effort':'medium','purpose':'qa' if role=='qa' else 'implementation'} for role in ('worker','qa')},
+            'executable':executable, 'kind':kind,
+            'model':('opus' if run.get('purpose') == 'plan' else 'sonnet') if kind == 'claude' else 'gpt-6.1-sol',
+            'effort':'high' if run.get('purpose') == 'plan' else 'medium','purpose':'qa' if role=='qa' else 'implementation'} for role in (('worker',) if single else ('worker','qa'))},
         'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]}
                  for key in run['tasks']]}
 

@@ -52,7 +52,8 @@ class Herdr:
             raise RuntimeError('Panel ' + pane['pane_id'] + ' was replaced by another terminal; reopen Watchdog panels')
         return dict(pane, terminal_id=live['terminal_id'], restored_from=pane['terminal_id'])
 
-    def export(self, tab):
+    def request(self, method, params):
+        """Typed native methods without a direct CLI equivalent (e.g. pane.focus)."""
         if self.session:
             path = Path.home() / '.config/herdr/sessions' / self.session / 'herdr.sock'
         else:
@@ -60,10 +61,13 @@ class Herdr:
         with socket.socket(socket.AF_UNIX) as connection:
             connection.settimeout(10)
             connection.connect(str(path))
-            connection.sendall((json.dumps({'id': str(uuid.uuid4()), 'method': 'layout.export',
-                                           'params': {'tab_id': tab}}) + '\n').encode())
+            connection.sendall((json.dumps({'id': str(uuid.uuid4()), 'method': method,
+                                           'params': params}) + '\n').encode())
             with connection.makefile() as stream:
                 value = json.loads(stream.readline())
         if 'error' in value:
             raise RuntimeError(str(value['error']))
-        return value['result']['layout']
+        return value['result']
+
+    def export(self, tab):
+        return self.request('layout.export', {'tab_id': tab})['layout']

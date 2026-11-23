@@ -77,6 +77,9 @@ def run_status(run, *, now=None):
     if stalled(run, now=now):
         return dict(key='stalled', label='Stalled', detail='no activity since ' + when +
                     ' · close it in Progress (x)', section='Blocked', color='blocked', finished=False)
+    if run.get('purpose') == 'plan' and tasks and all(t.get('plan') for t in tasks):
+        return dict(key='decision', label='Plano pronto', detail='Confira a proposta antes de despachar a implementação',
+                    section='Blocked', color='review', finished=False)
     from .mission_single import is_single, review_valid
     if is_single(run) and tasks and all(t['state'] in ('review', 'done') for t in tasks):
         approved = review_valid(run, run.get('candidate'))
@@ -120,7 +123,9 @@ def blocking(store, repo, scope, tasks, snapshot):
     for previous in store.list(repo):
         if previous['phase'] in FINISHED or not overlaps(previous, scope, tasks):
             continue
-        if accepted_in_todo(previous, snapshot):
+        if previous.get('purpose') == 'plan' and all(t.get('plan') for t in previous['tasks'].values()):
+            settle.append((previous, 'planning finished; new dispatch explicitly requested'))
+        elif accepted_in_todo(previous, snapshot):
             settle.append((previous, 'tasks were accepted as Done in TODO'))
         elif stalled(previous):
             settle.append((previous, 'stalled with no activity since ' +
@@ -169,7 +174,7 @@ class RunStore:
             yield
 
 
-def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=None, mode='team', executor=None):
+def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=None, mode='team', executor=None, provisioning='existing', grouping='single', purpose='implementation', _defer=False):
     if not confirmed:
         raise RuntimeError('Explicit confirmation is required')
     store = store or RunStore()
@@ -180,19 +185,31 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
         session.verify()
         if mode not in ('team', 'single'):
             raise RuntimeError('Unknown execution mode')
+        if provisioning not in ('existing', 'fresh') or (mode != 'single' and provisioning != 'existing'):
+            raise RuntimeError('Unknown or incompatible provisioning mode')
+        if grouping not in ('single', 'together') or purpose not in ('implementation', 'plan'):
+            raise RuntimeError('Unknown grouping or contract purpose')
+        if (grouping != 'single' or purpose != 'implementation') and (mode != 'single' or provisioning != 'fresh'):
+            raise RuntimeError('Grouped/planning dispatch requires a fresh single executor')
         if mode == 'single':
             from .mission_single import validate_executor, available
-            if len(tasks) != 1:
+            if len(tasks) != 1 and not (provisioning == 'fresh' and grouping == 'together'):
                 raise RuntimeError('Para um agente: selecione uma tarefa por execução')
-            validate_executor(snapshot.repo, asdict(session.binding), executor)
-            available(store, snapshot.repo, executor)
+            if provisioning == 'existing':
+                validate_executor(snapshot.repo, asdict(session.binding), executor)
+                available(store, snapshot.repo, executor)
         if session.binding.kind != 'codex':
-            raise RuntimeError('Orchestrate needs an exact Codex thread')
+            if mode != 'single' or provisioning != 'fresh':
+                raise RuntimeError('Orchestrate needs an exact Codex thread')
+            from .mission_fresh import leader_ready
+            leader_ready(session)
         settle, live = blocking(store, snapshot.repo, scope, tasks, snapshot)
         if live:
             raise RuntimeError('These tasks already have a running team ' + live[0]['id'][:8] +
                                '. Follow it in Progress, or close it there with x to start over.')
         for previous, reason in settle:
+            if previous.get('purpose') == 'plan' and set(previous['tasks']) != {t.id for t in tasks}:
+                continue  # A joint proposal is not acceptance of a smaller execution scope.
             close(store, previous['id'], reason)
         now = time.time()
         from .mission_native import boot_id
@@ -203,15 +220,31 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
                'tasks': {t.id: {'title': t.text, 'state': 'ready', 'agent': 'main', 'updated': now,
                                 'summary': 'Waiting for the main conversation to prepare the brief'} for t in tasks}}
         run['execution_mode'] = mode
-        if mode == 'single': run['executor'] = executor
+        if grouping != 'single': run['grouping'] = grouping
+        if purpose != 'implementation': run['purpose'] = purpose
+        if mode == 'single':
+            if provisioning == 'existing': run['executor'] = executor
+            else: run['provisioning'] = 'fresh'
         if checkpoint:
             run['checkpoint'] = checkpoint
         snapshot.assert_current()
         store.save(run)
+        prior_plans = []
+        if purpose == 'implementation':
+            from .mission_scope import resolve
+            for previous, _ in settle:
+                if previous.get('purpose') != 'plan' or set(previous['tasks']) != set(run['tasks']): continue
+                try: resolve(previous, snapshot)
+                except RuntimeError: continue
+                for key, old_task in previous['tasks'].items():
+                    if key in run['tasks'] and old_task.get('plan') and old_task['plan'] not in prior_plans:
+                        prior_plans.append(old_task['plan'])
+        if prior_plans: run['approved_plans'] = prior_plans
         message = (f"Watchdog Mission Control run {run['id']} was explicitly confirmed.\n"
                    f"Project: {run['repo']}\nMain: {session.binding.session}\n"
                    + (f"Committed checkpoint (use as base_sha): {checkpoint['sha']}\n" if checkpoint else '') +
-                   (('Approved mode: single existing executor, reviewed by main; no QA actor.\n'
+                   (('Approved mode: single fresh executor in an isolated worktree, reviewed by main; no QA actor.\n'
+                       if provisioning == 'fresh' else 'Approved mode: single existing executor, reviewed by main; no QA actor.\n'
                        'Confirmed executor: ' + json.dumps(executor, ensure_ascii=False) + '\n') if mode == 'single' else
                        'Approved team: one new Codex worker and one new Codex QA, in one execution tab.\n') +
                    'Prepare an explicit brief with allowed files, acceptance criteria, test commands, '
@@ -225,9 +258,19 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
                    + ('In single mode, inspect the result and run the declared tests yourself. Record a leader-review '
                       'with --candidate SHA --file JSON --confirm (run_id, candidate, result_version, verdict, summary, tests) '
                       'before approval. Never invent QA or review evidence.\n' if mode == 'single' else '')
+                   + ('Produce a plan only, no source edits or commits. Prefer the strongest suitable planning model and high effort.\n'
+                      if purpose == 'plan' else 'Execution: choose the weakest suitable model and effort that reliably meets this contract.\n')
+                   + ('Handle all selected IDs TOGETHER as one logical task.\n' if grouping == 'together' else '')
+                   + ('Provider: choose kind codex or claude with its explicit executable and account; no Left Undone commands or state.\n' if provisioning == 'fresh' else '')
+                   + ('Approved proposal from the preceding planning dispatch:\n' + '\n'.join(prior_plans) + '\n' if prior_plans else '')
                    + '\n'.join(f"{t.id}: {t.text}" for t in tasks))
+        if _defer:
+            run.update(request_delivery='pending', request_message=message)
+            store.save(run)
+            return run
         try:
-            session.runtime.queue(session.binding, message)
+            from .mission_fresh import send_to_leader
+            send_to_leader(session, message)
         except Exception as error:
             run['request_delivery'] = 'uncertain'
             run['reason'] = 'Coordination request delivery was not confirmed; inspect the exact main queue before recovery'
@@ -313,6 +356,10 @@ def accept_event(run, event, *, now=None):
         if status not in ('working', 'blocked', 'result') or task['state'] == 'done':
             raise RuntimeError('Invalid task transition')
         if status == 'result':
+            if run.get('grouping') == 'together':
+                covered = report.get('covered_tasks')
+                if not isinstance(covered, list) or len(covered) != len(run['tasks']) or set(covered) != set(run['tasks']):
+                    raise RuntimeError('Bundle result must cover every selected task')
             commits, tests = report.get('commits'), report.get('tests')
             if (not isinstance(commits, list) or not commits or
                     any(not isinstance(c, str) or len(c) != 40 or any(x not in '0123456789abcdef' for x in c) for c in commits)
@@ -327,6 +374,13 @@ def accept_event(run, event, *, now=None):
             run['qa'] = None
         task.update(state={'result': 'review'}.get(status, status), summary=report['summary'],
                     agent='worker', updated=now)
+        if run.get('grouping') == 'together':
+            for key, member in run['tasks'].items():
+                if key == task_id: continue
+                member.pop('accepted_result', None)
+                if status == 'result': member['result'] = report
+                else: member.pop('result', None)
+                member.update(state=task['state'], summary=report['summary'], agent='worker', updated=now)
     run.get('report_errors', {}).pop(native_id, None)
     run['events'][event_id] = {'report': report, 'delivery': 'pending', 'received': now}
     if native: run['events'][event_id].update(role=role, generation=event['generation'], actor=event['actor'])
@@ -379,3 +433,42 @@ def finish(run, candidate, *, confirmed=False):
     for task in run['tasks'].values():
         task.update(state='done', summary='QA passed; main approved ' + candidate, updated=time.time())
     run['phase'] = 'done'
+
+
+def request_batch(session, snapshot, ids, *, confirmed=False, grouping='together',
+                  purpose='implementation', store=None, checkpoint=None):
+    """LU's Separate/Together choice, with one verified parent message for the batch."""
+    if not confirmed: raise RuntimeError('Explicit confirmation is required')
+    if grouping not in ('separate', 'together'): raise RuntimeError('Unknown dispatch grouping')
+    store = store or RunStore()
+    tasks = snapshot.selected(ids)
+    with session.routing(), locked(snapshot.repo):
+        snapshot.assert_current(); session.verify()
+        _, live = blocking(store, snapshot.repo, capture(snapshot, tasks), tasks, snapshot)
+        if live: raise RuntimeError('These tasks already have a running dispatch ' + live[0]['id'][:8])
+    groups = [[t.id for t in tasks]] if grouping == 'together' else [[t.id] for t in tasks]
+    runs = []
+    try:
+        for group in groups:
+            runs.append(request(session, snapshot, set(group), confirmed=True, store=store, checkpoint=checkpoint,
+                mode='single', provisioning='fresh', grouping='together' if len(group)>1 else 'single',
+                purpose=purpose, _defer=True))
+        with session.routing(), locked(snapshot.repo):
+            snapshot.assert_current(); session.verify()
+            if any(run['main'] != asdict(session.binding) for run in runs):
+                raise RuntimeError('Batch leader identity changed before delivery')
+            for run in runs:
+                run['request_delivery']='sending'; store.save(run)
+            from .mission_fresh import send_to_leader
+            send_to_leader(session, '\n\n'.join(run['request_message'] for run in runs))
+            for run in runs:
+                run['request_delivery']='sent'; store.save(run)
+        return runs
+    except Exception:
+        for run in runs:
+            if run['request_delivery'] == 'sending':
+                run.update(request_delivery='uncertain', reason='Batch delivery uncertain; inspect the exact leader queue before recovery')
+            elif run['request_delivery'] == 'pending':
+                run.update(phase='closed', closed={'reason':'Batch preparation cancelled before delivery', 'at':time.time()})
+            store.save(run)
+        raise

@@ -29,6 +29,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn('layout', result.stderr.lower())
 
+    def test_panel_selector_can_choose_agents_and_cancel(self):
+        for keys, expected in ((b'\r', 'CHOICE=agents'), (b'\x1b', 'CHOICE=None')):
+            with self.subTest(keys=keys):
+                script = ('import curses; from watchdog_app.panes import choose_panel; '
+                          'print("CHOICE="+str(curses.wrapper(choose_panel)))')
+                terminal = Terminal(['python3', '-c', script], dict(os.environ, TERM='xterm-256color'))
+                try:
+                    self.assertTrue(terminal.wait_for('Escolher painel'), terminal.output.decode(errors='replace'))
+                    os.write(terminal.master, keys)
+                    self.assertTrue(terminal.wait_for(expected), terminal.output.decode(errors='replace'))
+                    self.assertEqual(terminal.process.wait(timeout=3), 0)
+                finally:
+                    terminal.close()
+
     def test_picker_accepts_keyboard_selection_and_cancel(self):
         for keys, expected in ((b'j\r', 'CHOICE=3'), (b'\x1b', 'CHOICE=None')):
             with self.subTest(keys=keys):

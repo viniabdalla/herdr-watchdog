@@ -45,8 +45,8 @@ def rows(repo, store=None, *, progress=None, width=80):
         result.append(('RUN '+run['id'][:8]+' · '+status['label'].upper()+' · '+status['detail'],status['color'],run))
         from .mission_single import is_single
         if is_single(run):
-            actor = run.get('executor', {}).get('binding', {})
-            result.append(('Para um agente · Revisão do líder · ' + actor.get('pane', 'painel indisponível'), None, run))
+            actor = run.get('executor', {}).get('binding') or run.get('participants', {}).get('worker', {}).get('native', {})
+            result.append(('Para um agente · Revisão do líder · ' + actor.get('pane', run.get('resources', {}).get('worker', {}).get('pane_id', 'painel indisponível')), None, run))
         if run.get('reason') and run['phase']=='blocked':result.append((run['reason'],'blocked',run))
         if run.get('monitor_problem'):result.append(('Monitor: '+explain(run['monitor_problem']),'blocked',run))
         current={t.get('attempt_id') for t in run['tasks'].values()}|{t.get('gossip_task') for t in run['tasks'].values()}|{run.get('qa_task')}

@@ -4,7 +4,7 @@ status: ativo
 area: pessoal
 prioridade: alta
 resumo: Painéis Herdr para tarefas de projetos, progresso das sessões e arquivos criados pela IA
-atualizado: 2026-11-19
+atualizado: 2026-11-23
 motivo:
 ---
 
@@ -18,20 +18,32 @@ Este TODO adota o formato versionado do Watchdog desde 2026-11-18;
 os pedidos e as conclusões anteriores foram preservados na migração.
 
 ## Em andamento
-
-## Próximo
-- [ ] Melhorar o painel de agentes
-  ID: 5daa552a-b547-441a-b2f2-12976b061e72
+- [ ] Trazer a orquestração do Left Undone para o Watchdog
+  ID: 9a1da315-9c0d-40b1-a576-dd3bdcfc65d2
   Resumo:
-    mostrar agentes verificados do projeto, histórico cronológico de tarefas e contexto restante quando disponível.
+    abrir novos executores Codex ou Claude pelo Watchdog, com tarefas juntas ou separadas e planejamento antes da execução.
   Origem: pedido-humano
   Execução:
-    Resumo: mostrar agentes verificados do projeto, histórico cronológico de tarefas e contexto restante quando disponível.
-    Mostrar canais Gossip verificados, mantendo Gossip opcional. Exibir o painel Herdr verificado de cada agente e sua tarefa mais recente em português simples, com suporte posterior a inglês.
-    Indicar indisponibilidade quando não houver telemetria real de contexto. Manter Arquivos ao lado, destacar arquivos vinculados às tarefas e preservar a conexão com Yazi.
-    Aceite adicional: para duas sessões do mesmo projeto, mostrar uma linha por agente, com papel, diretório de trabalho e endereço Herdr (workspace e painel) verificados por sessão.
+    Escopo corrigido por Vini em 2026-11-19: modificar apenas Watchdog, manter Left Undone intacto e congelar Gossip.
+    Adaptar o fluxo do LU ao registro de execuções e às worktrees do Watchdog; não chamar o dispatcher nem alterar dados do LU.
+    Implementado em 2026-11-19: novo executor, contrato no lançamento, callbacks autenticados, continuação em nova tentativa, agrupamento, planejamento nativo e confirmação na interface. Verificação: 435 testes, sem falhas, 7 ignorados; revisão independente com seis correções comprovadas por regressões; telas conferidas em janela temporária. Evidências em docs/verification-orchestration-2026-11-19.md.
+    Não interpretar a entrega como aprovação das outras decisões do brainstorm. Validação com modelos reais e aceite operacional continuam separados dos testes automatizados.
   Aceite:
-    Com duas sessões no mesmo projeto, identificar cada agente pelo papel, diretório e painel Herdr. Conferir o histórico de tarefas e a disponibilidade da leitura de contexto por sessão.
+    Comprovar despacho e retorno no Watchdog para Codex e Claude, sem alterar LU; propostas não concluem implementação e resultados aguardam revisão do líder.
+
+
+## Próximo
+- [ ] Decidir os itens restantes do brainstorm do Watchdog
+  ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
+  Resumo:
+    definir as políticas restantes de curadoria, handoff, contexto e avisos; a portabilidade da orquestração para Watchdog já foi autorizada.
+  Origem: pedido-humano
+  Referência: brief brainstorm-3-way-merge.md (omarchy2, 2026-11-19)
+  Execução:
+    Brainstorm salvo em docs/merge-brainstorm-2026-11-19.md (recomendação: Watchdog como produto, Left Undone como inbox; Gossip fora das execuções novas).
+    Correção aprovada em 2026-11-19: mudanças apenas no Watchdog, LU intacto, orquestração trazida do LU para o Watchdog e Gossip congelado. Fusão dos aplicativos e mudanças no LU saem deste escopo.
+  Aceite:
+    Registrar as escolhas restantes antes de implementar mudanças nessas políticas.
 - [ ] Mostrar o uso de contexto por agente
   ID: e3f85c0d-2191-449c-a650-95e52a95c3e2
   Resumo:
@@ -152,6 +164,18 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 ## Bloqueado
 
 ## Feito
+- [x] Melhorar o painel de agentes
+  ID: 5daa552a-b547-441a-b2f2-12976b061e72
+  Resumo:
+    mostrar agentes verificados do projeto, histórico cronológico de tarefas e contexto restante quando disponível.
+  Origem: pedido-humano
+  Execução:
+    Resumo: mostrar agentes verificados do projeto, histórico cronológico de tarefas e contexto restante quando disponível.
+    Gossip congelado: não adicionar canais ou novas integrações. Exibir o painel Herdr verificado de cada agente e sua tarefa mais recente em português simples, com suporte posterior a inglês.
+    Indicar indisponibilidade quando não houver telemetria real de contexto. Manter Arquivos ao lado, destacar arquivos vinculados às tarefas e preservar a conexão com Yazi.
+    Aceite adicional: para duas sessões do mesmo projeto, mostrar uma linha por agente, com papel, diretório de trabalho e endereço Herdr (workspace e painel) verificados por sessão.
+  Aceite:
+    Com duas sessões no mesmo projeto, identificar cada agente pelo papel, diretório e painel Herdr. Conferir o histórico de tarefas e a disponibilidade da leitura de contexto por sessão.
 - [x] Simplificar a lista de tarefas
   ID: 944eefe8-edd3-41fa-b35f-e748d3c91681
   Resumo:

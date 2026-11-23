@@ -42,7 +42,7 @@ def verify_participant(run, role, *, enrolling=False):
     if not host or process(host['pid'])[1] != host['started']:
         raise RuntimeError('Native host wrapper exited or changed identity')
     pane = run['resources'][role]
-    if (native['kind'] != 'codex' or native['account'] != part['account'] or
+    if (native['kind'] != part.get('kind', 'codex') or native['account'] != part['account'] or
             native['pane'] != pane['pane_id'] or native['terminal'] != pane['terminal_id']):
         raise RuntimeError('Native actor account or terminal changed')
     uuid.UUID(native['session'])
@@ -63,7 +63,8 @@ def check_proof(run, role, proof):
 def register(run, store):
     for role, part in run['participants'].items():
         try:
-            if (store.root/run['id']/(role+'-exit.json')).exists():
+            from .mission_fresh import artifact
+            if (store.root/run['id']/artifact(run, role, 'exit.json')).exists():
                 raise RuntimeError('Participant exited; completion was not inferred')
             verify_participant(run, role)
             part['available'] = True; part['last_seen'] = time.time()
@@ -76,6 +77,10 @@ def register(run, store):
 def contract(run, task_id, attempt):
     from .mission_transport import assignment
     value = json.loads(assignment(run, task_id))
+    if run.get('grouping') == 'together':
+        value['members'] = [dict(t, title=run['tasks'][t['id']]['title']) for t in run['brief']['tasks']]
+        value['instructions'] += ' Handle ALL members together as one logical task; report covered_tasks with every selected ID.'
+        value['report_schema']['covered_tasks'] = list(run['tasks'])
     value['attempt_id'] = attempt
     value['report_schema'].update(attempt_id=attempt, event_id='Stable UUID per report; reuse on retry')
     return value
@@ -137,6 +142,10 @@ def dispatch(store, identity, task_id):
 def followup(store, identity, task_id, text):
     from . import mission_transport as transport
     if not text.strip(): raise RuntimeError('Follow-up text is required')
+    current = store.load(identity)
+    if current.get('provisioning') == 'fresh':
+        from .mission_fresh import retry
+        return retry(store, identity, task_id, text)
     with store.lock(identity):
         run=store.load(identity);transport.main_session(run);transport.source_current(run)
         task=run['tasks'][task_id]
@@ -183,19 +192,27 @@ def forward(store, run):
             body['leader_review_schema'] = {'run_id':run['id'], 'candidate':'Full exact reviewed commit SHA',
                 'result_version':run.get('result_version',0), 'verdict':'pass | fail',
                 'summary':'Leader findings and limitations', 'tests':['Command and independently observed result']}
+        if report.get('status') == 'planned':
+            body['next'] = 'Review this proposal; dispatch implementation separately only when approved. TODO remains open.'
         if (not is_single(run) and event.get('role') == 'qa' and not event.get('rejected') and
                 report.get('verdict') == 'pass' and report.get('candidate')):
             body['next'] = ('QA passed. Approve now; Watchdog merges the work into the project branch and pushes it '
                             '(do not merge by hand or ask the user to review branches): ' + approve_command(store, run, report['candidate']))
         message = 'Watchdog native report\n'+json.dumps(body,ensure_ascii=False)
+        if len(message.encode()) > LIMIT and report.get('status') == 'planned' and report.get('plan_file'):
+            body['report'] = {key:value for key,value in report.items() if key != 'plan'}
+            body['notice'] = 'The full proposal is retained in plan_file. Review it before dispatching implementation.'
+            message = 'Watchdog native report\n' + json.dumps(body, ensure_ascii=False)
         if len(message.encode()) > LIMIT: raise RuntimeError('Native notification exceeds message size')
+        from .mission_fresh import send_to_leader, leader_ready
+        if session.binding.kind == 'claude': leader_ready(session)
         event['delivery']='sending';store.save(run)
         try:
-            receipt=session.runtime.queue(session.binding,message);uuid.UUID(receipt)
+            receipt = send_to_leader(session, message, receipt_required=True)
         except Exception as error:
             event.update(delivery='uncertain',notification_problem=str(error));store.save(run)
             continue
-        event.update(delivery='sent',receipt=receipt,recipient=asdict(session.binding));store.save(run)
+        event.update(delivery='sent',recipient=asdict(session.binding), **receipt);store.save(run)
 
 
 def delivery_receipt(run, role, attempt, *, task_id=None):
@@ -206,6 +223,10 @@ def delivery_receipt(run, role, attempt, *, task_id=None):
         receipt=record.get('receipt')
         valid_receipt=isinstance(receipt,str) and str(uuid.UUID(receipt))==receipt
     except ValueError:valid_receipt=False
+    if record.get('method') == 'launch':
+        actor = record.get('recipient') or {}
+        valid_receipt = bool(actor and record.get('launch_receipt') ==
+                             {'pid':actor.get('pid'), 'started':actor.get('started')})
     if record.get('state')!='sent' or not valid_receipt:
         return False,'Queue receipt is missing or uncertain; inspect the exact thread queue'
     part=run['participants'][role]
@@ -217,7 +238,9 @@ def delivery_receipt(run, role, attempt, *, task_id=None):
     if (not isinstance(payload,dict) or payload.get('run_id')!=run['id'] or payload.get('attempt_id')!=attempt):
         return False,'Queue receipt contract run or attempt differs from the current intent'
     if role=='worker':
-        if payload.get('task_id')!=task_id:return False,'Queue receipt task differs from the current intent'
+        member_ids = {t['id'] for t in payload.get('members', [])} if run.get('grouping') == 'together' else set()
+        if payload.get('task_id') != task_id and not (member_ids == set(run['tasks']) and task_id in member_ids):
+            return False,'Queue receipt task differs from the current intent'
     else:
         review=run.get('review_contract') or {}
         if (not review.get('id') or payload.get('review_id')!=review['id'] or
@@ -231,12 +254,18 @@ def reconcile_intents(run):
     # The task/review intent is committed before deliver() even creates its own
     # record. Conversely deliver() commits a receipt before its caller finalizes.
     # Reconcile both windows without ever submitting a queue message.
+    def bootstrapping(record):
+        part = run['participants'].get(record.get('role'), {})
+        return (record.get('method') == 'launch' and record.get('state') == 'sending'
+                and part.get('startup_attempt') == record.get('attempt_id') and not part.get('generation')
+                and time.time() - record.get('created', 0) < 60)
     for record in run.get('deliveries',{}).values():
-        if record['state']=='sending':
+        if record['state']=='sending' and not bootstrapping(record):
             record.update(state='uncertain',problem='Interrupted queue delivery; inspect before recovery')
     for key,task in run['tasks'].items():
         if task.get('delivery')!='sending':continue
         attempt=task.get('attempt_id')
+        if bootstrapping(run.get('deliveries', {}).get(attempt, {})): continue
         sent,problem=delivery_receipt(run,'worker',attempt,task_id=key)
         task['delivery']='sent' if sent else 'uncertain'
         if sent:
@@ -277,8 +306,12 @@ def tick(store, identity):
         if run['phase'] not in ('active','blocked'):return run
         transport.main_session(run)
         transport.source_current(run)
-        register(run,store)
-        reconcile_intents(run)
+        if run.get('purpose') != 'plan':
+            register(run,store)
+            reconcile_intents(run)
+        else:
+            from .mission_plan import reconcile
+            reconcile(run)
         for event in run['events'].values():
             if event['delivery']=='sending':event.update(delivery='uncertain',notification_problem='Interrupted notification; not resent')
         run['monitor_updated']=time.time();run.pop('monitor_problem',None);store.save(run)
@@ -415,9 +448,13 @@ def participant_prompt(store, run, role):
         'Main supplies a NEW executor for every later task at the preceding accepted commit, a NEW QA conversation for each review, and dedicated disposable conversations for probes, never real task executors. ')
     command=[sys.executable,str(ROOT/'watchdog'),'mission']
     scope=['--run',identity,'--role',role,'--state-dir',str(store.root)]
-    return (part['role_context']+'\nNative Mission Control participant. Only main talks to the user. '
-        'Wait for your role-identity.json (host bootstrap can take 45 seconds), then enroll from THIS conversation. '
-        'No source edits before an explicit queued contract. Queue delivery targets this exact thread/account. '
+    startup = run.get('deliveries', {}).get(part.get('startup_attempt'), {})
+    launch_contract = ('This launch includes your complete contract below. After successful enrollment, execute ONLY this contract.\n'
+                       + json.dumps(startup['payload'], ensure_ascii=False) + '\n') if startup else ''
+    return (launch_contract + part['role_context']+'\nNative Mission Control participant. Only main talks to the user. '
+        'Wait for your role-identity.json (host bootstrap can take 45 seconds), then enroll from THIS conversation. ' +
+        ('No source edits before enrollment and the supplied launch contract. ' if startup else
+         'No source edits before an explicit queued contract. Queue delivery targets this exact thread/account. ') +
         'Never change CODEX_THREAD_ID, forge a peer, use pane text injection or operate Gossip. '
         'Reports require the supplied run/task/attempt IDs and a stable event_id UUID per report; '
         'reuse that UUID on retry. '+review_policy+'\n'
@@ -440,7 +477,7 @@ def bootstrap(store, identity, role, child, *, timeout=45):
     while time.monotonic()<deadline:
         if child.poll() is not None:raise RuntimeError('Participant exited before native registration')
         candidates,_=bindings.discover(Path(part['worktree']))
-        matches=[b for b in candidates if b.kind=='codex' and b.account==part['account'] and
+        matches=[b for b in candidates if b.kind==part.get('kind', 'codex') and b.account==part['account'] and
             b.pane==pane['pane_id'] and b.terminal==pane['terminal_id'] and b.pid==child.pid]
         if len(matches)==1:
             binding=matches[0];bindings.verify(binding)
@@ -451,7 +488,7 @@ def bootstrap(store, identity, role, child, *, timeout=45):
     else:raise RuntimeError('Native registration timed out; owned terminal retained')
     proof={'transport':'native','run_id':identity,'role':role,'native':asdict(binding),
         'generation':str(uuid.uuid4()),'boot_id':boot_id(),'bridge_owner':owner(),
-        'broker':str(store.root/identity/(role+'-broker.sock'))}
+        'broker':str(store.root/identity/('w-'+part['startup_attempt'][:8]+'.sock' if part.get('startup_attempt') else role+'-broker.sock'))}
     with store.lock(identity):
         run=store.load(identity)
         if not enabled(run):raise RuntimeError('Transport changed during bootstrap')
@@ -460,7 +497,15 @@ def bootstrap(store, identity, role, child, *, timeout=45):
         if part.get('generation'):raise RuntimeError('Native actor already bootstrapped; inspect its existing proof')
         part.update(native=proof['native'],generation=proof['generation'],boot_id=proof['boot_id'],bridge_owner=proof['bridge_owner'],
                     enrolled=False,available=False)
-        check_proof(run,role,proof);store.save(run)
+        check_proof(run,role,proof)
+        if part.get('startup_attempt'):
+            from .mission_fresh import attach
+            from .mission_handoff import claim_session
+            delivery = run['deliveries'][part['startup_attempt']]
+            delivery['payload']['session_policy'] = claim_session(store, run, role,
+                delivery['payload']['task_id'], part['base_sha'])
+            attach(run, proof)
+        store.save(run)
         atomic(store.root/identity/(role+'-identity.json'),proof)
     return proof
 

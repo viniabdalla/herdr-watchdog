@@ -38,6 +38,24 @@ action has no interactive terminal. Left Undone is optional as a visible panel:
 if its panel is already bound to this conversation, it stays to the right of
 Files. Watchdog reads that binding and never edits Left Undone's state.
 
+## Agents and individual panels
+
+`watchdog pane` opens a terminal selector for Agents, Tasks, Progress, Artifacts or Files.
+`watchdog pane agents` opens the agents monitor directly. Use the same `--repo`,
+`--pane` and `--session` options to identify the conversation, or pass its
+`--binding-file`. Reopening focuses the existing panel; a closed panel can be
+recreated without rebuilding the layout. A busy or replaced terminal is left alone.
+
+In **WATCHDOG / TASKS**, click **Agents m** or press **m** to open the same monitor
+below Progress (or beside the existing conversation's panels when Progress is absent).
+The monitor shows the main session and native participants recorded for that leader,
+with tab/pane, availability, delivery, context usage, percentage bar and abbreviated
+cumulative tokens. Missing telemetry appears as **Sem dados**. Old runs remain history;
+opening the monitor does not send work, accept deliveries or close TODO items.
+For Claude, **B** adjusts its context window; preferences are saved only in Watchdog
+state. **q/Esc** exits the monitor, leaving its pane available for reopening.
+The usage readers were ported from Left Undone; its monitor and database are not used.
+
 ## Interactive Tasks
 
 Click a task or use arrows/j/k and Space to select it. `s` prepares a request
@@ -93,6 +111,36 @@ WATCHDOG_HERDR_TEST=1 python3 -B -m unittest discover -s tests -q
 Live layout tests use only their own workspace in wd-test. Yazi tests use
 temporary files and real PTYs. `python3 uninstall.py` removes only this checkout's
 links and keeps state; it does not close running panels or stop Herdr.
+
+## Fresh workers and planning
+
+In Tasks, select tasks and use **0** (new executor), **P** (plan only), or the
+**Despachar p** menu. Several tasks offer **Juntas** (one worker and one contract
+covering all selected IDs) or **Separadas** (one fresh worker per task). The
+confirmation lists the project checkpoint before any dispatch. One message asks
+the verified leader to prepare the contracts, choose a model and effort, and launch.
+
+The fresh-worker template accepts `kind: codex` or `kind: claude` plus explicit
+account and executable paths. Each worker starts in a separate owned Git worktree
+with a standalone brief, adapted from Left Undone's dispatch flow. Reports use
+Watchdog's authenticated host bridge. Follow-ups start fresh attempts at the
+previous worker's clean committed checkpoint; older worktrees and reports remain.
+Codex leaders use their exact-thread queue. Claude leaders must be idle to receive
+a dispatch; reports remain pending while a Claude leader is busy.
+
+Planning uses the provider's native plan mode and stores a proposal in the run
+ledger and `plan-<attempt>.md` in Watchdog state. It does not complete TODO items,
+produce implementation evidence, merge or push. A planner that changes source or
+commits is blocked with its changes retained. Read the proposal in its execution
+tab; explicitly dispatch implementation afterward. A preceding proposal with the same complete task scope
+is included in the leader's new request. Questions become blocked reports
+for the leader. Implementation results still require exact-candidate leader review;
+a Together result must cover every selected task.
+
+Only Watchdog code/state changes in this port. Left Undone's code, buttons,
+installation and data remain intact. Its existing identity dependency is unchanged.
+Gossip is frozen for maintenance; no new integrations are planned, and legacy run
+records remain readable. Fresh dispatch uses native launch/report paths.
 
 ## Mission Control pilot
 

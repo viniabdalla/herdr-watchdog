@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import sys
 import time
+import uuid
 
 from .actions import Session
 from .herdr import Herdr
@@ -62,18 +63,34 @@ def validate_brief(run, brief):
         raise RuntimeError('Brief needs a full committed base SHA')
     from .mission_single import is_single
     single = is_single(run)
+    fresh = single and run.get('provisioning') == 'fresh'
+    if brief.get('provisioning', 'existing') != run.get('provisioning', 'existing'):
+        raise RuntimeError('Brief provisioning differs from the confirmed run')
     if brief.get('execution_mode', 'team') != run.get('execution_mode', 'team'):
         raise RuntimeError('Brief execution mode differs from the confirmed run')
+    if brief.get('purpose', 'implementation') != run.get('purpose', 'implementation'):
+        raise RuntimeError('Brief purpose differs from the confirmed run')
+    if run.get('purpose') == 'plan' and not fresh:
+        raise RuntimeError('Planning requires a fresh executor')
+    if brief.get('grouping', 'single') != run.get('grouping', 'single'):
+        raise RuntimeError('Brief grouping differs from the confirmed run')
     if single:
-        if (brief.get('transport', 'native') != 'native' or len(run['tasks']) != 1 or
+        if (brief.get('transport', 'native') != 'native' or
+                (len(run['tasks']) != 1 and not (fresh and run.get('grouping') == 'together')) or
                 set(brief.get('participants', {})) != {'worker'}):
             raise RuntimeError('Single mode requires one native executor and one task')
-        part = brief['participants']['worker']; executor = run['executor']
-        if any(part.get(k) != executor.get(k) for k in ('worktree', 'branch')) or part.get('native') != executor['binding'] or part.get('account') != executor['binding']['account']:
-            raise RuntimeError('Brief executor differs from the confirmed recipient')
+        if not fresh:
+            part = brief['participants']['worker']; executor = run['executor']
+            if any(part.get(k) != executor.get(k) for k in ('worktree', 'branch')) or part.get('native') != executor['binding'] or part.get('account') != executor['binding']['account']:
+                raise RuntimeError('Brief executor differs from the confirmed recipient')
     elif set(brief.get('participants', {})) != {'worker', 'qa'}:
         raise RuntimeError('Exactly one approved worker and QA are required')
-    for participant in (() if single else brief['participants'].values()):
+    for participant in (() if single and not fresh else brief['participants'].values()):
+        kind = participant.get('kind', 'codex')
+        if kind not in ('codex', 'claude'):
+            raise RuntimeError('Unknown executor provider kind')
+        if kind == 'claude' and not fresh:
+            raise RuntimeError('Claude requires a fresh single executor')
         for field in ('account', 'executable'):
             value = participant.get(field)
             if not isinstance(value, str) or not Path(value).is_absolute():
@@ -198,8 +215,21 @@ def start_monitor(run, store):
                                  '--run', run['id'], '--state-dir', str(store.root)],
                                 stdin=subprocess.DEVNULL, stdout=stream, stderr=stream,
                                 start_new_session=True)
+    from .mission_broker import process
+    run['monitor_started'] = process(proc.pid)[1]
     return proc.pid
 
+
+
+def monitor_running(run):
+    from .mission_broker import process
+    pid = run.get('monitor_pid')
+    if not pid: return False
+    try: started = process(pid)[1]
+    except (OSError, RuntimeError): return False
+    if not run.get('monitor_started'):
+        raise RuntimeError('Monitor PID exists without a pinned start time; inspect before replacement')
+    return started == run['monitor_started']
 
 
 def ensure_monitor(store, identity):
@@ -240,16 +270,20 @@ def resumable_worktrees(run, store, brief):
             raise RuntimeError('Resume requires clean worktrees; changes were preserved')
 
 
-def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
+def launch(store, identity, brief, *, confirmed=False, api=None, resume=False, replacement=False):
     if not confirmed:
         raise RuntimeError('Explicit launch confirmation is required')
     from .mission_single import is_single, launch_existing
-    if is_single(store.load(identity)):
+    initial = store.load(identity)
+    single = is_single(initial)
+    if single and initial.get('provisioning') != 'fresh':
         if resume: raise RuntimeError('Existing executor attachment cannot be retried blindly')
         return launch_existing(store, identity, brief, api=api)
     with store.lock(identity):
         run = store.load(identity)
-        if not resume and (run['phase'] != 'requested' or run.get('operation')):
+        replacing = replacement and single and run.get('provisioning') == 'fresh' and run.get('operation') == 'replace fresh executor'
+        if replacement and not replacing: raise RuntimeError('No prepared fresh replacement')
+        if not resume and (run['phase'] != 'requested' or run.get('operation') and not replacing):
             raise RuntimeError('Run already launched or interrupted; inspect its retained resources')
         if run['request_delivery'] != 'sent':
             raise RuntimeError('Coordination request delivery is uncertain; inspect the exact main queue')
@@ -262,31 +296,35 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
         mode = brief.get('transport', run.get('transport', {}).get('kind', 'native'))
         if mode not in ('native', 'gossip'): raise RuntimeError('Unknown mission transport')
         if resume and mode != 'gossip': raise RuntimeError('Legacy startup resume requires its original Gossip adapter')
+        roles = ('worker',) if single else ('worker', 'qa')
         contexts = {r: (role_context(r, run['repo']) if mode == 'gossip' else
             'You are the assigned '+r+'. Accept only explicit coordinator contracts. '
-            'No extra agents, user questions, target merges, pushes or TODO edits.') for r in ('worker', 'qa')}
+            'No extra agents, user questions, target merges, pushes or TODO edits.') for r in roles}
         api = api or Herdr(run.get('herdr_session'))
         run['brief'] = brief
         if mode=='native' and brief.get('session_policy'):
             run['session_policy']=brief['session_policy']
         run['identity_protocol'] = 3 if mode == 'native' else 2
         folder = store.root / identity;folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+        incarnation = uuid.uuid4().hex if single else None
+        actor_folder = folder / incarnation if single else folder
+        actor_base = run.get('worker_head', brief['base_sha']) if single else brief['base_sha']
         def intent(operation):
             main_session(run)
             run['operation'] = operation
             store.save(run)
         try:
             run['phase'] = 'launching'
-            for role in (() if resume else ('worker', 'qa')):
-                branch = 'watchdog/' + identity + '/' + role
-                worktree = folder / role
+            for role in (() if resume else roles):
+                branch = 'watchdog/' + identity + '/' + role + ('-' + incarnation if incarnation else '')
+                worktree = actor_folder / role
                 run['participants'][role] = dict(brief['participants'][role],
                     worktree=str(worktree), branch=branch if role == 'worker' else None,
                     nickname='wd-' + role + '-' + identity[:8], role_context=contexts[role])
                 intent('create ' + role + ' worktree')
                 args = ['worktree', 'add'] + (['-b', branch] if role == 'worker' else ['--detach'])
-                git(run['repo'], *args, str(worktree), brief['base_sha'])
-                run['participants'][role]['base_sha'] = brief['base_sha']
+                git(run['repo'], *args, str(worktree), actor_base)
+                run['participants'][role]['base_sha'] = actor_base
                 store.save(run)
             if mode == 'gossip':
                 intent('create gossip')
@@ -294,18 +332,23 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
             else:
                 run['transport'] = {'kind':'native','boot_id':boot_id()}
                 store.save(run)
+            if single:
+                from .mission_fresh import prepare
+                prepare(run)
+                store.save(run)
             intent('create execution tab')
             pane = api.call('tab', 'create', '--workspace', run['main']['workspace'], '--cwd',
                             run['participants']['worker']['worktree'], '--label',
                             'Watchdog run ' + identity[:8], '--no-focus')['root_pane']
             run['resources']['worker'] = pane
             run['tab'] = pane['tab_id'];store.save(run)
-            intent('split execution tab')
-            api.checked(pane)
-            run['resources']['qa'] = api.call('pane', 'split', pane['pane_id'], '--direction', 'right',
-                '--cwd', run['participants']['qa']['worktree'], '--no-focus')['pane']
-            store.save(run)
-            for role in ('worker', 'qa'):
+            if not single:
+                intent('split execution tab')
+                api.checked(pane)
+                run['resources']['qa'] = api.call('pane', 'split', pane['pane_id'], '--direction', 'right',
+                    '--cwd', run['participants']['qa']['worktree'], '--no-focus')['pane']
+                store.save(run)
+            for role in roles:
                 pane = run['resources'][role]
                 api.checked(pane)
                 info = api.call('pane','process-info','--pane',pane['pane_id'])['process_info']
@@ -321,7 +364,9 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
                         '--run', identity, '--role', role, '--state-dir', str(store.root)]
                 api.call('pane', 'run', pane['pane_id'], shlex.join(argv))
             run['phase'] = 'active';run['operation'] = 'start monitor';store.save(run)
-            run['monitor_pid'] = start_monitor(run, store)
+            if not replacing or not monitor_running(run):
+                run['monitor_pid'] = start_monitor(run, store)
+            run.pop('replacement_previous', None)
             if resume:
                 run['resumed_from'] = {'operation': 'create gossip', 'reason': run.pop('reason'),
                                        'at': time.time()}
@@ -337,11 +382,12 @@ def launch(store, identity, brief, *, confirmed=False, api=None, resume=False):
 
 def open_run(run, api=None):
     from .mission_single import is_single
-    if is_single(run):
+    if is_single(run) and run.get('provisioning') != 'fresh':
         from .mission_native import verify_participant
         actor = verify_participant(run, 'worker')
         return (api or Herdr(run.get('herdr_session'))).call('agent', 'focus', actor.pane)
-    if not run.get('tab') or set(run['resources']) != {'worker', 'qa'}:
+    expected = {'worker'} if is_single(run) else {'worker', 'qa'}
+    if not run.get('tab') or set(run['resources']) != expected:
         raise RuntimeError('Execution tab has not been created completely')
     api = api or Herdr(run.get('herdr_session'))
     for pane in run['resources'].values():
@@ -358,12 +404,16 @@ def participant(store, identity, role):
     if os.environ.get('HERDR_PANE_ID') != pane['pane_id']:
         raise RuntimeError('Participant started in the wrong pane')
     Herdr(run.get('herdr_session')).checked(pane)
-    marker = store.root / identity / (role + '-started.json')
+    from .mission_fresh import artifact
+    marker = store.root / identity / artifact(run, role, 'started.json')
     try:
         with marker.open('x') as stream:
             json.dump({'pane': pane, 'pid': os.getpid(), 'started': time.time()}, stream)
     except FileExistsError as error:
         raise RuntimeError('Participant launch already attempted; inspect its owned pane before recovery') from error
+    if run.get('purpose') == 'plan':
+        from .mission_plan import participant as plan_participant
+        return plan_participant(store, identity)
     transport = run['transport']
     prompt = (part['role_context'] + '\n\nWatchdog Mission Control participant. '
         'Only the main conversation talks to the user. No extra agents, main merges, pushes, '
@@ -399,6 +449,9 @@ def participant(store, identity, role):
     if part.get('resume_session'):
         argv += ['resume',part['resume_session']]
     argv.append(prompt)
+    if run.get('provisioning') == 'fresh':
+        from .mission_fresh import provider_command
+        argv, env = provider_command(part, prompt, store, run)
     from .mission_terminal import TerminalLease
     terminal = TerminalLease(sys.stdout.fileno())
     child = subprocess.Popen(argv, env=env)
@@ -421,5 +474,5 @@ def participant(store, identity, role):
             try:terminal.restore()
             finally:
                 # Do not infer success from exit and never kill another process.
-                atomic(store.root / identity / (role + '-exit.json'),
+                atomic(store.root / identity / artifact(run, role, 'exit.json'),
                        {'code': child.returncode, 'at': time.time()})

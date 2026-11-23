@@ -46,14 +46,29 @@ def panel_process(api, pane, role, state):
                 return True, foreground
         elif (argv[1:3] == [str(ROOT / 'tools/watchdog-preview.py'), role] or
               argv[1:4] == [str(ROOT / 'watchdog'), 'panel', role]):
+            if role == 'agents':
+                try:
+                    repo = Path(argv[argv.index('--repo') + 1]).resolve()
+                    file = Path(argv[argv.index('--binding-file') + 1])
+                    if repo != Path(state['repo']).resolve() or not file.is_file():
+                        continue
+                    if file.resolve() != Path(state['binding_file']).resolve():
+                        # Older launch arguments are valid only through a sealed
+                        # Clean sessions redirect to this exact current owner.
+                        from .actions import Session
+                        owner = Session.for_panel(file, repo).binding
+                        if asdict(owner) != state['binding']:
+                            continue
+                except (OSError, ValueError, IndexError, KeyError, RuntimeError, TypeError):
+                    continue
             return True, foreground
     return False, foreground
 
 
-def ensure_panels(api, state, save):
+def ensure_panels(api, state, save, *, roles=('tasks', 'progress', 'artifacts', 'files'), split_target=None):
     staging = anchor = None
     workspace = state['binding']['workspace']
-    for role in ('tasks', 'progress', 'artifacts', 'files'):
+    for role in roles:
         if role in state['panes']:
             # A Herdr restart keeps pane ids but issues new terminal ids.
             pane = state['panes'][role] = api.panel(state['panes'][role], state['repo'])
@@ -73,7 +88,11 @@ def ensure_panels(api, state, save):
             if pane.get('launch_state') == 'starting':
                 raise RuntimeError('Unconfirmed ' + role + ' launch; inspect that pane before retrying')
         else:
-            if staging is None:
+            if split_target is not None:
+                target = api.checked(split_target)
+                pane = api.call('pane', 'split', target['pane_id'], '--direction', 'down',
+                                '--cwd', state['repo'], '--no-focus')['pane']
+            elif staging is None:
                 created = api.call('tab', 'create', '--workspace', workspace, '--cwd',
                                    state['repo'], '--label', 'Watchdog starting', '--no-focus')
                 pane = created['root_pane']
@@ -90,7 +109,7 @@ def ensure_panels(api, state, save):
         else:
             argv = [sys.executable, str(ROOT / 'watchdog'), 'panel', role, '--repo',
                     state['repo'], '--yazi-client-id', state['yazi_client_id']]
-            if role in ('tasks', 'progress') and state.get('binding_file'):
+            if role in ('tasks', 'progress', 'agents') and state.get('binding_file'):
                 argv += ['--binding-file', state['binding_file']]
         pane['launch_state'] = 'starting'
         save()
@@ -177,6 +196,9 @@ def main(argv=None):
     if argv[:1] == ['mission']:
         from .mission_cli import main as mission_main
         return mission_main(argv[1:])
+    if argv[:1] == ['pane']:
+        from .panes import main as pane_main
+        return pane_main(argv[1:])
     parser = argparse.ArgumentParser(description='Watchdog: verified conversation layouts and project panels')
     parser.add_argument('command', nargs='?', default='open',
                         choices=('open', 'layout', 'list', 'status', 'panel', 'pick'))
@@ -191,8 +213,14 @@ def main(argv=None):
     parser.add_argument('--binding-file', type=Path, default=os.environ.get('WATCHDOG_BINDING_FILE'))
     args = parser.parse_args(argv)
     if args.command == 'panel':
+        if args.preset == 'agents':
+            if not args.binding_file:
+                parser.error('panel agents requires --binding-file')
+            from .agents_ui import run
+            run(args.repo.resolve(), args.binding_file)
+            return 0
         if args.preset not in ('tasks', 'progress', 'artifacts'):
-            parser.error('panel requires tasks, progress or artifacts')
+            parser.error('panel requires tasks, progress, artifacts or agents')
         command = [sys.executable, str(ROOT / 'tools/watchdog-preview.py'), args.preset,
                    '--repo', str(args.repo.resolve())]
         if args.yazi_client_id:
