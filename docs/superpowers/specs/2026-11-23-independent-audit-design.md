@@ -17,7 +17,10 @@ O provider deve confirmar modelo solicitado, cwd, nova thread sem turnos,
 `readOnly` sem rede de ferramentas e aprovação `never` antes de `turn/start`.
 Uma divergência ou reroute interrompe a auditoria, sem fallback. O host consulta
 `config/read` para desabilitar todos os servidores MCP da configuração efetiva,
-apps, memórias e multi-agent nessa thread. Pedidos RPC de ferramenta/aprovação
+apps, memórias, hooks e multi-agent nessa thread. O processo recebe
+`-c features.hooks=false` antes de `app-server`, impedindo hooks de ciclo de vida
+já na inicialização e antes de criar thread; nenhum config real é alterado.
+Pedidos RPC de ferramenta/aprovação
 são recusados. O runtime permanece somente biblioteca padrão e Python 3.10+.
 A conta Codex continua guardando sua própria sessão/autenticação; o sandbox de
 leitura se aplica às ferramentas do auditor, não aos arquivos operacionais do host.
@@ -27,6 +30,11 @@ modelo efetivo, sessão/turno, prova do provider e identidade integral do líder
 Saídas parciais ficam na evidência de falha. A entrega usa a fila nativa do líder
 original e requer conta/thread/pane/processo, projeto e binding ainda idênticos.
 Nenhum binding é reanexado ou redirecionado pela verificação do destinatário.
+A mesma validação raw se aplica às entradas CLI, abertura UI, confirmação e
+lançamento: não chamam construtor, `verify` nem `routing` de `Session`. O
+lançamento adquire diretamente o lease de Clean sessions, verifica operações
+não encerradas e recusa identidade original indisponível, mesmo se a mesma
+conversa tiver reaparecido em outro pane.
 
 Intenções persistem antes de criar aba, iniciar wrapper ou enviar resultado.
 Uma auditoria ativa/incerta impede outra para esse mesmo líder/projeto. Timeout

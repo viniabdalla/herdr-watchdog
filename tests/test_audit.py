@@ -329,7 +329,7 @@ class OriginalRecipientTests(unittest.TestCase):
             value = {'repo': str(repo), 'binding_file': str(file), 'recipient': asdict(binding)}
             with patch('watchdog_app.bindings.engine', return_value=runtime), \
                  patch('watchdog_app.bindings.project_for', return_value=repo), \
-                 patch.object(audit, 'Session', side_effect=AssertionError('must not reattach')):
+                 patch('watchdog_app.actions.Session', side_effect=AssertionError('must not reattach')):
                 session, live = audit.original(value)
             self.assertEqual(asdict(session.binding), asdict(binding))
             self.assertEqual(live['agent_status'], 'idle')

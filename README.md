@@ -92,7 +92,9 @@ runs a host wrapper with a new Codex app-server session. It displays audit outpu
 not an interactive Codex TUI. No leader conversation is copied or resumed.
 
 The provider must confirm the requested model, new empty session, cwd, read-only
-sandbox and approval `never` before execution. Connected tools are disabled.
+sandbox and approval `never` before execution. Connected tools and account lifecycle hooks are disabled; hooks are disabled before
+app-server initialization. Audit entrypoints verify the original leader without
+reattaching or rewriting its binding.
 Press **A** again to follow running/completed/failed/uncertain status, effective
 model and report path. Reports return to the exact original verified Codex leader;
 a busy leader requires explicit **Entregar ao líder original** after it becomes

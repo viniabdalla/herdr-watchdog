@@ -55,3 +55,35 @@ O relatório pode representar observações feitas em momentos diferentes.
 
 A entrega do candidato aguarda revisão independente do commit exato e decisão do
 coordenador. O TODO permanece aberto.
+
+## Correções após QA do candidato 1fc316e
+
+A reprodução fornecida pela QA mostrou `HOOK_DISABLE_OVERRIDE: MISSING` e
+`LAUNCH_REWROTE_LEADER_BINDING: True`. Antes de corrigir, seis regressões novas
+falharam: duas para hooks e quatro para preservação do binding na abertura,
+confirmação UI e CLI. As seis passaram após as correções.
+
+O processo Codex agora recebe `-c features.hooks=false` **antes** de `app-server`
+e de `initialize`/`thread/start`, com a mesma desativação no override da thread.
+Uma fixture de subprocesso não generativa lê conta descartável com hooks
+habilitados e handler sentinela/injeção: comprova ausência de execução do handler
+e de injeção, preservando os arquivos da conta byte a byte. Não foi executado
+hook real de ai-memory, consumido handoff ou inicializado modelo real.
+
+As entradas da auditoria usam validação da identidade exata sem construtor,
+`verify` ou `routing` de `Session`. Fixtures com Session real e runtime/discovery
+substituídos oferecem a mesma conversa em outro pane: a operação é recusada,
+nenhum pane é aberto e o binding permanece byte a byte idêntico. Casos adicionais
+cobrem identidade disponível sem usar métodos capazes de escrever e o lease
+compartilhado com Clean sessions: operação não encerrada ou lock ocupado recusa
+o lançamento antes de efeitos externos.
+
+A suíte focada de auditoria agora tem 29 testes, todos passaram. As limitações
+de demonstração ao vivo descritas acima continuam aplicáveis.
+
+Verificação final das correções: `test_audit*.py` 29 passaram; Tasks 9 passaram;
+CLI 6 passaram; suíte completa isolada 467 testes, 7 skips, OK em 60.146s
+(`/tmp/watchdog-audit-corrections-tests.log`); `git diff --check` passou.
+A reprodução original de QA após o ajuste informa `HOOK_DISABLE_OVERRIDE: False`
+e `LAUNCH_REWROTE_LEADER_BINDING: False`; a recusa de identidade indisponível é
+comprovada pelas regressões novas, que não substituem a validação raw por mock.

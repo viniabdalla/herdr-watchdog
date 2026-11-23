@@ -20,7 +20,7 @@ def status_rows(value):
 
 class AuditUI:
     def __init__(self, session, store=None):
-        session.verify()
+        audit.verify_leader(session)
         if session.binding.kind != 'codex':
             raise RuntimeError('Auditoria requer líder Codex verificado')
         self.recipient = asdict(session.binding)
@@ -86,7 +86,7 @@ class AuditUI:
         return 0
 
     def confirm(self, session):
-        session.verify()
+        audit.verify_leader(session, self.recipient)
         if asdict(session.binding) != self.recipient:
             raise RuntimeError('Líder mudou; cancele e abra novamente a auditoria')
         if self.stage == 'deliver':

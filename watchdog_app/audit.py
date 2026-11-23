@@ -13,7 +13,6 @@ import sys
 import time
 import uuid
 
-from .actions import Session
 from .herdr import Herdr
 from .mission_launch import git
 from .store import atomic, state_root
@@ -49,7 +48,7 @@ def runtime_paths(account, executable):
 class RPC:
     """Bounded JSONL app-server client; server tool/approval requests always fail closed."""
     def __init__(self, executable, account, cwd, timeout=60):
-        self.proc = subprocess.Popen([executable, 'app-server'], cwd=cwd, env=environment(account),
+        self.proc = subprocess.Popen([executable, '-c', 'features.hooks=false', 'app-server'], cwd=cwd, env=environment(account),
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self.selector = selectors.DefaultSelector()
         self.selector.register(self.proc.stdout, selectors.EVENT_READ)
@@ -179,6 +178,40 @@ def original(value):
     return SimpleNamespace(binding=binding, runtime=runtime), live
 
 
+def verify_leader(session, expected=None):
+    """Validate an exact actor without invoking the write-capable Session API."""
+    if not session.file or session.binding is None:
+        raise RuntimeError('No conversation binding. Open this panel with watchdog first.')
+    return original({'binding_file': str(session.file), 'repo': str(session.repo),
+                     'recipient': expected if expected is not None else asdict(session.binding)})
+
+
+def load_leader(file, repo):
+    from types import SimpleNamespace
+    from . import bindings
+    data = json.loads(Path(file).read_text())
+    context = SimpleNamespace(file=Path(file), repo=Path(repo).resolve(),
+                              binding=bindings.engine().Binding(**data['binding']))
+    verify_leader(context)
+    return context
+
+
+@contextmanager
+def routing(session):
+    """Share the Clean sessions lease without its reattaching Session wrapper."""
+    from .clean_sessions import SETTLED, lease, operations
+    from .store import Store
+    if not session.file:
+        raise RuntimeError('No conversation binding. Open this panel with watchdog first.')
+    store = Store(Path(session.file).parent)
+    with lease(store, session.repo):
+        for operation in operations(store, session.repo):
+            if operation['state'] not in SETTLED:
+                raise RuntimeError('Clean sessions ' + operation['state'] + '; auditoria indisponível')
+        verify_leader(session)
+        yield
+
+
 def brief(value):
     # Whitelist only. No task text, transcript, handoff, prior answers or runtime identity.
     payload = {k: value[k] for k in ('audit_id', 'repo', 'revision', 'source_digest')}
@@ -203,10 +236,10 @@ def launch(session, account, model, executable=DEFAULT_EXECUTABLE, *, confirmed=
         raise RuntimeError('Auditoria requer líder Codex verificado para entrega por thread')
     store, api = store or AuditStore(), api or Herdr()
     identity = audit_id or str(uuid.uuid4()); account, executable = runtime_paths(account, executable)
-    with store.lock(identity), session.routing():
+    with store.lock(identity), routing(session):
         if (store.folder(identity) / 'audit.json').exists():
             raise RuntimeError('Auditoria já registrada; inspecione sem repetir o lançamento')
-        session.verify(); recipient = asdict(session.binding)
+        recipient = asdict(session.binding)
         for previous in store.list(session.repo):
             if previous['recipient'] == recipient and previous['state'] in ('launching', 'running', 'uncertain'):
                 raise RuntimeError('Auditoria ativa/incerta já existe: ' + previous['audit_id'] + '; inspecione sem repetir')
@@ -250,7 +283,8 @@ def readonly_config(config):
     servers = config.get('mcp_servers', {})
     if not isinstance(servers, dict): raise RuntimeError('Configuração MCP desconhecida')
     return {'mcp_servers': {name: {'enabled': False} for name in servers},
-            'features.apps': False, 'features.multi_agent': False, 'features.memories': False}
+            'features.apps': False, 'features.multi_agent': False, 'features.memories': False,
+            'features.hooks': False}
 
 
 def execute(value, save, *, rpc_factory=RPC):
@@ -399,7 +433,7 @@ def main(argv):
         elif args.action == 'open':
             if not args.binding_file or not args.account or not args.model:
                 parser.error('open requer --binding-file, --account e --model explícitos')
-            result = launch(Session(args.binding_file, args.repo), args.account, args.model, args.executable,
+            result = launch(load_leader(args.binding_file, args.repo), args.account, args.model, args.executable,
                             confirmed=args.confirm, audit_id=args.audit_id, store=store)
         else:
             if not args.audit_id: parser.error('ação requer --audit-id')
