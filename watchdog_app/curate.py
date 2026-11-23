@@ -30,6 +30,10 @@ blocked: only OPEN IDs that cannot proceed due to a concrete stated impediment;
 include the full causal clause as reason, copied verbatim from the supporting quote.
 Name the full task title or exact ID in an affirmative blocker claim. A denial,
 resolved blocker, different task, or invented/paraphrased reason is uncertain.
+Causal evidence must be an affirmative resource state (credentials/login/access/
+permission/approval expired, missing, denied, unavailable, offline, pending or
+required; Portuguese equivalents), waiting for a named resource, or explicit
+no access/sem acesso. Unknown or negated causal clauses are uncertain.
 Not started, still pending,
 or a future step is NOT a blocker. Lack of mention proves nothing.
 add: only genuinely new, explicit unfinished project work. No examples, offers,
@@ -175,11 +179,25 @@ BLOCKING_UNCERTAIN = re.compile(
     r"\b(?:another|other|different)\s+(?:project|repo(?:sitory)?)\b|"
     r"\b(?:outros?|diferente)\s+(?:projeto|repositorio)\b|\?"
 )
+# Complete affirmative causal forms, not a search for a word anywhere in a clause.
+# Deliberate lack-of-access forms express an impediment; they do not license a
+# general negation grammar ("no permission is required" is not such a cause).
+CAUSE_RESOURCE_EN = r'(?:credentials?|login|access|permissions?|approvals?)'
+CAUSE_STATE_EN = r'(?:expired|missing|denied|unavailable|offline|pending|required)'
+CAUSE_RESOURCE_PT = r'(?:credenciais|login|acesso|permissao|aprovacao)'
+CAUSE_STATE_PT = (r'(?:expirou|expiraram|expirad[oa]s?|ausentes?|faltando|negad[oa]s?|'
+                  r'indisponivel|indisponiveis|pendentes?|necessari[oa]s?)')
 BLOCKING_CAUSE = re.compile(
-    r'\b(?:expired|missing|denied|unavailable|offline|failed|error|full|waiting|awaiting|'
-    r'approval|permission|requires?|required|not available|no access|expir\w*|falt\w*|'
-    r'negad\w*|indispon\w*|falh\w*|erro|cheio|aguardando|aprovacao|permissao|necessari\w*)\b'
+    r'(?:'
+    r'(?:the )?'+CAUSE_RESOURCE_EN+r' (?:(?:is|are|was|were|has been|have been|has|have) )?'+CAUSE_STATE_EN+
+    r'|(?:expired|missing|denied|unavailable) (?:the )?'+CAUSE_RESOURCE_EN+
+    r'|(?:waiting for|awaiting) (?:the )?'+CAUSE_RESOURCE_EN+
+    r'|(?:as |os |a |o )?'+CAUSE_RESOURCE_PT+r' (?:(?:e|esta|estao|foi|foram) )?'+CAUSE_STATE_PT+
+    r'|(?:falta|faltam)(?: de)? '+CAUSE_RESOURCE_PT+
+    r'|aguardando (?:as |os |a |o )?'+CAUSE_RESOURCE_PT+
+    r'|no access|sem acesso)'
 )
+
 
 
 def blocking_supported(task, quote, reason, reply, tasks):
@@ -190,22 +208,37 @@ def blocking_supported(task, quote, reason, reply, tasks):
     """
     identities=task_identities(task)
     other=[task_identities(item) for item in tasks if item.id!=task.id]
+    subject=r'(?:'+'|'.join(re.escape(name) for name in identities if name)+r')'
+    label=r"(?:(?:the |a )?(?:task|tarefa|item)\s*:?\s*)?['\"`]?"
+    relation=r'(?:\b(?:because|due to|by|porque|por|pois|devido a|pelo|pela)\b|:)'
+    predicate=(r'(?:(?:(?:is|are|esta|estao)\s+)?(?:blocked|bloquead[oa]s?|impedid[oa]s?)\b\s*'+relation+
+               r"|(?:cannot|can['’]t|is unable to)\s+(?:run|proceed|continue|start|execute|connect|deploy|authenticate)\s+"+relation+
+               r'|(?:nao pode|nao consegue)\s+(?:prosseguir|continuar|executar|iniciar|conectar|autenticar|implantar)\s+'+relation+r')')
+    pattern=re.compile(label+subject+r"['\"`]?\s+"+predicate+
+                       r'\s*(?P<cause>[^.!?;\n]+)[.!?]?')
+
+    def claim_cause(sentence):
+        match=pattern.fullmatch(sentence.strip())
+        if match:
+            cause=match['cause'].strip(' .!?:;')
+            if BLOCKING_CAUSE.fullmatch(cause):return cause
+        return None
+
+    # Full reply context must consist of supported current claims or affirmative
+    # causal clauses. Unknown unscoped caveats remain uncertain, even when the
+    # selected excerpt ends before them. Named other tasks keep separate context.
     for sentence in re.split(r'(?<=[.!?])\s+|\n+',plain(reply)):
+        sentence=sentence.strip()
+        if not sentence:continue
         if not mentions(sentence,identities) and any(mentions(sentence,names) for names in other):
             continue
         if BLOCKING_UNCERTAIN.search(sentence):
             raise RuntimeError('Uncertain blocker: denied, resolved, contradictory or other-project evidence')
-    subject=r'(?:'+'|'.join(re.escape(name) for name in identities if name)+r')'
-    label=r"(?:(?:the |a )?(?:task|tarefa|item)\s*:?\s*)?['\"`]?"
-    relation=r'(?:because|due to|by|porque|por|pois|devido a|pelo|pela|:)'
-    predicate=(r'(?:(?:(?:is|are|esta|estao)\s+)?(?:blocked|bloquead[oa]s?|impedid[oa]s?)\s*'+relation+
-               r'|(?:cannot|can[\'’]t|is unable to|nao pode|nao consegue)\s+[^.!?;\n]{1,80}?\s+'+relation+r')')
-    pattern=(r'(?:^|[.!?]\s+)'+label+subject+r"['\"`]?\s+"+predicate+
-             r'\s*(?P<cause>[^.!?;\n]+)(?:[.!?;]|$)')
-    for match in re.finditer(pattern,plain(quote)):
-        cause=match['cause'].strip(' .!?:;')
-        if (len(re.findall(r'\w+',cause))>=2 and BLOCKING_CAUSE.search(cause) and
-                plain(reason).strip(' .!?:;')==cause):
+        if claim_cause(sentence) is None and not BLOCKING_CAUSE.fullmatch(sentence.strip(' .!?:;')):
+            raise RuntimeError('Uncertain blocker: relevant reply context is not a supported affirmative causal statement')
+    for sentence in re.split(r'(?<=[.!?])\s+|\n+',plain(quote)):
+        cause=claim_cause(sentence)
+        if cause is not None and plain(reason).strip(' .!?:;')==cause:
             return
     raise RuntimeError('Uncertain blocker: affirmative full-title/exact-ID impediment and literal causal reason required')
 

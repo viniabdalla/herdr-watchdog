@@ -112,3 +112,59 @@ Portuguese/English blockers. They do not establish external truth of an impedime
 universal language understanding. This finite grammar/cause vocabulary deliberately
 withholds unknown formulations and can produce conservative false negatives. Human
 confirmation follows the evidence gate. No real proposal or new model was used.
+
+## Affirmative causal grammar after the negated-cause review
+
+Review `bae8acd2-06f1-4fd4-8810-b03f455f7583` of parent
+`8688e258ef7f07c4a3959430d252b70e3867e847` demonstrated two further false positives:
+`credentials never expired` and `no permission is required` still contained keywords
+accepted by the previous cause search. Both literal replies were reproduced RED in
+TODO v0/v1 with Codex/Claude records, including direct validation, supplied replay and
+application. The correction replaces keyword presence with **full-clause matching**
+of a finite affirmative grammar, rather than adding two negation exclusions.
+
+Declared English resources are credentials, login, access, permission and approval
+(with the supported singular/plural forms and optional `the`). Supported affirmative
+states are expired, missing, denied, unavailable, offline, pending and required, with
+an optional explicit auxiliary such as `is`, `are`, `was`, `were`, `has` or `has been`.
+Examples: `credentials expired`, `credentials are missing`, `access is denied`,
+`permission is required` and `approval is pending`. Explicit forms such as
+`missing credentials`, `waiting for approval` and `awaiting permission` are supported.
+
+Portuguese forms cover the named resources credenciais, login, acesso, permissão and
+aprovação, optionally with an article and a supported copula, followed by the declared
+affirmative states (for example expiraram, expiradas, ausentes, faltando, negado,
+indisponível, pendente, necessária). Examples include `as credenciais expiraram`,
+`o acesso foi negado`, `permissao necessaria`, `aprovacao pendente`, `faltam credenciais`,
+`falta de acesso` and `aguardando aprovacao`. Case and accents are normalized for matching.
+
+`no access` and `sem acesso` are **specific allowed absence forms**: lack of access can
+be the reported impediment. They do not authorize arbitrary negative clauses such as
+`no access is needed`, `no permission is required`, `credentials never expired`,
+`credentials aren't missing`, `credenciais nunca expiraram`, `nenhuma permissao e
+necessaria` or `permissao desnecessaria`. Extra words, negations or unknown modifiers
+prevent a complete match. The reason must still equal the complete supported cause.
+
+The outer statement must itself affirm a current task-specific blocker. Supported
+inability predicates use explicit action verbs (run/proceed/continue/start/execute/
+connect/deploy/authenticate, and the declared Portuguese counterparts). `cannot fail`
+and `cannot not run` do not assert one of these supported inability statements.
+Word boundaries prevent malformed `blockedby` from becoming an affirmative claim.
+
+The same finite-context check applies to relevant **whole-reply** sentences. Another
+explicitly named TODO task retains its own context. Otherwise each relevant sentence
+must be a supported current blocker statement or an affirmative causal clause; unknown
+unscoped context stays uncertain. Thus an accepted initial cause cannot hide
+`Credentials never expired.` or `No permission is required.` after the selected quote,
+or a contrary clause after a semicolon. This intentionally withholds some legitimate
+replies containing unrelated unscoped narrative; the human must review or obtain a
+clearer source reply. Existing resolution, contradictory-state, fabricated-reason,
+stale-source/recipient and confirmation checks remain in force.
+
+Disposable regressions cover never/not/no/isnt, Portuguese nunca/não/nenhuma/
+desnecessária, the declared missing/expired/denied/permission/approval vocabulary,
+accepted absence forms, unknown predicates, and context outside the selected quote.
+All three validation/application paths run on both TODO and native-record formats.
+These tests establish deterministic grammar behavior, not universal language
+understanding, external truth, live model inference, or acceptance of the real task.
+No real proposal was applied and no new model was invoked.

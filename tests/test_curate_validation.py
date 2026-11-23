@@ -238,3 +238,98 @@ class CuratorValidationTests(unittest.TestCase):
                             with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
                             self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
                         else:self.assertEqual(curate.apply_review(self.session,snapshot,result,{0}).tasks[0].section,'Blocked')
+
+    def causal_fixture(self, version, kind, cause):
+        raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+        (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo)
+        self.session.binding=replace(self.binding,kind=kind)
+        text='Colors is blocked because '+cause+'.'
+        if kind=='codex':self.reply(text)
+        else:self.log.write_text(json.dumps(dict(type='assistant',message=dict(id='cause',stop_reason='end_turn',content=[dict(type='text',text=text)])))+'\n')
+        output=dict(done=[],blocked=[dict(id=snapshot.tasks[0].id,reason=cause,evidence=text)],add=[])
+        return snapshot,output,text
+
+    def test_causal_negations_and_ambiguity_are_uncertain_across_all_validation_paths(self):
+        causes=(
+            'credentials never expired', 'no permission is required',
+            'credentials are not expired', "credentials aren't missing", 'credentials isnt missing',
+            'credentials are never missing', 'access was never denied', 'permission is not required',
+            'approval is not required', 'no approval is required', 'approval is never missing',
+            'missing approval is not a blocker', 'credentials expired maybe', 'permission', 'approval',
+            'credenciais nunca expiraram', 'credenciais nao expiraram', 'nenhuma permissao e necessaria',
+            'permissao desnecessaria', 'aprovacao nao e necessaria', 'acesso nunca foi negado',
+            'credenciais nao estao faltando', 'nao falta acesso', 'nenhuma aprovacao esta pendente',
+            'no access is needed', 'not no access', 'sem acesso e desnecessario',
+        )
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for path in ('direct','existing','apply'):
+                    for cause in causes:
+                        with self.subTest(version=version,kind=kind,path=path,cause=cause):
+                            snapshot,output,text=self.causal_fixture(version,kind,cause)
+                            if path=='direct':
+                                result=curate.validate_proposals(output,snapshot,text)
+                                self.assertFalse(result['actions']);self.assertTrue(result['rejected'])
+                            else:
+                                result=curate.validate_existing(self.session,snapshot,output)
+                                if path=='existing':
+                                    self.assertFalse(result['actions']);self.assertTrue(result['rejected'])
+                                else:
+                                    result['actions']=[dict(kind='blocked',id=snapshot.tasks[0].id,reason=cause,evidence=text)]
+                                    with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
+                            self.assertEqual((self.repo/'TODO.md').read_bytes(),snapshot.raw)
+
+    def test_affirmative_causal_forms_including_access_absence_still_require_confirmation(self):
+        causes=('credentials expired', 'credentials are missing', 'access is denied',
+                'permission is required', 'approval is pending', 'no access',
+                'as credenciais expiraram', 'o acesso foi negado', 'permissao necessaria',
+                'aprovacao pendente', 'sem acesso', 'faltam credenciais',
+                'waiting for approval', 'missing credentials')
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for cause in causes:
+                    with self.subTest(version=version,kind=kind,cause=cause):
+                        snapshot,output,text=self.causal_fixture(version,kind,cause)
+                        direct=curate.validate_proposals(output,snapshot,text)
+                        self.assertEqual(len(direct['actions']),1,direct['rejected'])
+                        result=curate.validate_existing(self.session,snapshot,output)
+                        self.assertEqual(len(result['actions']),1,result['rejected'])
+                        self.assertEqual((self.repo/'TODO.md').read_bytes(),snapshot.raw)
+                        curate.apply_review(self.session,snapshot,result,set())
+                        self.assertEqual((self.repo/'TODO.md').read_bytes(),snapshot.raw)
+                        self.assertEqual(curate.apply_review(self.session,snapshot,result,{0}).tasks[0].section,'Blocked')
+
+    def test_negated_or_unknown_supplemental_cause_cannot_hide_outside_selected_quote(self):
+        tails=(' Credentials never expired.', ' No permission is required.',
+               ' Credenciais nunca expiraram.', ' Access is not needed.',
+               '; no permission is required.')
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for path in ('direct','existing','apply'):
+                    for tail in tails:
+                        with self.subTest(version=version,kind=kind,path=path,tail=tail):
+                            snapshot,output,quote=self.causal_fixture(version,kind,'credentials expired')
+                            text=quote[:-1]+tail if tail.startswith(';') else quote+tail
+                            if kind=='codex':self.reply(text)
+                            else:self.log.write_text(json.dumps(dict(type='assistant',message=dict(id='tail',stop_reason='end_turn',content=[dict(type='text',text=text)])))+'\n')
+                            if tail.startswith(';'):
+                                output['blocked'][0]['evidence']=text
+                            if path=='direct':
+                                self.assertFalse(curate.validate_proposals(output,snapshot,text)['actions'])
+                            else:
+                                result=curate.validate_existing(self.session,snapshot,output)
+                                if path=='existing':self.assertFalse(result['actions'])
+                                else:
+                                    result['actions']=[dict(kind='blocked',id=snapshot.tasks[0].id,reason='credentials expired',evidence=output['blocked'][0]['evidence'])]
+                                    with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
+                            self.assertEqual((self.repo/'TODO.md').read_bytes(),snapshot.raw)
+
+    def test_unknown_or_negated_blocker_predicates_do_not_supply_affirmative_support(self):
+        for text in ('Colors cannot not run because credentials expired.',
+                     'Colors cannot fail because credentials expired.',
+                     'Colors is blockedby credentials expired.',
+                     'Colors is blocked becausex credentials expired.'):
+            with self.subTest(reply=text):
+                self.reply(text)
+                output=dict(done=[],blocked=[dict(id=ID,reason='credentials expired',evidence=text)],add=[])
+                self.assertFalse(curate.validate_proposals(output,self.snap,text)['actions'])
