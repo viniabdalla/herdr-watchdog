@@ -117,7 +117,8 @@ def dispatch(store, identity, task_id):
         task = run['tasks'][task_id]
         if task.get('delivery') or task.get('attempt_id'): raise RuntimeError('Assignment already sent or uncertain')
         item = next(t for t in run['brief']['tasks'] if t['id'] == task_id)
-        if any(not run['tasks'][d].get('accepted_result') for d in item['dependencies']):
+        bundled = run.get('grouping') == 'together'
+        if not bundled and any(not run['tasks'][d].get('accepted_result') for d in item['dependencies']):
             raise RuntimeError('Task dependencies need reviewed results accepted by main')
         if any(t.get('attempt_id') and not t.get('accepted_result') for k,t in run['tasks'].items() if k != task_id):
             raise RuntimeError('Worker already has an assignment awaiting main review')
@@ -130,12 +131,14 @@ def dispatch(store, identity, task_id):
         attempt = str(uuid.uuid4()); payload = contract(run, task_id, attempt)
         from .mission_handoff import claim_session
         payload['session_policy']=claim_session(store,run,'worker',task_id,head,purpose=item.get('purpose','implementation'))
-        task.update(attempt_id=attempt, delivery='sending'); store.save(run)
+        members = list(run['tasks'].values()) if bundled else [task]
+        for member in members:member.update(attempt_id=attempt, delivery='sending')
+        store.save(run)
         try: deliver(store, run, 'worker', attempt, payload)
         except Exception:
-            task.update(delivery='uncertain',state='blocked',summary='Native delivery needs inspection',updated=time.time())
+            for member in members:member.update(delivery='uncertain',state='blocked',summary='Native delivery needs inspection',updated=time.time())
             store.save(run); raise
-        task.update(delivery='sent', state='working', agent='worker', summary='Assignment delivered', updated=time.time())
+        for member in members:member.update(delivery='sent', state='working', agent='worker', summary='Assignment delivered', updated=time.time())
         store.save(run); return run
 
 
@@ -155,16 +158,19 @@ def followup(store, identity, task_id, text):
         attempt=str(uuid.uuid4());payload=contract(run,task_id,attempt);payload['clarification']=text
         from .mission_handoff import claim_session
         payload['session_policy']=claim_session(store,run,'worker',task_id,payload['base_sha'],purpose=payload.get('purpose','implementation'))
-        task.setdefault('attempt_history',[]).append(task['attempt_id'])
-        task.update(attempt_id=attempt,delivery='sending')
-        task.pop('result',None);task.pop('accepted_result',None);run['qa']=None
+        members = list(run['tasks'].values()) if run.get('grouping') == 'together' else [task]
+        for member in members:
+            member.setdefault('attempt_history',[]).append(member['attempt_id'])
+            member.update(attempt_id=attempt,delivery='sending')
+            member.pop('result',None);member.pop('accepted_result',None)
+        run['qa']=None
         run['result_version']=run.get('result_version',0)+1
         store.save(run)
         try:deliver(store,run,'worker',attempt,payload)
         except Exception:
-            task.update(delivery='uncertain',state='blocked',summary='Follow-up delivery is uncertain',updated=time.time())
+            for member in members:member.update(delivery='uncertain',state='blocked',summary='Follow-up delivery is uncertain',updated=time.time())
             store.save(run);raise
-        task.update(delivery='sent',state='working',agent='worker',summary='Guidance delivered',updated=time.time())
+        for member in members:member.update(delivery='sent',state='working',agent='worker',summary='Guidance delivered',updated=time.time())
         store.save(run);return run
 
 
@@ -488,7 +494,8 @@ def bootstrap(store, identity, role, child, *, timeout=45):
     else:raise RuntimeError('Native registration timed out; owned terminal retained')
     proof={'transport':'native','run_id':identity,'role':role,'native':asdict(binding),
         'generation':str(uuid.uuid4()),'boot_id':boot_id(),'bridge_owner':owner(),
-        'broker':str(store.root/identity/('w-'+part['startup_attempt'][:8]+'.sock' if part.get('startup_attempt') else role+'-broker.sock'))}
+        'broker':str(store.root/identity/(role[0]+'-'+(part.get('incarnation') or part['startup_attempt'])[:8]+'.sock'
+            if part.get('incarnation') or part.get('startup_attempt') else role+'-broker.sock'))}
     with store.lock(identity):
         run=store.load(identity)
         if not enabled(run):raise RuntimeError('Transport changed during bootstrap')

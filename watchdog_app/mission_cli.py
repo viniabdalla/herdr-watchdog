@@ -24,7 +24,7 @@ def template(run):
             'tasks':[{'id':key,'allowed_files':[],'acceptance':[],'tests':[],'dependencies':[]} for key in run['tasks']]}
     kind = run['main'].get('kind', 'codex') if single else 'codex'
     executable = str(Path(shutil.which(kind)).resolve()) if shutil.which(kind) else str(Path.home()/'.local/bin'/kind)
-    return {**({'execution_mode':'single', 'provisioning':'fresh', 'grouping':run.get('grouping','single'), 'purpose':run.get('purpose','implementation')} if single else {}),
+    return {**({'execution_mode':'single', 'provisioning':'fresh', 'grouping':run.get('grouping','single'), 'purpose':run.get('purpose','implementation')} if single else {'grouping':run.get('grouping','single')}),
         'transport':run.get('transport',{}).get('kind','native'),'run_id':run['id'],'repo':run['repo'],'base_sha':git(run['repo'],'rev-parse','HEAD'),
         'participants':{role:{'account':run['main']['account'],
             'executable':executable, 'kind':kind,
@@ -77,7 +77,7 @@ def main(argv):
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('list','inspect','template','launch','monitor','watch','poll','open',
-                                         'handoff-export','handoff-preview','handoff-adopt','participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','leader-review','approve'))
+                                         'handoff-export','handoff-preview','handoff-adopt','participant','native-host','enroll','receive','recover-unstarted','recover-identity','dispatch','followup','report','accept-result','review','leader-review','approve','renew-qa','prepare-team'))
     parser.add_argument('--run')
     parser.add_argument('--repo',type=Path,default=Path.cwd())
     parser.add_argument('--state-dir',type=Path,help='Watchdog run ledger directory')
@@ -88,6 +88,7 @@ def main(argv):
     parser.add_argument('--role',choices=('worker','qa'))
     parser.add_argument('--text')
     parser.add_argument('--candidate')
+    parser.add_argument('--incarnation',help='Exact QA incarnation issued by renew-qa')
     parser.add_argument('--after',type=int,default=0)
     parser.add_argument('--binding-file',type=Path)
     parser.add_argument('--context-file',type=Path)
@@ -101,7 +102,7 @@ def main(argv):
         else:
             if not args.run:parser.error('--run is required')
             if args.action in ('dispatch','followup','accept-result') and not args.task:parser.error('--task is required')
-            if args.action in ('review','leader-review','approve') and not args.candidate:parser.error('--candidate is required')
+            if args.action in ('review','leader-review','approve','renew-qa') and not args.candidate:parser.error('--candidate is required')
             if args.action in ('participant','native-host','enroll','receive','recover-unstarted','recover-identity','report') and not args.role:parser.error('--role is required')
             if args.action=='launch' and not args.brief:parser.error('--brief is required')
             if args.action=='report' and not args.file:parser.error('--file is required')
@@ -129,7 +130,13 @@ def main(argv):
             elif args.action=='watch':return watch(store,args.run) or 0
             elif args.action=='poll':result=transport.tick(store,args.run)
             elif args.action=='open':result=open_run(store.load(args.run))
-            elif args.action=='participant':return participant(store,args.run,args.role)
+            elif args.action=='participant':return participant(store,args.run,args.role,incarnation=args.incarnation)
+            elif args.action=='prepare-team':
+                from .mission_maintenance import prepare_team
+                result=prepare_team(store,args.run,confirmed=args.confirm)
+            elif args.action=='renew-qa':
+                from .mission_maintenance import renew_qa
+                result=renew_qa(store,args.run,args.candidate,confirmed=args.confirm)
             elif args.action=='native-host':
                 from .mission_native import serve
                 return serve(store,args.run,args.role,confirmed=args.confirm)

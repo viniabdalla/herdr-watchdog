@@ -189,8 +189,10 @@ def request(session, snapshot, ids, *, confirmed=False, store=None, checkpoint=N
             raise RuntimeError('Unknown or incompatible provisioning mode')
         if grouping not in ('single', 'together') or purpose not in ('implementation', 'plan'):
             raise RuntimeError('Unknown grouping or contract purpose')
-        if (grouping != 'single' or purpose != 'implementation') and (mode != 'single' or provisioning != 'fresh'):
+        if purpose != 'implementation' and (mode != 'single' or provisioning != 'fresh'):
             raise RuntimeError('Grouped/planning dispatch requires a fresh single executor')
+        if grouping == 'together' and mode == 'single' and provisioning != 'fresh':
+            raise RuntimeError('Grouped single dispatch requires a fresh executor')
         if mode == 'single':
             from .mission_single import validate_executor, available
             if len(tasks) != 1 and not (provisioning == 'fresh' and grouping == 'together'):

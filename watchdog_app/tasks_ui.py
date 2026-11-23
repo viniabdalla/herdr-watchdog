@@ -240,6 +240,8 @@ class TasksUI:
                     ('', None, None)])
                 if offer['kind'] == 'fresh':
                     rows.append(('Tarefas: ' + ('separadas, um agente por tarefa' if offer.get('grouping') == 'separate' else 'juntas em um contrato'), None, None))
+                elif len(offer['ids']) > 1:
+                    rows.append((f"Uma entrega conjunta · {len(offer['ids'])} tarefas · um executor e um QA", None, None))
                 changes = offer.get('changes')
                 if changes is None:
                     rows.append(('Checkpoint: not a Git repository; nothing will be committed.', None, None))
@@ -523,7 +525,8 @@ class TasksUI:
                                      grouping=offer['grouping'], purpose=offer['purpose'])
                 run = runs[0]
             else:
-                run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True, checkpoint=saved)
+                run = request(self.session, offer['snapshot'], offer['ids'], confirmed=True, checkpoint=saved,
+                              grouping='together' if len(offer['ids']) > 1 else 'single')
             self.notice = ('Checkpoint ' + saved['sha'][:8] + ' saved · ' if saved and saved['created'] else '') + \
                 'Run ' + run['id'][:8] + ' · preparing the brief · see Progress'
         elif offer['kind'] == 'done':

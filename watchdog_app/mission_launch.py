@@ -397,8 +397,10 @@ def open_run(run, api=None):
     return api.call('tab', 'focus', run['tab'])
 
 
-def participant(store, identity, role):
+def participant(store, identity, role, *, incarnation=None):
     run = store.load(identity);part = run['participants'][role]
+    if part.get('incarnation') != incarnation:
+        raise RuntimeError('Participant incarnation differs from the confirmed launch')
     source_current(run)
     pane = run['resources'][role]
     if os.environ.get('HERDR_PANE_ID') != pane['pane_id']:

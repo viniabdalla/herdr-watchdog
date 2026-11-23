@@ -68,7 +68,7 @@ def provider_command(part, prompt, store, run):
 
 
 def artifact(run, role, suffix):
-    attempt = run['participants'][role].get('startup_attempt')
+    attempt = run['participants'][role].get('incarnation') or run['participants'][role].get('startup_attempt')
     return role + ('-' + attempt if attempt else '') + '-' + suffix
 
 
