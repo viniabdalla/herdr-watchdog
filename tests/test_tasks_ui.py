@@ -26,7 +26,7 @@ bindings.engine=lambda:runtime
 bindings.project_for=lambda b:repo
 def infer(payload,cancel):
  task=next(t for t in payload['tasks'] if 'Add task colors' in t['text'])
- return {'done':[{'id':task['id'],'evidence':'Colors are implemented.'}],'blocked':[],'add':[]}
+ return {'done':[{'id':task['id'],'evidence':'Add task colors is complete.'}],'blocked':[],'add':[]}
 curate.ask_codex=infer
 from watchdog_app.tasks_ui import run
 run(repo,Path(sys.argv[2]))
@@ -130,7 +130,7 @@ class TasksUITests(unittest.TestCase):
         self.terminal.close()
         history = self.repo / 'record.jsonl'
         history.write_text(json.dumps({'type': 'event_msg', 'timestamp': '2026-11-16T10:00:00Z',
-            'payload': {'type': 'task_complete', 'turn_id': 'turn', 'last_agent_message': 'Colors are implemented.'}})+'\n' if with_reply else '')
+            'payload': {'type': 'task_complete', 'turn_id': 'turn', 'last_agent_message': 'Add task colors is complete.'}})+'\n' if with_reply else '')
         binding = self.repo / 'binding.json'
         binding.write_text(json.dumps({'repo':str(self.repo),'binding':asdict(FakeBinding(history=str(history)))}))
         script = BOUND_SCRIPT

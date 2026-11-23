@@ -28,14 +28,14 @@ class CuratorTests(unittest.TestCase):
         path = self.repo / 'source.jsonl'
         path.write_text(json.dumps({'type': 'event_msg', 'timestamp': '2026-11-16T10:00:00Z',
                                    'payload': {'type': 'task_complete', 'turn_id': 'turn',
-                                               'last_agent_message': 'Colors are implemented.'}}) + '\n')
+                                               'last_agent_message': 'Add colors is complete.'}}) + '\n')
         return SimpleNamespace(binding=FakeBinding(history=str(path)), verify=lambda: None)
 
     def test_review_is_cached_and_never_changes_todo_without_apply(self):
         session = self.session();calls = []
         def infer(payload, cancel):
             calls.append(payload)
-            return {'done': [{'id': self.snapshot.tasks[0].id, 'evidence': 'Colors are implemented.'}],
+            return {'done': [{'id': self.snapshot.tasks[0].id, 'evidence': 'Add colors is complete.'}],
                     'blocked': [], 'add': []}
         with patch('watchdog_app.curate.ask_codex', side_effect=infer):
             first = review(session, self.snapshot, threading.Event())
@@ -48,7 +48,7 @@ class CuratorTests(unittest.TestCase):
 
     def test_new_completed_reply_invalidates_an_old_review(self):
         session = self.session()
-        raw = {'done': [{'id': self.snapshot.tasks[0].id, 'evidence': 'Colors are implemented.'}],
+        raw = {'done': [{'id': self.snapshot.tasks[0].id, 'evidence': 'Add colors is complete.'}],
                'blocked': [], 'add': []}
         with patch('watchdog_app.curate.ask_codex', return_value=raw):
             result = review(session, self.snapshot, threading.Event())
@@ -80,10 +80,10 @@ class CuratorTests(unittest.TestCase):
 
     def test_done_and_blocked_require_literal_support_and_open_ids(self):
         a, b, closed = self.snapshot.tasks
-        reply = normalize_reply('**Task colors are implemented.**\nVerifier cannot run because login expired.')
-        output = {'done': [{'id': a.id, 'evidence': 'Task colors are implemented.'}],
+        reply = normalize_reply('**Task Add colors is complete.**\nConnect verifier cannot run because login expired.')
+        output = {'done': [{'id': a.id, 'evidence': 'Task Add colors is complete.'}],
                   'blocked': [{'id': b.id, 'reason': 'Login expired',
-                               'evidence': 'Verifier cannot run because login expired.'}], 'add': []}
+                               'evidence': 'Connect verifier cannot run because login expired.'}], 'add': []}
         result = validate_proposals(output, self.snapshot, reply)
         self.assertEqual([a['kind'] for a in result['actions']], ['done', 'blocked'])
         self.assertEqual(result['rejected'], [])
@@ -91,17 +91,17 @@ class CuratorTests(unittest.TestCase):
 
     def test_bad_quote_does_not_hide_a_separate_valid_proposal(self):
         a, b, _ = self.snapshot.tasks
-        output = {'done': [{'id': a.id, 'evidence': 'Colors work.'},
+        output = {'done': [{'id': a.id, 'evidence': 'Add colors is complete.'},
                            {'id': b.id, 'evidence': 'Made-up evidence'}], 'blocked': [], 'add': []}
-        result = validate_proposals(output, self.snapshot, 'Colors work.')
+        result = validate_proposals(output, self.snapshot, 'Add colors is complete.')
         self.assertEqual([a['id'] for a in result['actions']], [a.id])
         self.assertTrue(result['rejected'])
 
     def test_conflicting_statuses_are_both_withheld(self):
         task = self.snapshot.tasks[0]
-        output = {'done': [{'id': task.id, 'evidence': 'Colors work.'}],
-                  'blocked': [{'id': task.id, 'reason': 'waiting', 'evidence': 'Colors work.'}], 'add': []}
-        result = validate_proposals(output, self.snapshot, 'Colors work.')
+        output = {'done': [{'id': task.id, 'evidence': 'Add colors is complete.'}],
+                  'blocked': [{'id': task.id, 'reason': 'waiting', 'evidence': 'Add colors is complete.'}], 'add': []}
+        result = validate_proposals(output, self.snapshot, 'Add colors is complete.')
         self.assertEqual(result['actions'], [])
         self.assertTrue(result['rejected'])
 

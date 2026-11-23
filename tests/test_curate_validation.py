@@ -51,3 +51,105 @@ class CuratorValidationTests(unittest.TestCase):
         self.session.repo=self.repo/'another-project'
         with self.assertRaises(RuntimeError):
             curate.validate_existing(self.session,self.snap,self.output('Colors implemented and tests passed.'))
+
+    def test_qa_literal_counterexamples_and_uncertain_completion_are_withheld(self):
+        cases=[
+            'Colors tests passed, but the implementation does not work.',
+            'Colors implemented. Ainda falta verificar o aceite.',
+            'Colors tests passed for another project; this task has not been started.',
+            'Colors implemented. Aguardando ajuda para commit.',
+            'Colors concluído. Aguardando aceite do usuário.',
+            'Colors implementado. Não funciona.',
+            'Colors implementado. O aceite ainda não foi verificado.',
+            'Colors tests passed.',
+            'Colors works.',
+            'Colors completed tests.',
+            'Completed task: Colors dashboard.',
+            'Complete task: Colors.',
+            'Colors implemented. Waiting for help committing the changes.',
+            'Colors implementado em outro projeto.',
+            'Colors implemented. Acceptance verification remains.',
+        ]
+        for text in cases:
+            with self.subTest(reply=text):
+                result=curate.validate_proposals(self.output(text),self.snap,text)
+                self.assertEqual(result['actions'],[])
+                self.assertTrue(result['rejected'])
+
+    def test_apply_revalidates_old_or_tampered_proposal_against_full_reply(self):
+        for text in [
+            'Colors tests passed, but the implementation does not work.',
+            'Colors implemented. Ainda falta verificar o aceite.',
+            'Colors tests passed for another project; this task has not been started.',
+            'Colors implemented. Aguardando ajuda para commit/aceite.',
+        ]:
+            with self.subTest(reply=text):
+                (self.repo/'TODO.md').write_bytes(self.snap.raw)
+                self.reply(text)
+                quote=text.split('.')[0]+'.' if '. ' in text else text
+                raw=self.output(quote)
+                result=curate.validate_existing(self.session,self.snap,raw)
+                # Mimic a cached action produced by the previous permissive filter.
+                result['actions']=[dict(kind='done',id=ID,evidence=quote)]
+                with self.assertRaises(RuntimeError):
+                    curate.apply_review(self.session,self.snap,result,{0})
+                self.assertEqual((self.repo/'TODO.md').read_bytes(),self.snap.raw)
+
+    def test_completion_requires_full_task_identity_not_a_shared_word(self):
+        raw=self.snap.raw.replace(b'- [ ] Colors',b'- [ ] Colors dashboard')
+        snapshot=Snapshot.parse(self.repo,raw)
+        result=curate.validate_proposals(self.output('Colors implemented.'),snapshot,'Colors implemented.')
+        self.assertFalse(result['actions']);self.assertTrue(result['rejected'])
+        result=curate.validate_proposals(self.output('Colors dashboard is complete.'),snapshot,'Colors dashboard is complete.')
+        self.assertEqual(len(result['actions']),1)
+
+    def test_affirmative_task_completion_in_supported_formats_and_native_sources(self):
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for quote in ('Colors implemented and tests passed.', 'Colors is complete.',
+                              'Colors concluído e aceite verificado.', 'Colors finalizado.',
+                              'Completed task: Colors.'):
+                    with self.subTest(version=version,kind=kind,quote=quote):
+                        raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                        (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo)
+                        key=snapshot.tasks[0].id
+                        if kind=='codex':self.reply(quote)
+                        else:
+                            self.log.write_text(json.dumps(dict(type='assistant',message=dict(id='m',stop_reason='end_turn',content=[dict(type='text',text=quote)])))+'\n')
+                        self.session.binding=replace(self.binding,kind=kind)
+                        output=dict(done=[dict(id=key,evidence=quote)],blocked=[],add=[])
+                        result=curate.validate_existing(self.session,snapshot,output)
+                        self.assertEqual(len(result['actions']),1,result['rejected'])
+                        self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+                        self.assertTrue(curate.apply_review(self.session,snapshot,result,{0}).tasks[0].done)
+
+    def test_qa_cases_are_revalidated_in_both_todo_and_transcript_formats(self):
+        replies=[
+            'Colors tests passed, but the implementation does not work.',
+            'Colors implemented. Ainda falta verificar o aceite.',
+            'Colors tests passed for another project; this task has not been started.',
+            'Colors implemented. Aguardando ajuda para commit/aceite.',
+        ]
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for text in replies:
+                    with self.subTest(version=version,kind=kind,reply=text):
+                        raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                        (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo)
+                        key=snapshot.tasks[0].id
+                        self.session.binding=replace(self.binding,kind=kind)
+                        if kind=='codex':self.reply(text)
+                        else:
+                            self.log.write_text(json.dumps(dict(type='assistant',message=dict(id='m',stop_reason='end_turn',content=[dict(type='text',text=text)])))+'\n')
+                        output=dict(done=[dict(id=key,evidence=text)],blocked=[],add=[])
+                        result=curate.validate_existing(self.session,snapshot,output)
+                        self.assertFalse(result['actions']);self.assertTrue(result['rejected'])
+                        result['actions']=[dict(kind='done',id=key,evidence=text)]
+                        with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
+                        self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+
+    def test_exact_uuid_can_identify_affirmative_completion(self):
+        text='Task '+ID+' is complete.'
+        self.reply(text);result=curate.validate_existing(self.session,self.snap,self.output(text))
+        self.assertEqual(len(result['actions']),1,result['rejected'])
+        self.assertTrue(curate.apply_review(self.session,self.snap,result,{0}).tasks[0].done)
