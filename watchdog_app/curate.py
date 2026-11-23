@@ -59,6 +59,18 @@ SCHEMA = schema_object({
 })
 
 
+MAX_NORMALIZED_REPLY_CHARS = 12000
+MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024
+
+
+def admit_normalized_reply(text):
+    if not isinstance(text, str):
+        raise RuntimeError('Completed reply text is unavailable')
+    if len(text) > MAX_NORMALIZED_REPLY_CHARS:
+        raise RuntimeError('Completed reply exceeds 12000 normalized Unicode characters; no proposals admitted')
+    return text
+
+
 def normalize_reply(text):
     lines, fence = [], None
     for line in text.splitlines():
@@ -71,50 +83,56 @@ def normalize_reply(text):
             continue
         if fence is None:
             lines.append(line)
+    if fence is not None:
+        raise RuntimeError('Unclosed fence in completed reply; normalization context is incomplete')
     text = '\n'.join(lines)
     text = re.sub(r'(?<!\w)(\*\*|__)(?=\S)(.+?)(?<=\S)\1(?!\w)', r'\2', text)
     return re.sub(r'`([^`\n]+)`', r'\1', text)
 
 
+def complete_reply_tail(binding):
+    tail = evidence_tail(binding.history, limit=MAX_TRANSCRIPT_BYTES)
+    if tail['incomplete'] or any('malformed' in item for item in tail['issues']):
+        raise RuntimeError('Partial or malformed source; wait for complete evidence')
+    return tail
+
+
 def latest_reply(binding):
-    path = Path(binding.history)
-    with path.open('rb') as file:
-        length = file.seek(0, 2)
-        offset = max(0, length - 4 * 1024 * 1024)
-        file.seek(offset)
-        if offset:
-            file.readline()
-        lines = file.read().splitlines(keepends=True)
+    tail = complete_reply_tail(binding)
     latest = None
-    for line in lines:
-        if not line.endswith(b'\n'):
-            continue
-        try:
-            row = json.loads(line)
-        except (ValueError, UnicodeError):
-            continue
-        if not isinstance(row, dict):
-            continue
+    for row, reference in tail['records']:
+        fallback = reference.rsplit(':', 1)[-1]
         if binding.kind == 'codex':
+            if row.get('type') != 'event_msg':continue
             payload = row.get('payload', {})
-            if row.get('type') != 'event_msg' or payload.get('type') != 'task_complete':
-                continue
+            if not isinstance(payload, dict):raise RuntimeError('Malformed completed reply payload')
+            if payload.get('type') != 'task_complete':continue
             text = payload.get('last_agent_message', '')
-            identity = payload.get('turn_id') or hashlib.sha256(line).hexdigest()
+            identity = payload.get('turn_id') or fallback
         else:
-            if row.get('type') != 'assistant' or row.get('isSidechain') or row.get('agentId'):
-                continue
+            if row.get('type') != 'assistant' or row.get('isSidechain') or row.get('agentId'):continue
             message = row.get('message', {})
-            if message.get('stop_reason') != 'end_turn':
-                continue
-            text = '\n'.join(p.get('text', '') for p in message.get('content', [])
-                             if isinstance(p, dict) and p.get('type') == 'text')
-            identity = message.get('id') or row.get('uuid') or hashlib.sha256(line).hexdigest()
-        if not isinstance(text, str) or not text.strip():
-            continue
-        text = normalize_reply(text)[-12000:]
-        latest = {'id': identity, 'text': text, 'timestamp': row.get('timestamp', ''),
-                  'key': hashlib.sha256((str(identity) + '\0' + text).encode()).hexdigest()}
+            if not isinstance(message, dict):raise RuntimeError('Malformed completed reply message')
+            if message.get('stop_reason') != 'end_turn':continue
+            parts = message.get('content', [])
+            if not isinstance(parts, list):raise RuntimeError('Malformed completed reply content')
+            text_parts = [part.get('text', '') for part in parts
+                          if isinstance(part, dict) and part.get('type') == 'text']
+            if any(not isinstance(part, str) for part in text_parts):
+                raise RuntimeError('Completed reply text is unavailable')
+            text = '\n'.join(text_parts)
+            identity = message.get('id') or row.get('uuid') or fallback
+        if not isinstance(text, str):raise RuntimeError('Completed reply text is unavailable')
+        # Select the latest complete native reply FIRST. Admission failure must
+        # neither select its suffix nor fall back to an older eligible reply.
+        latest = {'id': identity, 'text': text, 'timestamp': row.get('timestamp', '')}
+    if latest is None:
+        if tail['start']:
+            raise RuntimeError('No complete reply within the bounded transcript window; no older reply substituted')
+        return None
+    latest['text'] = admit_normalized_reply(normalize_reply(latest['text']))
+    if not latest['text'].strip():return None
+    latest['key'] = hashlib.sha256((str(latest['id']) + '\0' + latest['text']).encode()).hexdigest()
     return latest
 
 
@@ -244,6 +262,8 @@ def blocking_supported(task, quote, reason, reply, tasks):
 
 
 def validate_proposals(output, snapshot, reply):
+    # Direct callers supply the complete normalized reply, never an excerpt.
+    reply = admit_normalized_reply(reply)
     if not isinstance(output, dict) or set(output) != {'done', 'blocked', 'add'}:
         raise RuntimeError('Codex returned an invalid review format')
     available = {t.id: t for t in snapshot.tasks if not t.done}
@@ -342,10 +362,9 @@ def source_context(session, snapshot):
     if Path(getattr(session, 'repo', snapshot.repo)).resolve() != snapshot.repo:
         raise RuntimeError('Conversation and task snapshot belong to different projects')
     snapshot.assert_current()
-    tail = evidence_tail(session.binding.history)
-    if tail['incomplete'] or any('malformed' in item for item in tail['issues']):
-        raise RuntimeError('Partial or malformed source; wait for complete evidence')
-    return {'binding': asdict(session.binding), 'tail_digest': tail['digest']}
+    tail = complete_reply_tail(session.binding)
+    return {'binding': asdict(session.binding), 'tail_digest': tail['digest'],
+            'tail_identity': list(tail['identity']), 'tail_start': tail['start'], 'tail_size': tail['size']}
 
 
 def validate_existing(session, snapshot, output):

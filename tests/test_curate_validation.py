@@ -333,3 +333,138 @@ class CuratorValidationTests(unittest.TestCase):
                 self.reply(text)
                 output=dict(done=[],blocked=[dict(id=ID,reason='credentials expired',evidence=text)],add=[])
                 self.assertFalse(curate.validate_proposals(output,self.snap,text)['actions'])
+
+    def reply_record(self, kind, text, turn='admission'):
+        if kind=='codex':
+            return dict(type='event_msg',payload=dict(type='task_complete',turn_id=turn,last_agent_message=text))
+        return dict(type='assistant',message=dict(id=turn,stop_reason='end_turn',content=[dict(type='text',text=text)]))
+
+    def test_normalized_reply_character_boundaries_preserve_complete_multibyte_text(self):
+        limit=12000
+        for kind in ('codex','claude'):
+            for delta in (-1,0,1):
+                for unit in ('é','🌞'):
+                    with self.subTest(kind=kind,delta=delta,unit=unit):
+                        prefix='Colors is complete.\n'
+                        text=prefix+unit*(limit+delta-len(prefix))
+                        raw='**Colors is complete.**\r\n'+text[len(prefix):]
+                        normalized=curate.normalize_reply(raw)
+                        self.assertEqual(len(normalized),limit+delta)
+                        self.assertGreater(len(normalized.encode()),limit)
+                        self.session.binding=replace(self.binding,kind=kind)
+                        self.log.write_text(json.dumps(self.reply_record(kind,raw))+'\n')
+                        if delta<=0:
+                            self.assertEqual(curate.latest_reply(self.session.binding)['text'],normalized)
+                            self.assertEqual(len(curate.validate_proposals(self.output('Colors is complete.'),self.snap,normalized)['actions']),1)
+                            self.assertEqual(len(curate.validate_existing(self.session,self.snap,self.output('Colors is complete.'))['actions']),1)
+                        else:
+                            with self.assertRaisesRegex(RuntimeError,'12000'):curate.latest_reply(self.session.binding)
+                            with self.assertRaisesRegex(RuntimeError,'12000'):curate.validate_proposals(self.output('Colors is complete.'),self.snap,normalized)
+                            with self.assertRaisesRegex(RuntimeError,'12000'):curate.validate_existing(self.session,self.snap,self.output('Colors is complete.'))
+                        self.assertEqual((self.repo/'TODO.md').read_bytes(),self.snap.raw)
+
+    def test_oversize_latest_response_never_falls_back_and_does_not_poison_a_later_small_reply(self):
+        for kind in ('codex','claude'):
+            with self.subTest(kind=kind):
+                self.session.binding=replace(self.binding,kind=kind)
+                old=self.reply_record(kind,'Colors is complete.','old')
+                huge=self.reply_record(kind,'Not complete.\n'+' '*12000+'\nColors is complete.','huge')
+                self.log.write_text(json.dumps(old)+'\n'+json.dumps(huge)+'\n')
+                with self.assertRaisesRegex(RuntimeError,'12000'):curate.latest_reply(self.session.binding)
+                with self.log.open('a') as f:f.write(json.dumps(self.reply_record(kind,'Colors is complete.','new'))+'\n')
+                self.assertEqual(curate.latest_reply(self.session.binding)['id'],'new')
+
+    def test_oversize_contrary_prefix_refused_before_direct_replay_model_or_apply(self):
+        import threading
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for action in ('done','blocked'):
+                    for path in ('direct','latest','existing','review','apply','tampered_apply'):
+                        with self.subTest(version=version,kind=kind,action=action,path=path):
+                            raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                            (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo);key=snapshot.tasks[0].id
+                            self.session.binding=replace(self.binding,kind=kind)
+                            quote='Colors is complete.' if action=='done' else 'Colors is blocked because credentials expired.'
+                            output=dict(done=[],blocked=[],add=[])
+                            output[action]=[dict(id=key,evidence=quote)]
+                            if action=='blocked':output[action][0]['reason']='credentials expired'
+                            self.log.write_text(json.dumps(self.reply_record(kind,quote,'old'))+'\n')
+                            old_result=curate.validate_existing(self.session,snapshot,output)
+                            prefix='Colors is not done.' if action=='done' else 'Colors is not blocked.'
+                            text=prefix+'\n'+' '*12000+'\n'+quote
+                            with self.log.open('a') as f:f.write(json.dumps(self.reply_record(kind,text,'oversized'))+'\n')
+                            if path=='direct':
+                                with self.assertRaisesRegex(RuntimeError,'12000'):curate.validate_proposals(output,snapshot,text)
+                            elif path=='latest':
+                                with self.assertRaisesRegex(RuntimeError,'12000'):curate.latest_reply(self.session.binding)
+                            elif path=='existing':
+                                with self.assertRaisesRegex(RuntimeError,'12000'):curate.validate_existing(self.session,snapshot,output)
+                            elif path=='review':
+                                with patch.object(curate,'ask_codex',side_effect=AssertionError('model must not be called')):
+                                    with self.assertRaisesRegex(RuntimeError,'12000'):curate.review(self.session,snapshot,threading.Event())
+                            else:
+                                if path=='tampered_apply':old_result['context']=curate.source_context(self.session,snapshot)
+                                with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,old_result,{0})
+                            self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+
+    def test_incomplete_normalization_or_transcript_context_is_not_admitted(self):
+        for kind in ('codex','claude'):
+            with self.subTest(kind=kind,case='unclosed-normalization-fence'):
+                self.session.binding=replace(self.binding,kind=kind)
+                text='Colors is complete.\n```text\nColors is not done.'
+                self.log.write_text(json.dumps(self.reply_record(kind,text))+'\n')
+                with self.assertRaises(RuntimeError):curate.latest_reply(self.session.binding)
+                with self.assertRaises(RuntimeError):curate.normalize_reply(text)
+            with self.subTest(kind=kind,case='completed-record-exceeds-bounded-tail'):
+                self.session.binding=replace(self.binding,kind=kind)
+                old=self.reply_record(kind,'Colors is complete.','old')
+                giant=self.reply_record(kind,' '* (4*1024*1024+1)+'Colors is complete.','giant')
+                self.log.write_text(json.dumps(old)+'\n'+json.dumps(giant)+'\n')
+                with self.assertRaises(RuntimeError):curate.latest_reply(self.session.binding)
+
+    def test_review_and_apply_admission_boundaries_in_both_formats_and_actions(self):
+        import threading
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for action in ('done','blocked'):
+                    for delta in (-1,0,1):
+                        with self.subTest(version=version,kind=kind,action=action,delta=delta):
+                            raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                            (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo);key=snapshot.tasks[0].id
+                            self.session.binding=replace(self.binding,kind=kind)
+                            quote='Colors is complete.' if action=='done' else 'Colors is blocked because credentials expired.'
+                            output=dict(done=[],blocked=[],add=[]);output[action]=[dict(id=key,evidence=quote)]
+                            if action=='blocked':output[action][0]['reason']='credentials expired'
+                            self.log.write_text(json.dumps(self.reply_record(kind,quote,'old'))+'\n')
+                            old=curate.validate_existing(self.session,snapshot,output)
+                            text=quote+' '*(12000+delta-len(quote))
+                            self.log.write_text(json.dumps(self.reply_record(kind,text,'boundary'))+'\n')
+                            if delta<=0:
+                                with patch.object(curate,'ask_codex',return_value=output) as model:
+                                    result=curate.review(self.session,snapshot,threading.Event(),force=True)
+                                self.assertEqual(model.call_args.args[0]['reply'],text)
+                                self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+                                after=curate.apply_review(self.session,snapshot,result,{0})
+                                self.assertEqual(after.tasks[0].section,'Done' if action=='done' else 'Blocked')
+                            else:
+                                with patch.object(curate,'ask_codex',side_effect=AssertionError('no model for oversized reply')):
+                                    with self.assertRaisesRegex(RuntimeError,'12000'):
+                                        curate.review(self.session,snapshot,threading.Event())
+                                old['context']=curate.source_context(self.session,snapshot)
+                                with self.assertRaisesRegex(RuntimeError,'12000'):curate.apply_review(self.session,snapshot,old,{0})
+                                self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+
+    def test_tasks_ui_surfaces_oversize_reason_without_starting_review_or_changing_todo(self):
+        from watchdog_app.tasks_ui import TasksUI
+        self.reply('Colors is complete.\n'+'é'*12000)
+        self.session.successor_file=lambda:None
+        clean=SimpleNamespace(operation=None,poll=lambda binding:None)
+        with patch('watchdog_app.tasks_ui.colors',return_value={}), \
+             patch('watchdog_app.tasks_ui.Controller',return_value=clean), \
+             patch('watchdog_app.tasks_ui.Session.for_panel',return_value=self.session):
+            ui=TasksUI(None,self.repo,self.repo/'binding.json')
+            with patch.object(ui.job,'start',side_effect=AssertionError('UI must not start review')):
+                ui.refresh()
+        self.assertIn('12000',ui.review_status);self.assertIn('unavailable',ui.review_status)
+        self.assertIsNone(ui.result);self.assertFalse(ui.job.running)
+        self.assertEqual((self.repo/'TODO.md').read_bytes(),self.snap.raw)

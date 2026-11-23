@@ -113,12 +113,15 @@ class CuratorTests(unittest.TestCase):
         self.assertEqual(result['actions'], [])
         self.assertEqual(len(result['rejected']), 3)
 
-    def test_completed_reply_reader_ignores_tools_and_partial_lines(self):
+    def test_completed_reply_reader_ignores_tools_but_refuses_partial_context(self):
         path = self.repo / 'record.jsonl'
         rows = [{'type': 'event_msg', 'timestamp': '2026-11-16T10:00:00Z',
                  'payload': {'type': 'task_complete', 'turn_id': 'real-turn', 'last_agent_message': 'Actual completion'}},
                 {'type': 'response_item', 'payload': {'type': 'function_call_output', 'output': 'Everything done'}}]
         path.write_text('\n'.join(json.dumps(r) for r in rows) + '\n{"type":')
+        with self.assertRaisesRegex(RuntimeError, 'Partial'):
+            latest_reply(SimpleNamespace(kind='codex', history=str(path)))
+        path.write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
         reply = latest_reply(SimpleNamespace(kind='codex', history=str(path)))
         self.assertEqual(reply['id'], 'real-turn')
         self.assertEqual(reply['text'], 'Actual completion')

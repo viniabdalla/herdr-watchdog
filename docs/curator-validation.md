@@ -168,3 +168,54 @@ All three validation/application paths run on both TODO and native-record format
 These tests establish deterministic grammar behavior, not universal language
 understanding, external truth, live model inference, or acceptance of the real task.
 No real proposal was applied and no new model was invoked.
+
+## Complete normalized reply admission
+
+Review `37348a55-c5ed-46b3-bc3c-15bbf7d3997d` of parent
+`ec9fa49f5aa0b62b64a2972df63cb6a113d018b7` reproduced another context bug: the reader
+kept only the last 12,000 characters of a completed reply. A contrary prefix could
+therefore disappear while its affirmative suffix reached review and application.
+The eight done/blocked × TODO v0/v1 × Codex/Claude cases were reproduced RED before
+correction. A suffix is no longer considered a completed reply.
+
+Admission is now explicit: at most **12,000 Unicode code points in the complete
+normalized reply**, inclusive. This uses Python string length, not UTF-8 bytes or
+rendered graphemes. 11,999 and 12,000 are admitted; 12,001 is refused with
+`Completed reply exceeds 12000 normalized Unicode characters; no proposals admitted`.
+No prefix, suffix, or other excerpt is selected to fit. Accented letters and emoji
+are tested with their actual code-point lengths. Existing Markdown normalization
+removes presentation emphasis/inline backticks and closed fenced examples and converts
+line endings; the cap applies after that normalization. It does not strip substantive
+prose or truncate for size. An unclosed normalization fence is ambiguous/incomplete
+and is refused rather than silently dropping the rest of the reply.
+
+The reader first selects the **latest complete native reply**, then normalizes and
+admits that entire reply. If the latest reply is too large, it refuses instead of
+falling back to an older eligible reply. A later small completed reply can be admitted
+normally even if an earlier one was oversized. Empty latest prose supplies no reply,
+not an older fallback. Direct `validate_proposals` callers must supply the complete
+normalized prose; the function independently enforces its size before validating any
+proposal. Internal `validate_existing`, `review` and `apply_review` always re-read the
+complete bound source and enforce admission. Cached or adulterated result metadata
+cannot authorize an oversized current source. Model generation is never called for
+an inadmissible reply, and the existing Tasks UI displays the unavailable reason
+without starting review or changing TODO.
+
+The independent transcript intake bound remains **4 MiB of raw JSONL evidence**, not
+12,000 bytes. The shared bounded tail reader supplies complete records and explicit
+partial/malformed flags. If no complete selected reply fits that window, the curator
+reports unavailable; it does not use a JSON fragment or substitute an older reply.
+Partial or malformed source also fails closed. The bounded window may omit older
+conversation records: this feature validates the latest completed reply, not the
+entire conversation's history. Freshness context now retains transcript file
+identity, window start and file size as well as binding and tail digest, so identical
+repeated bytes after growth/replacement do not masquerade as the same source.
+
+Disposable regressions cover normalization, multibyte text, all admission boundaries,
+contrary prefixes, old/adulterated results, direct/latest/replay/review/application
+paths, both TODO/native formats, later recovery with a small reply, raw record/window
+limits and unresolved fences. Model calls are mocked or asserted absent. A test of
+the existing Tasks UI state checks that the reason is surfaced and no review or task
+write occurs; no UI production file was changed. These establish bounded admission
+and freshness behavior, not external truth, universal language understanding, live
+model inference or human acceptance. No real proposal was applied.
