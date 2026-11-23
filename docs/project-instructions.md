@@ -39,3 +39,22 @@ labels a suggestion, and what evidence permits completion. Save that acknowledge
 as a source reference. `agent_reading: manual-unobserved` is intentional: installation
 and fixture tests cannot attest model reading. This run installed no real project's
 instructions; that actual-agent reading check remains manual/unperformed.
+
+
+## Markdown context before writing
+
+The second review reproduced an unsafe first-install path in which a file with an
+unclosed backtick fence accepted an appended block, then failed a later check after
+both files had been written. Preview now validates Markdown context **before** either
+first installation or managed replacement, and validates the complete proposed output.
+An unresolved backtick or tilde fence anywhere in either file is refused. Managed
+markers inside a code fence remain ambiguous and are refused; valid closed fenced
+examples are preserved byte-for-byte.
+
+Apply recomputes this validation for **both** files under the lock before its first
+file write, even for an old or adulterated preview. Disposable regressions verify the
+exact `# Rules\n```text\nexample left open\n` bytes, tilde fences, both filenames,
+old/tampered payloads, closed examples, and markers inside examples. Refusal preserves
+the original bytes and leaves the other instruction file absent. Markdown checking is
+a conservative fence parser; ambiguous or unresolved source context requires manual
+reconciliation rather than claiming that installed text will be read as instructions.

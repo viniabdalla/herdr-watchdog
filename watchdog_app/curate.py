@@ -27,7 +27,10 @@ Passing tests or saying something works alone does not establish task completion
 Withhold uncertainty, contrary evidence, outstanding acceptance/commit help,
 or work belonging to another project. Human confirmation cannot replace this gate.
 blocked: only OPEN IDs that cannot proceed due to a concrete stated impediment;
-include a short reason and an exact supporting quote. Not started, still pending,
+include the full causal clause as reason, copied verbatim from the supporting quote.
+Name the full task title or exact ID in an affirmative blocker claim. A denial,
+resolved blocker, different task, or invented/paraphrased reason is uncertain.
+Not started, still pending,
 or a future step is NOT a blocker. Lack of mention proves nothing.
 add: only genuinely new, explicit unfinished project work. No examples, offers,
 questions, user approvals, duplicates, or work already in the completed titles.
@@ -159,6 +162,54 @@ def completion_supported(task, quote, reply, tasks):
         raise RuntimeError('Uncertain completion: an affirmative full-title or exact-ID task completion claim is required; tests alone are insufficient')
 
 
+
+BLOCKING_UNCERTAIN = re.compile(
+    r"\b(?:not|no longer|never|isn['’]t|wasn['’]t|nao|nunca)\s+(?:\w+\s+){0,3}"
+    r"(?:blocked|blocking|bloquead\w*|impedid\w*)\b|"
+    r"\b(?:not|isn['’]t|aren['’]t|hasn['’]t|haven['’]t|nao)\s+(?:been\s+)?"
+    r"(?:expired|missing|denied|unavailable|offline|failed|full|required|expir\w*|negad\w*|indispon\w*)\b|"
+    r"\b(?:unblocked|resolved|restored|cleared|removed|solved|fixed|renewed|granted|completed|finished|concluid\w*|finalizad\w*|"
+    r"resolvid\w*|restaurad\w*|restabelecid\w*|desbloquead\w*|liberad\w*|sanad\w*|superad\w*|aprovad\w*|autorizad\w*)\b|"
+    r"\b(?:no blocker|no impediment|sem bloqueio|sem impedimento|can now|can proceed|can run|"
+    r"pode prosseguir|pode continuar|if|maybe|perhaps|possibly|might|would|should|will|talvez|poderia)\b|"
+    r"\b(?:another|other|different)\s+(?:project|repo(?:sitory)?)\b|"
+    r"\b(?:outros?|diferente)\s+(?:projeto|repositorio)\b|\?"
+)
+BLOCKING_CAUSE = re.compile(
+    r'\b(?:expired|missing|denied|unavailable|offline|failed|error|full|waiting|awaiting|'
+    r'approval|permission|requires?|required|not available|no access|expir\w*|falt\w*|'
+    r'negad\w*|indispon\w*|falh\w*|erro|cheio|aguardando|aprovacao|permissao|necessari\w*)\b'
+)
+
+
+def blocking_supported(task, quote, reason, reply, tasks):
+    """Restricted current-impediment claim plus verbatim causal reason.
+
+    This validates the reported claim, not external truth of the impediment.
+    Unknown wording and paraphrased reasons require manual review.
+    """
+    identities=task_identities(task)
+    other=[task_identities(item) for item in tasks if item.id!=task.id]
+    for sentence in re.split(r'(?<=[.!?])\s+|\n+',plain(reply)):
+        if not mentions(sentence,identities) and any(mentions(sentence,names) for names in other):
+            continue
+        if BLOCKING_UNCERTAIN.search(sentence):
+            raise RuntimeError('Uncertain blocker: denied, resolved, contradictory or other-project evidence')
+    subject=r'(?:'+'|'.join(re.escape(name) for name in identities if name)+r')'
+    label=r"(?:(?:the |a )?(?:task|tarefa|item)\s*:?\s*)?['\"`]?"
+    relation=r'(?:because|due to|by|porque|por|pois|devido a|pelo|pela|:)'
+    predicate=(r'(?:(?:(?:is|are|esta|estao)\s+)?(?:blocked|bloquead[oa]s?|impedid[oa]s?)\s*'+relation+
+               r'|(?:cannot|can[\'’]t|is unable to|nao pode|nao consegue)\s+[^.!?;\n]{1,80}?\s+'+relation+r')')
+    pattern=(r'(?:^|[.!?]\s+)'+label+subject+r"['\"`]?\s+"+predicate+
+             r'\s*(?P<cause>[^.!?;\n]+)(?:[.!?;]|$)')
+    for match in re.finditer(pattern,plain(quote)):
+        cause=match['cause'].strip(' .!?:;')
+        if (len(re.findall(r'\w+',cause))>=2 and BLOCKING_CAUSE.search(cause) and
+                plain(reason).strip(' .!?:;')==cause):
+            return
+    raise RuntimeError('Uncertain blocker: affirmative full-title/exact-ID impediment and literal causal reason required')
+
+
 def validate_proposals(output, snapshot, reply):
     if not isinstance(output, dict) or set(output) != {'done', 'blocked', 'add'}:
         raise RuntimeError('Codex returned an invalid review format')
@@ -195,9 +246,8 @@ def validate_proposals(output, snapshot, reply):
                     if kind == 'done':
                         completion_supported(available[entry['id']], quote, reply, snapshot.tasks)
                     if kind == 'blocked':
-                        if not re.search(r'cannot|unable|because|blocked|expired|missing|denied|failed|bloque|falta|imped|aguardando.*(?:acesso|senha|aprova)', quote, re.I):
-                            raise RuntimeError('Blocking requires a concrete stated impediment')
                         action['reason'] = single_line(entry['reason'], 'Blocker')
+                        blocking_supported(available[entry['id']], quote, action['reason'], reply, snapshot.tasks)
                 actions.append(action)
             except (RuntimeError, KeyError, TypeError) as error:
                 rejected.append(str(error))

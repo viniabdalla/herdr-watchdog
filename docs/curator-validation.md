@@ -76,3 +76,39 @@ is not evidence of live curator inference, acceptance, or the corrected gate pas
 The earlier real enrollment-quote rejection remains a bounded replay observation.
 Actual installed-agent rule reading and live model curation remain unperformed;
 the coordinator's host verification resolves process visibility only, not those gaps.
+
+
+## Current blocking evidence and reason support
+
+The second independent review of parent
+`c4beecf44e784dd34f563ef2a5dcdd39aa5df371` found that the old blocking keyword gate
+could accept a denial, an unrelated Deployment blocker, or a resolved Colors blocker,
+and attach a fabricated `Waiting for credentials` reason. These cases were reproduced
+RED before correction, including old/adulterated `apply_review` payloads.
+
+A blocking proposal now requires an affirmative **current impediment** naming the
+full task title or exact ID, together with a causal relation and a concrete cause.
+Examples supported by the restricted bilingual grammar:
+
+- `Colors is blocked because credentials expired.` → reason `credentials expired`.
+- `Colors cannot run because login expired.` → reason `login expired`.
+- `Colors está bloqueado porque as credenciais expiraram.` → reason
+  `as credenciais expiraram`.
+- `Colors não consegue prosseguir porque o acesso foi negado.` → reason
+  `o acesso foi negado`.
+
+The reason must copy the complete causal text, allowing normalized case/accents and
+terminal punctuation; it cannot introduce a paraphrase, waiting condition or other
+cause. Generic `Colors is blocked.` without a cause remains uncertain. Negation of
+the blocker or its cause, known resolution/restoration claims, contrary later
+sentences and other-project evidence withhold the proposal, even if omitted from the
+selected quote. Unscoped contrary context stays relevant; another explicitly named
+TODO task can have its own separate status. The gate runs in `validate_proposals`,
+`validate_existing` and again in `apply_review` before any confirmed change.
+
+Disposable tests cover both TODO formats, Codex/Claude records, literal QA failures,
+fabricated reasons, omitted resolution, cancel, application revalidation and legitimate
+Portuguese/English blockers. They do not establish external truth of an impediment or
+universal language understanding. This finite grammar/cause vocabulary deliberately
+withholds unknown formulations and can produce conservative false negatives. Human
+confirmation follows the evidence gate. No real proposal or new model was used.

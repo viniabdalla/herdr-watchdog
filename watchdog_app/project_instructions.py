@@ -66,30 +66,44 @@ def read_regular(path, limit=LIMIT, missing=False):
         return raw
 
 
+
+def validate_context(text):
+    """Managed rules must be outside closed Markdown backtick/tilde fences."""
+    fence=None
+    for line in text.splitlines():
+        if 'watchdog-todo:' in line and fence:
+            raise RuntimeError('Managed markers inside a code fence are ambiguous')
+        mark=re.match(r'^\s*(`{3,}|~{3,})(.*)$',line)
+        if not mark:continue
+        if fence is None:
+            fence=mark[1]
+        elif mark[1][0]==fence[0] and len(mark[1])>=len(fence) and not mark[2].strip():
+            fence=None
+    if fence is not None:
+        raise RuntimeError('Unclosed Markdown fence; reconcile before instruction installation')
+
+
 def proposed(raw):
     text=(raw or b'').decode('utf-8')
+    validate_context(text)
     nl='\r\n' if b'\r\n' in (raw or b'') else '\n'
     block=BEGIN+nl+BODY.replace('\n',nl)+END
     markers=[line for line in text.splitlines() if 'watchdog-todo:' in line]
     if not markers:
         if 'Watchdog TODO instructions' in text:
             raise RuntimeError('Unmanaged conflicting instructions; reconcile manually')
-        return (text+('' if not text or text.endswith('\n') else nl)+block+nl).encode()
+        result=text+('' if not text or text.endswith('\n') else nl)+block+nl
+        validate_context(result)
+        return result.encode()
     if markers != [BEGIN,END] or text.count(BEGIN)!=1 or text.count(END)!=1:
         raise RuntimeError('Ambiguous managed markers; reconcile manually')
-    fence=None
-    for line in text.splitlines():
-        mark=re.match(r'^\s*(`{3,}|~{3,})(.*)$',line)
-        if mark:
-            if fence is None:fence=mark[1]
-            elif mark[1][0]==fence[0] and len(mark[1])>=len(fence) and not mark[2].strip():fence=None
-        if 'watchdog-todo:' in line and fence:
-            raise RuntimeError('Managed markers inside a code fence are ambiguous')
     start=text.index(BEGIN);end=text.index(END)+len(END)
     if end<=start:raise RuntimeError('Reversed managed markers')
     if 'Watchdog TODO instructions' in text[:start]+text[end:]:
         raise RuntimeError('Unmanaged conflicting instructions outside managed block')
-    return (text[:start]+block+text[end:]).encode()
+    result=text[:start]+block+text[end:]
+    validate_context(result)
+    return result.encode()
 
 
 def preview(repo):

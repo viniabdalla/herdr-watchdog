@@ -153,3 +153,88 @@ class CuratorValidationTests(unittest.TestCase):
         self.reply(text);result=curate.validate_existing(self.session,self.snap,self.output(text))
         self.assertEqual(len(result['actions']),1,result['rejected'])
         self.assertTrue(curate.apply_review(self.session,self.snap,result,{0}).tasks[0].done)
+
+    def test_blocking_qa_cases_and_fabricated_reasons_are_withheld_on_all_paths(self):
+        cases=[
+            ('Colors is not blocked.','Waiting for credentials'),
+            ('Deployment is blocked because credentials expired.','Waiting for credentials'),
+            ('Colors is blocked. Colors is no longer blocked; access restored.','Waiting for credentials'),
+            ('Colors is blocked because credentials expired.','Waiting for approval'),
+            ('Colors is blocked because credentials expired. Access restored.','credentials expired'),
+            ('Colors não está bloqueado.','credenciais expiradas'),
+            ('Colors is blocked because credentials are not expired.','credentials are not expired'),
+            ('Colors is blocked because credentials expired. This blocker has been cleared.','credentials expired'),
+            ('Colors is blocked because credentials expired. Approval granted.','credentials expired'),
+            ('Colors está bloqueado porque as credenciais expiraram. Bloqueio resolvido.','as credenciais expiraram'),
+        ]
+        for version in (0,1):
+            for text,reason in cases:
+                with self.subTest(version=version,reply=text,reason=reason):
+                    raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                    (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo);key=snapshot.tasks[0].id
+                    self.reply(text)
+                    output=dict(done=[],blocked=[dict(id=key,reason=reason,evidence=text)],add=[])
+                    direct=curate.validate_proposals(output,snapshot,text)
+                    self.assertEqual(direct['actions'],[]);self.assertTrue(direct['rejected'])
+                    result=curate.validate_existing(self.session,snapshot,output)
+                    self.assertFalse(result['actions'])
+                    result['actions']=[dict(kind='blocked',id=key,reason=reason,evidence=text)]
+                    with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
+                    self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+
+    def test_blocking_current_specific_impediment_with_literal_reason_in_pt_and_en(self):
+        cases=[
+            ('Colors is blocked because credentials expired.','credentials expired'),
+            ('Colors cannot run because login expired.','login expired'),
+            ('Colors está bloqueado porque as credenciais expiraram.','as credenciais expiraram'),
+            ('Colors não consegue prosseguir porque o acesso foi negado.','o acesso foi negado'),
+            ('Task '+ID+' is blocked because credentials are missing.','credentials are missing'),
+        ]
+        for version in (0,1):
+            for text,reason in cases:
+                with self.subTest(version=version,reply=text):
+                    raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                    (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo);key=snapshot.tasks[0].id
+                    # Version 0 has a snapshot identity rather than the v1 UUID.
+                    text=text.replace(ID,key);self.reply(text)
+                    output=dict(done=[],blocked=[dict(id=key,reason=reason,evidence=text)],add=[])
+                    result=curate.validate_existing(self.session,snapshot,output)
+                    self.assertEqual(len(result['actions']),1,result['rejected'])
+                    self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+                    curate.apply_review(self.session,snapshot,result,set())
+                    self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+                    self.assertEqual(curate.apply_review(self.session,snapshot,result,{0}).tasks[0].section,'Blocked')
+
+    def test_apply_rejects_adulterated_block_reason_and_unquoted_resolution(self):
+        for source,quote,reason in [
+            ('Colors is blocked because credentials expired.', 'Colors is blocked because credentials expired.', 'Waiting for approval'),
+            ('Colors is blocked because credentials expired. Access restored.', 'Colors is blocked because credentials expired.', 'credentials expired'),
+        ]:
+            with self.subTest(source=source,reason=reason):
+                (self.repo/'TODO.md').write_bytes(self.snap.raw);self.reply(source)
+                output=dict(done=[],blocked=[dict(id=ID,reason=reason,evidence=quote)],add=[])
+                result=curate.validate_existing(self.session,self.snap,output)
+                result['actions']=[dict(kind='blocked',id=ID,reason=reason,evidence=quote)]
+                with self.assertRaises(RuntimeError):curate.apply_review(self.session,self.snap,result,{0})
+                self.assertEqual((self.repo/'TODO.md').read_bytes(),self.snap.raw)
+
+    def test_blocker_gate_with_claude_and_codex_records_in_both_todo_formats(self):
+        for version in (0,1):
+            for kind in ('codex','claude'):
+                for resolved in (False,True):
+                    with self.subTest(version=version,kind=kind,resolved=resolved):
+                        raw=self.snap.raw if version else b'## Next\n- [ ] Colors\n'
+                        (self.repo/'TODO.md').write_bytes(raw);snapshot=Snapshot.read(self.repo);key=snapshot.tasks[0].id
+                        quote='Colors is blocked because credentials expired.'
+                        text=quote+(' Access restored.' if resolved else '')
+                        self.session.binding=replace(self.binding,kind=kind)
+                        if kind=='codex':self.reply(text)
+                        else:self.log.write_text(json.dumps(dict(type='assistant',message=dict(id='m',stop_reason='end_turn',content=[dict(type='text',text=text)])))+'\n')
+                        output=dict(done=[],blocked=[dict(id=key,reason='credentials expired',evidence=quote)],add=[])
+                        result=curate.validate_existing(self.session,snapshot,output)
+                        self.assertEqual(len(result['actions']),0 if resolved else 1,result['rejected'])
+                        if resolved:
+                            result['actions']=[dict(kind='blocked',id=key,reason='credentials expired',evidence=quote)]
+                            with self.assertRaises(RuntimeError):curate.apply_review(self.session,snapshot,result,{0})
+                            self.assertEqual((self.repo/'TODO.md').read_bytes(),raw)
+                        else:self.assertEqual(curate.apply_review(self.session,snapshot,result,{0}).tasks[0].section,'Blocked')
