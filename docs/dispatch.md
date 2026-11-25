@@ -379,3 +379,58 @@ Para um aviso já lido pelo líder cujo consumo não foi observado, use
 --evidence 'Confirmação do líder e compositor vazio'` (na mesma linha).
 Essa confirmação exige o mesmo líder e compositor vazio. Só então resolva a
 fila. O worker retoma uma decisão interrompida sem liberar cópias descartadas.
+
+Se o alerta **nunca entrou no histórico**, `consumed` não é uma saída: não há
+recibo. Um compositor vazio sozinho também não prova não entrega. Confira o
+histórico da identidade exata, encerre qualquer paste atrasado e registre essa
+evidência antes de rearmar. Um rascunho humano é preservado; o aviso continuará
+esperando o compositor vazio. Se o próprio alerta já está materializado, use a
+continuação R1 em vez de colar outra cópia.
+
+O campo `archive` de `*.stalled.json` identifica o incidente. Escolha um ID para
+a decisão e mantenha **o mesmo ID e os mesmos argumentos** em qualquer retomada:
+
+```bash
+python -m watchdog_app.pane_delivery recover-notice --pane PANE \
+  --incident /caminho/do/incidente.stalled.ID --action rearm \
+  --recovery-id DECISAO_ID --not-delivered \
+  --evidence 'Histórico da sessão conferido sem o alerta; paste anterior encerrado; evidência e localização'
+python -m watchdog_app.pane_delivery watch /caminho/do/registro.pending.json
+```
+
+O primeiro comando grava a decisão sem enviar tecla ou declarar consumo. O
+worker ativo, ou o segundo comando, continua o mesmo incidente pelo caminho
+confirmado do pane. O aviso só reaparece no Tasks como “perguntei ao líder” após
+o recibo real. Repetir a decisão completa uma interrupção; não rearma novamente
+uma decisão já aplicada, mesmo depois do consumo. Se houver nova falha de
+não entrega, releia os registros e faça **outra decisão explícita, com outro ID**.
+Não existe repetição automática de um alerta incerto. A decisão salva inclui o
+aviso original, identidade, compositor, evidência e etapa da recuperação.
+
+Se a identidade do líder mudou, rearmar é recusado: esta rota não transfere o
+alerta nem pedidos antigos para outra sessão. Encerre documentalmente o
+incidente obsoleto, com uma decisão explícita:
+
+```bash
+python -m watchdog_app.pane_delivery recover-notice --pane PANE \
+  --incident /caminho/do/incidente.stalled.ID --action close \
+  --recovery-id DECISAO_ID \
+  --evidence 'Identidade antiga encerrada; incidente obsoleto; motivos e evidências'
+```
+
+O encerramento não envia texto, tecla nem recibo para a sessão nova. Arquiva
+integralmente o aviso e os pedidos presos a identidades obsoletas, sem executar
+seus callbacks. Preserva os pedidos da identidade atual na ordem, inclusive
+os que chegaram depois da triagem ou durante a recuperação. O worker normal
+pode entregar esses pedidos com suas próprias identidades verificadas; eles
+não são um reenvio do alerta antigo. Rascunhos continuam intocados. Todos os
+originais permanecem no incidente para consulta. A faixa some pelo encerramento
+documental, sem ter sido falsamente marcada como entregue.
+
+Use `--session NOME` nos comandos quando aplicável. Após uma interrupção, repita
+o comando `recover-notice` com o mesmo ID, incidente e argumentos, inclusive se
+o `pending.json` já desapareceu. Um worker que encontra a decisão em andamento
+a termina antes de qualquer entrada no pane. Para iniciar um worker sem registro
+pendente, use um registro enfileirado atual. Reconciliação R1 continua disponível
+para um paste materializado ou um recibo realmente confirmado; não a use para
+inventar consumo nem cancelar uma recuperação ainda em andamento.

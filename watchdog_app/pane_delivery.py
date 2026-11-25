@@ -381,6 +381,98 @@ def finish_resolution(pending, state_path, state):
     state_path.unlink()
 
 
+
+def recover_notice(pane, incident, action, recovery_id, evidence, *, session=None, not_delivered=False):
+    """Explicit non-delivery decision; never infer a receipt from an empty field.
+
+    The incident path and operator-supplied recovery ID pin the decision across
+    restarts. A replay of that command finishes its intent, never rearms twice.
+    Changed identities may only close the obsolete incident, without input.
+    """
+    if not evidence.strip() or not recovery_id.strip():
+        raise RuntimeError('Informe identificação e evidência da recuperação')
+    if action not in ('rearm','close'): raise RuntimeError('Recuperação desconhecida')
+    archive = Path(incident).resolve()
+    receipt_path = archive/('notice-recovery.'+hashlib.sha256(recovery_id.encode()).hexdigest()+'.json')
+    request = dict(pane=pane,session=session,incident=str(archive),action=action,
+                   recovery_id=recovery_id,evidence=evidence,not_delivered=not_delivered)
+    with pane_lock(pane,session) as pending:
+        state_path = queue_state_path(pending)
+        receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else None
+        if receipt and receipt['request'] != request:
+            raise RuntimeError('ID de recuperação já usado por outra decisão')
+        state = json.loads(state_path.read_text()) if state_path.exists() else None
+        if state and state['status'] == 'recovering-notice':
+            if state['recovery']['receipt'] != str(receipt_path):
+                raise RuntimeError('Há outra recuperação em andamento; retome a decisão salva')
+            finish_notice_recovery(pending,state_path,state)
+            return 0
+        if receipt and receipt['status'] == 'complete': return 0
+        if not state or state['archive'] != str(archive) or state['status'] != 'awaiting':
+            raise RuntimeError('Incidente mudou ou não aguarda recuperação; releia os registros')
+        notice = json.loads(pending.read_text())
+        if not notice.get('stall_notice') or notice['phase'] != 'uncertain':
+            raise RuntimeError('Recuperação exige o próprio aviso suspenso')
+        api = Herdr(session)
+        agent = api.call('agent','get',pane)['agent']
+        observed = identity(agent)
+        if observed[0] != pane: raise RuntimeError('Pane de destino mudou')
+        rows = surface(api,pane)
+        if rows is None: raise RuntimeError('Compositor não verificável; recuperação suspensa')
+        same_identity = observed == tuple(notice['identity'])
+        if action == 'rearm':
+            if not same_identity:
+                raise RuntimeError('Identidade mudou; encerre documentalmente o incidente obsoleto')
+            if not not_delivered:
+                raise RuntimeError('Confirme NÃO entrega no histórico e encerramento do paste anterior')
+            if matches(rows,notice['text']):
+                raise RuntimeError('Aviso materializado; use a reconciliação R1, sem novo paste')
+        elif same_identity:
+            raise RuntimeError('Encerramento documental exige identidade antiga obsoleta')
+        paths = queued_paths(pending)
+        jobs = [json.loads(path.read_text()) for path in paths]
+        # Closing never retargets obsolete requests or acknowledges their callbacks.
+        # Every original remains archived. Current requests keep their FIFO order.
+        selected = [job for job in jobs if tuple(job['identity']) == observed] if action == 'close' else []
+        retired = [job for job in jobs if tuple(job['identity']) != observed] if action == 'close' else []
+        receipt = dict(request=request,status='prepared',notice_serialized=pending.read_text(),
+                       observed_identity=observed,observed_composer=rows,not_delivered=not_delivered,
+                       retired=retired,prepared_at=time.time())
+        for path in paths: archive_original(archive/('recovery-'+receipt_path.stem+'-'+path.name),path.read_text())
+        atomic(receipt_path,receipt)
+        rearmed = dict(notice,phase='waiting',keys=[],last_progress_at=time.time())
+        for key in ('on_confirm','confirmation_started_at','uncertain_phase','error',
+                    'observed_composer','suspended_at','last_key_at'):
+            rearmed.pop(key,None)
+        state.update(status='recovering-notice',recovery=dict(receipt=str(receipt_path),action=action,
+                     notice=rearmed,paths=[str(path) for path in paths],selected=selected))
+        atomic(state_path,state)
+        finish_notice_recovery(pending,state_path,state)
+    return 0
+
+
+def finish_notice_recovery(pending, state_path, state):
+    """Under the pane lease, complete a durable decision before any pane input."""
+    plan = state['recovery']
+    receipt_path = Path(plan['receipt'])
+    receipt = json.loads(receipt_path.read_text())
+    if plan['action'] == 'rearm':
+        awaiting = dict(state,status='awaiting')
+        awaiting.pop('recovery')
+        awaiting.setdefault('notice_recoveries',[]).append(str(receipt_path))
+        confirmed = dict(awaiting,status='confirmed')
+        notice = dict(plan['notice'],on_confirm=dict(path=str(state_path),expected=awaiting,value=confirmed))
+        atomic(pending,notice)
+        # If interrupted here, the recovering marker blocks all pane writers.
+        atomic(receipt_path,dict(receipt,status='complete',completed_at=time.time()))
+        atomic(state_path,awaiting)
+    else:
+        # No key, paste or callback. This is cancellation, not a delivery receipt.
+        pending.unlink(missing_ok=True)
+        atomic(receipt_path,dict(receipt,status='complete',completed_at=time.time()))
+        finish_resolution(pending,state_path,dict(state,paths=plan['paths'],selected=plan['selected']))
+
+
 def watch(record):
     """Durable pane monitor; uncertainty does not kill the only waiting process."""
     record = Path(record)
@@ -394,6 +486,7 @@ def watch(record):
             if state_path.exists():
                 state = json.loads(state_path.read_text())
                 if state['status'] == 'resolving': finish_resolution(pending,state_path,state)
+                elif state['status'] == 'recovering-notice': finish_notice_recovery(pending,state_path,state)
             check_stalled(pending)
             if not pending.exists() and not state_path.exists():
                 paths = queued_paths(pending)
@@ -472,6 +565,11 @@ def resume(record):
     job = json.loads(record.read_text())
     while True:
         with pane_lock(job['pane'], job['session']) as pending:
+            state_path = queue_state_path(pending)
+            if state_path.exists():
+                state = json.loads(state_path.read_text())
+                if state['status'] == 'recovering-notice':
+                    finish_notice_recovery(pending,state_path,state)
             if record != pending:
                 prefix = pending.name.removesuffix('.pending.json')+'.queued.'
                 if record.parent != pending.parent or not record.name.startswith(prefix):
@@ -507,6 +605,9 @@ def reconcile(record, resolution, evidence):
     if not evidence.strip(): raise RuntimeError('Informe a evidência da reconciliação')
     with pane_lock(original['pane'], original['session']) as pending:
         if record != pending: raise RuntimeError('Reconcilie somente o registro pendente do pane')
+        state_path = queue_state_path(pending)
+        if state_path.exists() and json.loads(state_path.read_text())['status'] == 'recovering-notice':
+            raise RuntimeError('Recuperação em andamento; retome a decisão salva antes de reconciliar')
         job = json.loads(pending.read_text())
         if job != original: raise RuntimeError('O registro mudou durante a espera; releia antes de reconciliar')
         if job['phase'] != 'uncertain': raise RuntimeError('Suspenda a entrega antes de reconciliar')
@@ -560,11 +661,22 @@ if __name__ == '__main__':
     queue_recovery.add_argument('--session')
     queue_recovery.add_argument('--keep', nargs='*', default=[])
     queue_recovery.add_argument('--evidence', required=True)
+    notice_recovery = commands.add_parser('recover-notice')
+    notice_recovery.add_argument('--pane',required=True)
+    notice_recovery.add_argument('--session')
+    notice_recovery.add_argument('--incident',required=True)
+    notice_recovery.add_argument('--action',choices=('rearm','close'),required=True)
+    notice_recovery.add_argument('--recovery-id',required=True)
+    notice_recovery.add_argument('--evidence',required=True)
+    notice_recovery.add_argument('--not-delivered',action='store_true')
     recovery = commands.add_parser('reconcile')
     recovery.add_argument('record')
     recovery.add_argument('--resolution', choices=('materialized', 'retired', 'consumed'), required=True)
     recovery.add_argument('--evidence', required=True)
     args = parser.parse_args()
+    if args.command == 'recover-notice':
+        raise SystemExit(recover_notice(args.pane,args.incident,args.action,args.recovery_id,args.evidence,
+                                       session=args.session,not_delivered=args.not_delivered))
     if args.command == 'queue-snapshot':
         print(json.dumps(queue_snapshot(args.pane,args.session),ensure_ascii=False,indent=2))
         raise SystemExit(0)
