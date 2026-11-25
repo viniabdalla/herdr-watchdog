@@ -35,6 +35,44 @@ class MattSkillsTerminalTests(test_group_dispatch.GroupDispatchTests):
         skill.parent.mkdir(parents=True, exist_ok=True)
         skill.write_text('---\nname: ' + name + '\n---\nFixture skill\n')
 
+    def test_review_uses_saved_group_base_and_branch_and_allows_editing(self):
+        # Spec #1 L105,108,139,153,163: never replace the group's base with HEAD.
+        for kind in ('claude', 'codex'):
+            with self.subTest(kind=kind):
+                self.install(self.account/'skills', 'code-review')
+                terminal = self.open(kind=kind)
+                self.dispatch(terminal, b' ')
+                self.git('update-ref', 'refs/heads/integration', self.git('rev-parse', 'HEAD'))
+                prefix = '/' if kind == 'claude' else '$'
+                expected = prefix + 'code-review ' + self.base + '..integration'
+                before = len(self.commands())
+                os.write(terminal.master, b'5')
+                self.wait(terminal, 'Editar comando')
+                self.wait(terminal, self.base)
+                os.write(terminal.master, b'\r')
+                self.wait(terminal, 'Skill enviada')
+                self.assertEqual(self.commands()[before][3], expected)
+                terminal.output = b''
+                before = len(self.commands())
+                os.write(terminal.master, b'5\x1b')
+                self.wait(terminal, 'Cancelled')
+                self.assertEqual(len(self.commands()), before)
+                os.write(terminal.master, b'5\x15' + (prefix+'code-review outra-base..outra-branch').encode() + b'\r')
+                self.wait(terminal, 'Skill enviada')
+                self.assertEqual(self.commands()[before][3], prefix+'code-review outra-base..outra-branch')
+                terminal.close()
+
+    def test_review_without_group_does_not_invent_a_base(self):
+        # Spec #1 L105,108,139: absent group metadata needs an explicit interval.
+        self.install(self.account/'skills', 'code-review')
+        terminal = self.open()
+        os.write(terminal.master, b'5')
+        self.wait(terminal, 'Editar comando')
+        self.wait(terminal, 'Grupo sem base')
+        os.write(terminal.master, b'\x1b')
+        self.wait(terminal, 'Cancelled')
+        self.assertEqual(self.commands(), [])
+
     def test_prefix_visibility_edit_cancel_and_confirm(self):
         # Spec #1 L102-105,144,162: only leader-visible skills; editable before Enter.
         for kind in ('claude', 'codex'):

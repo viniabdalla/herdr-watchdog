@@ -99,6 +99,18 @@ def contract(record, config):
     notice = shlex.join([str(ROOT/'watchdog'), 'aviso', '--lider', record['leader'],
                          '--pane', record['pane'], '--ticket', record['ticket']] +
                         (['--session',record['herdr_session']] if record['herdr_session'] else []))
+    if record.get('review_axis'):
+        axis = record['review_axis']
+        template = DISPATCH.read_text().split('### Contrato-modelo '+axis+'\n', 1)[1].split('\n### ', 1)[0]
+        return (f"Revisor {axis} · grupo {record['group']}\n"
+                f"Projeto: {record['project']}\nWorktree: {record['worktree']}\nBranch: {record['branch']}\n"
+                f"Pane próprio: {record['pane']}\nPane líder: {record['leader']}\n"
+                f"Intervalo fixo: {record['review_base']}..{record['review_head']}\n"
+                f"Aceite: {record['acceptance']}\nSpec/plano: {record['spec']}\n"
+                f"Relatório: {record['report']}\nLeia {DISPATCH}.\n\n{template}\n"
+                f"Aviso após salvar: {notice} pronto --commit {record['review_head']} "
+                f"--testes 'revisão somente leitura' --resumo 'Relatório {record['report']}; N achados; pior: SEVERIDADE'\n"
+                f"Dúvida não decidida: {notice} BLOQUEIO --duvida TEXTO\n")
     footer = DISPATCH.read_text().split('## Rodapé comum do contrato\n',1)[1].split('### CLI de aviso',1)[0]
     return (f"Executor {record['ticket']} · grupo {record['group']}\n"
             f"Projeto: {record['project']}\nWorktree: {record['worktree']}\nBranch: {record['branch']}\n"
@@ -113,7 +125,8 @@ def contract(record, config):
 
 
 def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, spec,
-                  dependencies=(), capacity=4, session=None):
+                  dependencies=(), capacity=4, session=None, review_axis=None,
+                  review_base=None, review_head=None):
     repo = Path(repo).resolve()
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}', ticket):
         raise RuntimeError('Ticket deve ser um identificador simples')
@@ -121,6 +134,12 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
         raise RuntimeError('Capacidade deve ser positiva')
     config = configuration(repo)
     base = git(repo, 'rev-parse', '--verify', 'refs/heads/'+config['integration'])
+    if any((review_axis, review_base, review_head)):
+        if review_axis not in ('Standards', 'Spec') or not review_base or not review_head:
+            raise RuntimeError('Revisor exige eixo, base e fim do intervalo')
+        review_base = git(repo, 'rev-parse', '--verify', '--end-of-options', review_base+'^{commit}')
+        review_head = git(repo, 'rev-parse', '--verify', '--end-of-options', review_head+'^{commit}')
+        base = review_head
     api = Herdr(session)
     # Same mechanism as T6, different key: serialize project registry mutations,
     # while send() independently holds the actual target pane through Enter.
@@ -144,6 +163,9 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
                       contract=str(run_dir/(ticket+'-'+identity[:8]+'-contrato.md')),
                       state='preparing', operation='worktree', created=date.today().isoformat(),
                       created_at=time.time())
+        if review_axis:
+            record.update(review_axis=review_axis, review_base=review_base, review_head=review_head,
+                          report=str(run_dir/(ticket+'-'+identity[:8]+'-relatorio.md')))
         data['executors'].append(record)
         save = lambda: atomic(repo/'.watchdog/executors.json', data)
         save()
@@ -266,6 +288,9 @@ def main(argv=None):
     opening.add_argument('--depende',action='append',default=[])
     opening.add_argument('--capacidade',type=int,default=4)
     opening.add_argument('--session')
+    opening.add_argument('--revisor', choices=('Standards', 'Spec'))
+    opening.add_argument('--base')
+    opening.add_argument('--fim')
     listing = actions.add_parser('listar')
     listing.add_argument('--grupo')
     closing = actions.add_parser('fechar')
@@ -281,7 +306,8 @@ def main(argv=None):
         if args.action == 'abrir':
             result = open_executor(args.repo,ticket=args.ticket,group=args.grupo,leader=args.lider,
                                    workspace=args.workspace,leva=args.leva,acceptance=args.aceite,spec=args.spec,
-                                   dependencies=args.depende,capacity=args.capacidade,session=args.session)
+                                   dependencies=args.depende,capacity=args.capacidade,session=args.session,
+                                   review_axis=args.revisor,review_base=args.base,review_head=args.fim)
         elif args.action == 'checar':
             result = record_check(args.repo,group=args.grupo,ticket=args.ticket,step=args.etapa,summary=args.resumo)
         elif args.action == 'listar':result = executors(args.repo,args.grupo)

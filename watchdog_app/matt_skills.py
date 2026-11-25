@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 
 from .pane_delivery import send
+from . import long_run
 
 # Keep numbering stable when one skill is missing. Other tickets extend this list.
 SKILLS = ('grill-with-docs', 'to-spec', 'to-tickets', 'retro', 'code-review', 'merge-danger')
@@ -40,6 +41,12 @@ def preview(session, key):
         specs = [path for path in specs if re.search(r'^title:\s*[\"\']?Spec:', path.read_text(), re.M | re.I)]
         if len(specs) == 1:
             command += ' ' + str(specs[0].relative_to(session.repo))
+    if command[1:] == 'code-review':
+        group = long_run.record(session.repo) or {}
+        if group.get('base') and group.get('integration_branch'):
+            command += ' ' + group['base'] + '..' + group['integration_branch']
+        else:
+            warning = 'Grupo sem base de revisão; preencha o intervalo antes de enviar.'
     return {'kind': 'skill', 'prompt': command, 'warning': warning,
             'binding': session.binding, 'pane': session.binding.pane, 'key': key}
 
