@@ -1,7 +1,6 @@
 """Interactive project tasks, explicit routing and confirmed Codex suggestions."""
 import curses
 import os
-import subprocess
 from pathlib import Path
 from dataclasses import asdict
 import signal
@@ -561,10 +560,8 @@ class TasksUI:
         elif offer['kind'] == 'verify':
             self.session.verify()
             pane = self.session.binding.pane
-            for command in (['herdr', 'pane', 'send-text', pane, offer['prompt']], ['herdr', 'pane', 'send-keys', pane, 'enter']):
-                result = subprocess.run(command, capture_output=True, text=True, timeout=10)
-                if result.returncode:
-                    raise RuntimeError('Envio ao painel ' + pane + ' falhou: ' + (result.stderr.strip() or 'erro do herdr'))
+            from .pane_delivery import send
+            send(pane, offer['prompt'], enter='enter')
             self.notice = f"Pedido de verificação enviado à sessão principal ({len(offer['ids'])} tarefa(s))"
         elif offer['kind'] in ('send', 'queue'):
             try:

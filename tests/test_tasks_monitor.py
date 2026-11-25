@@ -35,7 +35,7 @@ class TasksMonitorTests(unittest.TestCase):
         self.env = {k: v for k, v in os.environ.items() if k != 'WATCHDOG_FULL_CONTROLS'}
         self.env.update(TERM='xterm-256color', WATCHDOG_STATE_DIR=str(self.repo / 'state'),
                         PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], HERDR_LOG=str(self.log),
-                        HERDR_BIN_PATH=str(bin_dir / 'herdr'))
+                        HERDR_BIN_PATH=str(bin_dir / 'herdr'), XDG_STATE_HOME=str(self.repo/'xdg'))
 
     def unbound(self):
         terminal = Terminal(['python3', str(SCRIPT), 'tasks', '--repo', str(self.repo)], self.env)
