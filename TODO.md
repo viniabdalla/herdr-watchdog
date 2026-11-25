@@ -22,16 +22,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
-- [ ] T13 (#14) Pergunta pendente e meta encerrada
-  ID: 595712f8-ab5f-4540-b943-940648397038
-  Resumo:
-    faixa de pergunta de X aguarda você, faixa fixa de fim com resumo e notificação no desktop nos dois casos.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #14 (docs/issues/)
-  Execução:
-    Bloqueado por: T6 (#7), T11 (#12).
-  Aceite:
-    Pergunta para o Vini mostra a faixa e dispara a notificação. Meta encerrada mostra a faixa fixa até o próximo despacho e dispara a notificação. O aviso final do líder segue o formato concluídas com evidência e bloqueadas com motivo e próximo passo.
 - [ ] T14 (#15) Aceite manual
   ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
   Resumo:
@@ -186,6 +176,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T13 (#14) Pergunta pendente e meta encerrada
+  ID: 595712f8-ab5f-4540-b943-940648397038
+  Resumo:
+    faixa de pergunta de X aguarda você, faixa fixa de fim com resumo e notificação no desktop nos dois casos.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #14 (docs/issues/)
+  Execução:
+    Bloqueado por: T6 (#7), T11 (#12).
+  Aceite:
+    Pergunta para o Vini mostra a faixa e dispara a notificação. Meta encerrada mostra a faixa fixa até o próximo despacho e dispara a notificação. O aviso final do líder segue o formato concluídas com evidência e bloqueadas com motivo e próximo passo.
 - [x] 2026-11-25 T6 (#7) Trava por pane e aviso do executor
   ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
   Resumo:
