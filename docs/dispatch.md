@@ -71,7 +71,11 @@ local e o acompanhamento, escrevendo "Tn concluído: commit, testes" na conversa
 Substitua pane do líder, pane próprio e ticket pelos valores do contrato. O
 comando escreve uma mensagem inteira, espera sua materialização no compositor,
 dá Enter e confirma que ela foi consumida. `pronto` exige commit, testes e resumo;
-`BLOQUEIO` exige dúvida. Para uma sessão Herdr explícita, acrescente
+`BLOQUEIO` exige dúvida. O aviso também marca o executor no registro do kit:
+`BLOQUEIO` o põe em BLOQUEADOS no Progress e `pronto` limpa a marca (spec #21).
+Depois de responder a um bloqueio, o líder limpa a marca com
+`/caminho/do/watchdog kit desbloquear --repo <projeto> --grupo <grupo> --ticket <ticket>`.
+O botão [unblock] do Progress manda ao líder esse comando junto do pedido. Para uma sessão Herdr explícita, acrescente
 `--session <nome>` antes do evento. Saída zero confirma o consumo, e não apenas
 o sucesso dos comandos do Herdr.
 

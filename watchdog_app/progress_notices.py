@@ -87,14 +87,19 @@ def update(repo, group, action, *, ticket=None, question=None, completed=(), blo
         return notices
 
 
-def rows(group, *, details=False):
+def rows(group, *, details=False, ended_banner=True):
+    """Spec #21 L32: AGENTES leaves the ended banner out of its top (ended_banner=False)."""
     notices = group.get('notices', {})
     result = []
     ended = notices.get('ended')
     if details:
         if ended:
+            if not ended_banner:
+                result.append((ended['title'], 'done', None))
             result.extend((line, 'ready', None) for line in ended['body'].splitlines())
         return result
+    if not ended_banner:
+        ended = None
     events = ([ended] if ended else []) + list(notices.get('questions', {}).values())
     for event in events:
         result.append((event['title'], 'blocked' if 'completed' not in event else 'done', None))

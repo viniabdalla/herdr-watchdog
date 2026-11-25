@@ -95,6 +95,48 @@ def record_check(repo, *, group, ticket, step, summary):
         return record
 
 
+def mark_notice(start, *, pane, ticket, event, detail):
+    """Spec #21 L33: BLOQUEIO marks the worker blocked; `pronto` clears it.
+
+    Walks up from the worker's directory to the project registry. Never raises:
+    the notice itself is what matters to the leader.
+    """
+    try:
+        for folder in [Path(start).resolve(), *Path(start).resolve().parents]:
+            target = folder/'.watchdog/executors.json'
+            if not target.is_file():
+                continue
+            with pane_lock('kit:'+str(folder)):
+                data = registry(folder)
+                matches = [r for r in data['executors'] if r.get('pane') == pane and r.get('ticket') == ticket]
+                if len(matches) != 1:
+                    continue
+                record = matches[0]
+                if event == 'BLOQUEIO':
+                    record['blocked'] = dict(reason=detail, at=time.time())
+                else:
+                    record.pop('blocked', None)
+                    record['ready'] = dict(commit=detail, at=time.time())
+                atomic(target, data)
+                return record
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError):
+        return None
+    return None
+
+
+def unblock(repo, *, group, ticket):
+    """Spec #21 L42: the leader clears a block after answering the worker."""
+    repo = Path(repo).resolve()
+    with pane_lock('kit:'+str(repo)):
+        data = registry(repo)
+        matches = [r for r in data['executors'] if r['group'] == group and r['ticket'] == ticket]
+        if len(matches) != 1:
+            raise RuntimeError('Executor sem correspondência única no grupo')
+        matches[0].pop('blocked', None)
+        atomic(repo/'.watchdog/executors.json', data)
+        return matches[0]
+
+
 def contract(record, config):
     notice = shlex.join([str(ROOT/'watchdog'), 'aviso', '--lider', record['leader'],
                          '--pane', record['pane'], '--ticket', record['ticket']] +
@@ -300,6 +342,8 @@ def main(argv=None):
     checking = actions.add_parser('checar')
     for flag in ('grupo','ticket','resumo'):checking.add_argument('--'+flag,required=True)
     checking.add_argument('--etapa',type=int,choices=(1,2,3),required=True)
+    unblocking = actions.add_parser('desbloquear')
+    for flag in ('grupo','ticket'):unblocking.add_argument('--'+flag,required=True)
     asking = actions.add_parser('perguntar')
     asking.add_argument('--tarefa','--ticket',dest='ticket',required=True,help='UUID, chave do grupo, título inequívoco ou atalho Tn')
     asking.add_argument('--duvida',required=True)
@@ -309,7 +353,7 @@ def main(argv=None):
     ending.add_argument('--concluida',action='append',default=[],metavar='TAREFA|EVIDÊNCIA')
     ending.add_argument('--bloqueada',action='append',default=[],metavar='TAREFA|MOTIVO|PRÓXIMO PASSO')
     for sub in (asking,answered,ending):sub.add_argument('--grupo',required=True)
-    for sub in (opening,listing,closing,checking,asking,answered,ending):sub.add_argument('--repo',type=Path,required=True)
+    for sub in (opening,listing,closing,checking,unblocking,asking,answered,ending):sub.add_argument('--repo',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
         if args.action == 'abrir':
@@ -319,6 +363,8 @@ def main(argv=None):
                                    review_axis=args.revisor,review_base=args.base,review_head=args.fim)
         elif args.action == 'checar':
             result = record_check(args.repo,group=args.grupo,ticket=args.ticket,step=args.etapa,summary=args.resumo)
+        elif args.action == 'desbloquear':
+            result = unblock(args.repo,group=args.grupo,ticket=args.ticket)
         elif args.action in ('perguntar','responder','encerrar'):
             from .progress_notices import update
             result = update(args.repo,args.grupo,args.action,ticket=getattr(args,'ticket',None),

@@ -41,7 +41,7 @@ class ProgressAgentsTests(unittest.TestCase):
         self.live = [dict(pane_id=b.pane,terminal_id=b.terminal,agent=b.kind,
                           agent_session={'kind':'id','value':b.session},agent_status='working',
                           cwd=str(self.tree if b is self.worker else self.repo)) for b in (self.leader,self.worker)]
-        patch('watchdog_app.leader_kit.executors', side_effect=lambda repo,group=None:{'executors':[self.record] if group==self.record['group'] else []}).start()
+        patch('watchdog_app.leader_kit.executors', side_effect=lambda repo,group=None:{'executors':[self.record] if group in (None,self.record['group']) else []}).start()
         patch('watchdog_app.bindings.engine',return_value=NS(Binding=FakeBinding,verify=lambda b:None,
               candidates=lambda:([self.leader,self.worker],[]))).start()
         patch('watchdog_app.bindings.project_for',return_value=self.repo).start()
@@ -49,6 +49,14 @@ class ProgressAgentsTests(unittest.TestCase):
             self.assertEqual(args[:2], ('pane','list'), 'AGENTES must never send or mutate panes')
             return {'panes':self.live}
         patch('watchdog_app.herdr.Herdr.call',side_effect=read_panes).start()
+
+    @staticmethod
+    def agent(lines, prefix):
+        """Spec #21 L39: an agent line plus its indented activity line."""
+        lines=[t if isinstance(t,str) else t[0] for t in lines]
+        index=next(i for i,t in enumerate(lines) if t.startswith(prefix))
+        following=lines[index+1] if index+1<len(lines) and lines[index+1].startswith('  ') else ''
+        return lines[index]+' · '+following.strip()
 
     def monitor(self):
         from watchdog_app.progress_agents import Agents
@@ -61,7 +69,7 @@ class ProgressAgentsTests(unittest.TestCase):
         for expected in ('AGENTES','Líder','w:p2','Trabalhando','12k','12%',
                          'próxima checagem prevista 1/3','T2','espera outra','T3','depende do Vini'):
             self.assertIn(expected,text)
-        self.assertTrue(all(run is None for _,_,run in monitor.poll()))
+        self.assertFalse(any(isinstance(run,dict) for _,_,run in monitor.poll()))  # no runs, only AGENTES items
         self.assertIsNone(self.record['session'])
         with self.history.open('a') as stream:
             stream.write(self.history.read_text().replace('12000','24000'))
@@ -77,13 +85,13 @@ class ProgressAgentsTests(unittest.TestCase):
         self.record['checks']=[{'summary':'rumo conferido'}]
         monitor=self.monitor()
         lines=[t for t,_,_ in monitor.poll()]
-        worker=next(t for t in lines if t.startswith('T1 ·'))
+        worker=self.agent(lines,'T1 ·')
         self.assertIn('Inspect fixtures',worker)
-        self.assertIn('T1 (#2) — Work',worker)
+        self.assertNotIn('T1 (#2) — Work',worker)  # spec #21 L39: activity, or the title when none
         self.assertIn('checagem inicial 1/3',worker)
-        self.assertNotIn('Inspect fixtures',next(t for t in lines if t.startswith('Líder ·')))
+        self.assertNotIn('Inspect fixtures',self.agent(lines,'Líder ·'))
         self.live[1]['agent_session']={'kind':'id','value':'replacement'}
-        self.assertNotIn('Inspect fixtures',next(t for t,_,_ in monitor.poll() if t.startswith('T1 ·')))
+        self.assertNotIn('Inspect fixtures',self.agent(monitor.poll(),'T1 ·'))
 
     def test_executor_binding_is_verified_once_per_refresh(self):
         # Spec #1 L92-94,141: reuse the monitor verification for activity and context.
@@ -95,7 +103,11 @@ class ProgressAgentsTests(unittest.TestCase):
 
     def test_replaced_terminal_worktree_or_session_hides_usage(self):
         # Spec #1 L95: never associate telemetry with a different native actor.
-        for field,value in (('terminal_id','other'),('cwd',str(self.repo)),
+        # Spec #21 L36: a replaced terminal means the worker's pane was closed.
+        self.live[1]['terminal_id']='other'
+        self.assertFalse(any(t.startswith('T1 ·') for t,_,_ in self.monitor().poll()))
+        self.live[1]['terminal_id']='t2'
+        for field,value in (('cwd',str(self.repo)),
                             ('agent_session',{'kind':'id','value':'replacement'})):
             with self.subTest(field=field):
                 previous=self.live[1][field];self.live[1][field]=value
@@ -111,12 +123,16 @@ class ProgressAgentsTests(unittest.TestCase):
         self.assertLess(text.index('AGENTES'),next(i for i,t in enumerate(text) if t.startswith('SESSION')))
 
     def test_group_base_and_initial_check_schedule(self):
-        # Spec #1 L95-97,139: current group only; checks at 2, 3 and 4 minutes.
+        # Spec #1 L95-97,139: checks at 2, 3 and 4 minutes. Spec #21 L35 replaces
+        # "current group only": other rounds of the same leader stay visible.
         monitor=self.monitor()
         for _ in range(3):
             self.assertIn('próxima checagem prevista 1/3', '\n'.join(t for t,_,_ in monitor.poll()))
         self.record['group']='previous-group'
+        self.assertTrue(any(t.startswith('T1 ·') for t,_,_ in monitor.poll()))
+        self.record['leader']='w:other'
         self.assertFalse(any(t.startswith('T1 ·') for t,_,_ in monitor.poll()))
+        self.assertTrue(any('Outros' in t for t,_,_ in monitor.poll()))
 
     def test_pty_twenty_lines_keeps_agents_visible_and_refreshes(self):
         # Spec #1 L94-97,153,167: actual terminal, isolated runtime, no sends.
@@ -180,15 +196,20 @@ finally:f.doCleanups()
 
     def test_done_todo_and_observed_leader_activity_replace_waiting(self):
         # Spec #1 L94-97: completion and current work are visible per agent.
+        # Spec #21 L36-37: a stopped worker with a done task is Feito, in a collapsed group.
         from test_session_progress import codex_call, codex_result
         with self.history.open('a') as stream:
             for event in (codex_call(),codex_result()):stream.write(json.dumps(event)+'\n')
         text=(self.repo/'TODO.md').read_text().replace('- [ ] T1','- [x] T1')
         (self.repo/'TODO.md').write_text(text)
-        source=self.monitor().poll()
-        worker=next(t for t,_,_ in source if t.startswith('T1 ·'))
-        leader=next(t for t,_,_ in source if t.startswith('Líder ·'))
-        self.assertIn('concluída',worker)
+        self.live[1]['agent_status']='idle'
+        monitor=self.monitor()
+        self.assertIn('1 feito',next(t for t,_,_ in monitor.poll() if t.startswith('▸')))
+        monitor.toggle('w:t2' if self.record.get('tab') else '—')
+        source=monitor.poll()
+        worker=self.agent(source,'T1 ·')
+        leader=self.agent(source,'Líder ·')
+        self.assertIn('Feito',worker)
         self.assertNotIn('aguardando aviso',worker)
         self.assertIn('Inspect fixtures',leader)
 

@@ -47,6 +47,16 @@ _Avoid_: goal, objetivo
 Os executores abertos juntos num mesmo momento, que dividem uma aba nomeada pelo tema e pelas tarefas.
 _Avoid_: onda, batch, fronteira
 
+**Bloqueado**:
+Um executor parado que não consegue seguir sozinho: avisou `BLOQUEIO`, teve a abertura falhada ou está bloqueado no Herdr. Aparece em vermelho no topo de AGENTES.
+
+**Na fila**:
+Uma tarefa do grupo que ainda não tem executor, à espera de outra tarefa, do Vini ou de abertura. Fica junto dos bloqueados, com bolinha amarela.
+
+**Unblock**:
+O pedido do Vini, por botão no Progress, para o líder destravar um item bloqueado ou na fila; o líder decide sozinho o que não muda o desenho e só pergunta ao Vini o que for imperativo.
+_Avoid_: desbloqueio automático
+
 **Branch de integração**:
 A branch local em que o líder junta o trabalho de cada executor; só sai da máquina por decisão do Vini.
 

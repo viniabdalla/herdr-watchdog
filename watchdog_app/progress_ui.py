@@ -13,6 +13,42 @@ from .todo import Snapshot
 from .session_progress import Progress
 from .actions import Session
 from .clean_sessions_ui import Controller
+from .progress_agents import Item
+
+FOOTER='j/k · clique seleciona · [ir] [fechar] [unblock] · Enter: grupo/execução · x: fechar run · z: zerar grupo · q: sair'
+DOTS={'blocked':'dot_blocked','working':'dot_working','queued':'dot_queued','done':'dot_done','idle':'dot_idle'}
+
+
+def buttons(item, selected):
+    """Spec #21 L40-42: [ir] always, [unblock] when blocked or queued, [fechar] only selected and idle."""
+    names=[]
+    if item.kind=='agent' and item.pane:names.append('ir')
+    if item.unblock:names.append('unblock')
+    if selected and item.closable and not item.leader:names.append('fechar')
+    return names
+
+
+def draw_item(screen, y, width, item, text, color, palette, attr=0, *, selected=False):
+    """Draw one AGENTES line; return the clickable button ranges as (name, x0, x1)."""
+    names=buttons(item,selected)
+    labels=' '.join('['+name+']' for name in names)
+    room=max(4,width-2-(len(labels)+1 if labels else 0))
+    red=palette.get('blocked',0) if color=='blocked' else 0
+    x=0
+    parts=list(item.segments) or [(text,None)]
+    if item.kind in ('agent','queue'):
+        put(screen,y,'● ',(red or palette.get(DOTS.get(item.state),0))|attr,x);x+=2
+    for part,tone in parts:
+        if x>=room:break
+        part=safe(part)[:room-x]
+        put(screen,y,part,(red or palette.get(tone,0))|attr,x);x+=len(part)
+    hits=[]
+    if labels:
+        bx=width-2-len(labels)
+        for name in names:
+            label='['+name+']'
+            put(screen,y,label,(red or curses.A_BOLD)|attr,bx);hits.append((name,bx,bx+len(label)));bx+=len(label)+1
+    return hits
 
 
 def session_rows(view, width=80):
@@ -153,10 +189,13 @@ def panel(screen, repo, binding_file=None):
             curses.start_color()
             try:curses.use_default_colors();bg=-1
             except curses.error:bg=curses.COLOR_BLACK
-            for i,(name,color) in enumerate((('ready',12),('working',11),('blocked',9),('review',13),('done',10),('unavailable',7)),1):
+            gray=8 if curses.COLORS>=16 else 7
+            for i,(name,color) in enumerate((('ready',12),('working',11),('blocked',9),('review',13),('done',10),('unavailable',7),
+                                             ('dot_blocked',9),('dot_working',10),('dot_queued',11),('dot_done',12),('dot_idle',gray),
+                                             ('level_ok',10),('level_warn',11),('level_full',9)),1):
                 curses.init_pair(i,color if curses.COLORS>=16 else color%8,bg);palette[name]=curses.color_pair(i)
     except curses.error:pass
-    selected=offset=0;notice='';armed=None
+    selected=offset=0;notice='';armed=None;closing=None
     progress=Progress(repo,binding_file)
     clean=Controller(repo)
     from .progress_agents import Agents
@@ -177,16 +216,61 @@ def panel(screen, repo, binding_file=None):
         source = rows(repo, progress=progress, width=w, agents=agents) + cleanup_rows
         rendered=[]
         for text,color,run in source:
-            rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])
+            if isinstance(run,Item):
+                rendered.append((text,color,run))  # spec #21 L39: agent lines are cut, never wrapped
+            else:
+                rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])
         selected=min(selected,max(0,len(rendered)-1));page=max(1,h-5)
         offset=min(offset,selected)
         if selected>=offset+page:offset=selected-page+1
-        for i,(text,color,_) in enumerate(rendered[offset:offset+page],offset):
-            put(screen,i-offset+3,text,palette.get(color,0)|(curses.A_REVERSE if i==selected else 0))
-        put(screen,h-1,notice or 'j/k: scroll · Enter/click: execution tab · x: close run · z: zerar grupo · q: exit',curses.A_DIM)
+        hits={}
+        for i,(text,color,meta) in enumerate(rendered[offset:offset+page],offset):
+            attr=curses.A_REVERSE if i==selected else 0
+            if isinstance(meta,Item):
+                hits[i]=draw_item(screen,i-offset+3,w,meta,text,color,palette,attr,selected=i==selected)
+            else:
+                put(screen,i-offset+3,text,palette.get(color,0)|attr)
+        put(screen,h-1,notice or FOOTER,curses.A_DIM)
         screen.refresh();key=screen.getch()
+        if closing is not None and key!=-1:
+            # Spec #21 L41: only Y closes; any other key cancels and is consumed.
+            target,closing=closing,None
+            if key in (ord('Y'),ord('y')):
+                try:notice=agents.close(target)
+                except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:notice=str(error)
+            else:notice='Fechamento cancelado'
+            continue
         if key!=-1 and key!=ord('x'):notice=''
         if key in (ord('q'),27):return
+        current=rendered[min(selected,len(rendered)-1)][2] if rendered else None
+        action=None;mouse=None
+        if key==curses.KEY_MOUSE:
+            try:mouse=curses.getmouse()
+            except curses.error:pass
+        if mouse:
+            try:
+                _,mx,my,_,mask=mouse
+                if 3<=my<h-2 and mask&(curses.BUTTON1_CLICKED|curses.BUTTON1_DOUBLE_CLICKED):
+                    index=offset+my-3
+                    if index<len(rendered) and isinstance(rendered[index][2],Item):
+                        selected=index;current=rendered[index][2]
+                        action=next((name for name,x0,x1 in hits.get(index,()) if x0<=mx<x1),None)
+                        if current.kind=='header':action='toggle'
+                        key=-2 if action is None else key
+            except curses.error:pass
+        if isinstance(current,Item) and action is None:
+            action={ord('i'):'ir',ord('u'):'unblock',10:'toggle',13:'toggle',curses.KEY_ENTER:'toggle'}.get(key)
+            if action=='toggle' and current.kind!='header':action=None
+        if action and isinstance(current,Item):
+            try:
+                if action=='ir':notice=agents.go(current)
+                elif action=='unblock':notice=agents.unblock(current)
+                elif action=='toggle':agents.toggle(current.group)
+                elif action=='fechar' and current.closable:
+                    closing=current;notice=f'Fechar {current.ticket} ({current.pane})? Y confirma · outra tecla cancela'
+            except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:notice=str(error)
+            continue
+        if key==-2:continue
         if key == ord('z'):
             try:
                 long_run.reset(repo)
@@ -198,16 +282,16 @@ def panel(screen, repo, binding_file=None):
         elif key in (ord('k'),curses.KEY_UP):selected=max(0,selected-1)
         elif key==curses.KEY_NPAGE:selected+=page
         elif key==curses.KEY_PPAGE:selected=max(0,selected-page)
-        elif key==curses.KEY_MOUSE:
+        elif key==curses.KEY_MOUSE and mouse:
             try:
-                _,_,y,_,mask=curses.getmouse()
+                _,_,y,_,mask=mouse
                 if 3<=y<h-2:
                     selected=min(len(rendered)-1,max(0,offset+y-3))
                     if mask&(curses.BUTTON1_CLICKED|curses.BUTTON1_DOUBLE_CLICKED):key=10
             except curses.error:pass
         if key==ord('x') and rendered:
             run=rendered[min(selected,len(rendered)-1)][2]
-            if not run or run['phase'] in FINISHED:notice='Select an unfinished run to close'
+            if not isinstance(run,dict) or run['phase'] in FINISHED:notice='Select an unfinished run to close'
             elif armed==run['id']:
                 try:close(RunStore(),run['id'],'closed by the user in Progress');notice='Run '+run['id'][:8]+' closed; evidence kept'
                 except (RuntimeError,OSError,ValueError,KeyError) as error:notice=str(error)
@@ -218,7 +302,7 @@ def panel(screen, repo, binding_file=None):
         if key!=-1:armed=None
         if key in (10,13,curses.KEY_ENTER) and rendered:
             run=rendered[min(selected,len(rendered)-1)][2]
-            if run:
+            if isinstance(run,dict):
                 try:open_run(run)
                 except (RuntimeError,OSError,ValueError,KeyError) as error:notice=str(error)
 

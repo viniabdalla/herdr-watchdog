@@ -31,6 +31,10 @@ def main(argv=None):
         text = prefix + f'{args.ticket} pronto: commit {args.commit}, testes {args.testes}. {args.resumo}'
     else:
         text = prefix + 'BLOQUEIO: ' + args.duvida
+    from pathlib import Path
+    from .leader_kit import mark_notice
+    mark_notice(Path.cwd(), pane=args.pane, ticket=args.ticket, event=args.event,
+                detail=args.duvida if args.event == 'BLOQUEIO' else args.commit)
     try:
         send(args.lider, text, api=Herdr(args.session))
     except DeliveryPending as error:

@@ -133,7 +133,8 @@ class ProgressNoticeTests(unittest.TestCase):
         self.assertIn('Meta encerrada',self.text())
 
     def test_blocker_and_next_step_precede_thirteen_evidences(self):
-        # Spec #1 L97-98,166: low panels expose blockers before completed evidence.
+        # Spec #1 L97-98,166; spec #21 L32-34: blockers lead AGENTES; the ended banner
+        # moved to the end, still before completed evidence.
         (self.repo/'TODO.md').write_text('## Next\n'+''.join(f'- [x] T{n} (#1{n}) — Work\n' for n in range(1,14))+'- [ ] T14 (#114) — Human\n')
         snapshot=Snapshot.read(self.repo)
         atomic(long_run.path_for(self.repo),dict(members=[long_run.identity(snapshot,t) for t in snapshot.tasks],base='a'*40))
@@ -141,9 +142,10 @@ class ProgressNoticeTests(unittest.TestCase):
         for n in range(1,14):args.extend(['--concluida',f'T{n}|commit e testes {n}'])
         args.extend(['--bloqueada','T14|Falta decisão|Vini escolhe destino'])
         self.assertEqual(self.command(*args),0)
-        first=self.text().splitlines()[1]
-        self.assertIn('T14',first)
-        self.assertIn('Vini escolhe destino',first)
+        lines=self.text().splitlines()
+        self.assertEqual(lines[1],'BLOQUEADOS')
+        self.assertIn('T14',lines[2])
+        self.assertLess(self.text().index('Vini escolhe destino'),self.text().index('Concluída'))
         self.assertLess(self.text().index('Bloqueada'),self.text().index('Concluída'))
         notification=self.notifications.call_args.args[0]
         self.assertIn('Vini escolhe destino',notification[-2])
@@ -210,11 +212,13 @@ curses.wrapper(panel,repo)
         self.assertEqual(terminal.process.wait(timeout=3),0)
 
     def test_final_banner_precedes_all_old_questions_and_evidence_follows_agents(self):
-        # Spec #1 L85,97-98,166: unanswered questions must not hide the final notice.
+        # Spec #1 L85,97-98,166; spec #21 L32: questions stay on top, the final notice
+        # follows the agents and precedes its evidence.
         self.assertEqual(self.command('perguntar','--ticket','T1','--duvida','Pergunta antiga A'),0)
         self.assertEqual(self.command('perguntar','--ticket','T2','--duvida','Pergunta antiga B'),0)
         self.assertEqual(self.command('encerrar','--concluida','T1|commit e testes',
                                      '--bloqueada','T2|Sem resposta|Vini responde'),0)
         lines=self.text().splitlines()
-        self.assertTrue(lines[1].startswith('Meta encerrada'),lines)
-        self.assertLess(self.text().index('Líder'),self.text().index('Concluída T1'))
+        self.assertTrue(lines[1].startswith('pergunta de T1'),lines)
+        self.assertLess(self.text().index('Líder'),self.text().index('Meta encerrada'))
+        self.assertLess(self.text().index('Meta encerrada'),self.text().index('Concluída T1'))
