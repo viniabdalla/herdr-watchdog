@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
-- [ ] T12 (#13) Code review em duas abas
-  ID: fdc62343-7c2f-4cfc-99de-347a7cf816e5
-  Resumo:
-    botão code-review com a base do grupo; aba Code Review com Standards e Spec pelo kit; lado a lado; correção em aba nova após o ok.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #13 (docs/issues/)
-  Execução:
-    Bloqueado por: T7 (#8), T8 (#9).
-  Aceite:
-    O botão sai com a base do grupo e a branch de integração, editáveis. O padrão traz os contratos-modelo de Standards e Spec. Os relatórios ficam na pasta de execução do projeto. A correção abre numa aba nova só depois do ok.
 - [ ] T13 (#14) Pergunta pendente e meta encerrada
   ID: 595712f8-ab5f-4540-b943-940648397038
   Resumo:
@@ -206,6 +196,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T12 (#13) Code review em duas abas
+  ID: fdc62343-7c2f-4cfc-99de-347a7cf816e5
+  Resumo:
+    botão code-review com a base do grupo; aba Code Review com Standards e Spec pelo kit; lado a lado; correção em aba nova após o ok.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #13 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8), T8 (#9).
+  Aceite:
+    O botão sai com a base do grupo e a branch de integração, editáveis. O padrão traz os contratos-modelo de Standards e Spec. Os relatórios ficam na pasta de execução do projeto. A correção abre numa aba nova só depois do ok.
 - [x] 2026-11-25 T11 (#12) Seção AGENTES no Progress
   ID: 8d30059f-5d67-4f25-81ed-c09fd01c5eb3
   Resumo:

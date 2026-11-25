@@ -1,8 +1,8 @@
 ---
 number: 13
 title: "T12 — Code review em duas abas"
-state: open
-labels: [ready-for-agent]
+state: closed
+labels: ["ready-for-agent"]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/13
 parent: 1
 blocked_by: [8, 9]
@@ -23,3 +23,12 @@ O botão code-review digita a chamada curta com a base anotada e a branch de int
 - [ ] O padrão traz os contratos-modelo de Standards e Spec.
 - [ ] Os relatórios ficam na pasta de execução do projeto.
 - [ ] A correção abre numa aba nova só depois do ok.
+
+
+## Comentários
+
+### 2026-11-25T15:57:06Z · viniabdalla
+
+A prévia do code review traz o intervalo editável do grupo. O kit fornece contratos de leitura Standards e Spec com hashes fixos e relatórios distintos. O Dispatch exige os dois relatórios e o ok do Vini antes do executor de correção em aba nova.
+
+Commit do executor `6786b9c`, integrado em `23fe38f`. A suíte executou 627 testes em cada modo de controles, com 7 ignorados e nenhuma falha.
