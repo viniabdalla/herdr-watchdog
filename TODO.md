@@ -20,8 +20,6 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
-
-## Próximo
 - [ ] T15 (#16) Fila travada no pane do líder
   ID: 184d02f0-64ad-48c1-9af4-c75d8fd5d1d2
   Resumo:
@@ -32,6 +30,8 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Implementar em worktree própria na integração após a correção da revisão R1.
   Aceite:
     Aviso único, cópia preservada, fila retomada e estado visível no Tasks. Ver critérios e seção aprovada na issue.
+
+## Próximo
 - [ ] Decidir os itens restantes do brainstorm do Watchdog
   ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
   Resumo:
