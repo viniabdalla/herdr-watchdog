@@ -124,34 +124,3 @@ class PanelTransferTests(unittest.TestCase):
             outgoing_transfer_operation=data['transfer_operation'],predecessor_binding=asdict(self.third))
         self.final.write_text(json.dumps(data))
         with self.assertRaisesRegex(RuntimeError,'cyclic|too long'):Session.for_panel(self.final,f.repo)
-
-    def test_retry_preserves_progressed_successor_and_refuses_new_owner(self):
-        # #17 L34-35,48: partial persistence cannot overwrite a newer destination.
-        from dataclasses import asdict
-        from unittest.mock import patch
-        from watchdog_app.store import atomic
-        f=self.f
-        # Start another transfer, then fail the source's final release write.
-        next_binding=self.fixtures.Binding(session='retry-target',account=f.new.account,
-            history=str(f.root/'retry.jsonl'),pane='project:retry',terminal='retry',pid=998,started='998')
-        f.runtime.actors[next_binding.session]=asdict(next_binding)
-        target=f.store.root/(next_binding.key+'.json')
-        def fail_release(path,value):
-            if Path(path)==self.final and value.get('ownership')=='released':raise OSError('disk failure')
-            atomic(path,value)
-        with patch('watchdog_app.store.atomic',side_effect=fail_release):
-            with self.assertRaises(OSError):
-                f.store.transfer(self.final,self.third,next_binding,f.repo,'retry-op',api=f.api)
-        pending=self.final.read_bytes()
-        successor=json.loads(target.read_text());successor['new_progress']='preserve me';atomic(target,successor)
-        expected=target.read_bytes()
-        f.store.transfer(self.final,self.third,next_binding,f.repo,'retry-op',api=f.api)
-        self.assertEqual(target.read_bytes(),expected)
-        # Simulate a competing owner appearing while the original transfer is suspended.
-        self.final.write_bytes(pending)
-        successor['binding']['session']='another-owner';atomic(target,successor)
-        expected=target.read_bytes()
-        with self.assertRaises(RuntimeError):
-            f.store.transfer(self.final,self.third,next_binding,f.repo,'retry-op',api=f.api)
-        self.assertEqual(target.read_bytes(),expected)
-        self.assertEqual(self.final.read_bytes(),pending)

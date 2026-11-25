@@ -24,7 +24,7 @@ def choices(session):
     return result
 
 
-def connect(session, candidate, *, operation_id=None):
+def connect(session, candidate):
     """Explicit choice may change panes; revalidate the entire identity at selection."""
     from .actions import Session
     if candidate not in choices(session):
@@ -36,15 +36,12 @@ def connect(session, candidate, *, operation_id=None):
         if candidate == session.binding:
             return session
         target = Store(session.file.parent).transfer(session.file, session.binding, candidate,
-                                                    session.repo, operation_id or str(uuid.uuid4()), api=api)
+                                                    session.repo, str(uuid.uuid4()), api=api)
     return Session(target, session.repo)
 
 
 def follow(session):
     """Follow a new session only inside the same verified pane and terminal."""
-    from .relink_confirmation import blocked
-    if blocked(session):
-        raise RuntimeError('Sessão não confirmada; use Religar')
     old = session.binding
     try:
         session.runtime.verify(old)
