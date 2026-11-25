@@ -63,15 +63,7 @@ def preview(session, snapshot, ids, mode='dispatch'):
     if new_base:
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
-    action = 'Implementar nesta sessão' if mode == 'here' else 'Concluir'
-    execution = ('Implemente em worktree própria a partir da integração; integre com as mesmas '
-                 'checagens e avise "Tn concluído".' if mode == 'here' else 'Despache um executor por tarefa;')
-    phrase = (action + ' somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
-              ', acompanhadas no TODO.md de ' + str(snapshot.repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
-              ' e a seção ## Dispatch do AGENTS.md do projeto. ' + execution + ' '
-              'Leia o modo por identidade no campo modes do grupo a cada atualização; '
-              'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
-    prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
+    prompt = group_goal(session.binding, snapshot.repo, state)
     if group and not restart and previous and previous.get('goal') == goal_identity(session.binding):
         prompt = 'Grupo atualizado: ' + (', '.join('+' + task.title for task in added)
                                            or 'nenhuma tarefa nova.')
@@ -79,6 +71,44 @@ def preview(session, snapshot, ids, mode='dispatch'):
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
             'previous': previous, 'group': state, 'new_base': new_base,
             'classification': classify(snapshot, set(ids)), 'warnings': warnings(snapshot.repo)}
+
+
+def group_goal(binding, repo, group):
+    modes = group.get('modes', {})
+    all_here = bool(group['members']) and all(modes.get(key) == 'here' for key in group['members'])
+    action = 'Implementar nesta sessão' if all_here else 'Concluir'
+    execution = ('Implemente em worktree própria a partir da integração; integre com as mesmas '
+                 'checagens e avise "Tn concluído".' if all_here else
+                 'Implemente nesta sessão as tarefas com modo here, em worktree própria a partir da integração; '
+                 'despache um executor por tarefa com modo dispatch ou sem modo registrado. '
+                 'Integre com as mesmas checagens e avise "Tn concluído".')
+    phrase = (action + ' somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(repo)) +
+              ', acompanhadas no TODO.md de ' + str(repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
+              ' e a seção ## Dispatch do AGENTS.md do projeto. ' + execution + ' '
+              'Leia o modo por identidade no campo modes do grupo a cada atualização; '
+              'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
+    return ('/goal ' if binding.kind in ('codex', 'claude') else '') + phrase
+
+
+def resend_preview(session):
+    session.verify()
+    group = long_run.record(session.repo)
+    if not group or not group['members']:
+        raise RuntimeError('Não há grupo para reenviar a meta')
+    return {'kind':'resend_goal', 'prompt':group_goal(session.binding, session.repo, group), 'group':group,
+            'binding':session.binding, 'pane':session.binding.pane}
+
+
+def resend(session, offer):
+    with session.routing(), locked(session.repo):
+        session.verify()
+        if session.binding != offer['binding'] or long_run.record(session.repo) != offer['group']:
+            raise RuntimeError('O líder ou o grupo mudou; confira uma nova prévia da meta')
+        try:
+            send(offer['pane'], offer['prompt'])
+        except (RuntimeError, OSError) as error:
+            raise RuntimeError('Reenvio não confirmado; confira o pane antes de tentar novamente. Nada foi reenviado automaticamente.') from error
+        atomic(long_run.path_for(session.repo), dict(offer['group'], goal=goal_identity(session.binding)))
 
 
 def deliver(session, offer):
