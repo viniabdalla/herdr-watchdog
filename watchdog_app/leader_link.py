@@ -24,7 +24,7 @@ def choices(session):
     return result
 
 
-def connect(session, candidate):
+def connect(session, candidate, *, operation_id=None):
     """Explicit choice may change panes; revalidate the entire identity at selection."""
     from .actions import Session
     if candidate not in choices(session):
@@ -36,7 +36,7 @@ def connect(session, candidate):
         if candidate == session.binding:
             return session
         target = Store(session.file.parent).transfer(session.file, session.binding, candidate,
-                                                    session.repo, str(uuid.uuid4()), api=api)
+                                                    session.repo, operation_id or str(uuid.uuid4()), api=api)
     return Session(target, session.repo)
 
 

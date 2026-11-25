@@ -106,6 +106,11 @@ class Session:
                 raise RuntimeError('Panel redirect belongs to another project')
             if data.get('ownership') != 'released':
                 return cls(current, repo, follow=True, allow_unavailable=allow_unavailable)
+            from .relink_confirmation import blocked_file
+            if blocked_file(current, transfer=data.get('outgoing_transfer_operation', data.get('transfer_operation'))):
+                if allow_unavailable:
+                    return cls(current, repo, follow=True, allow_unavailable=True)
+                raise RuntimeError('Sessão não confirmada; use Religar')
             target = Path(data['successor_binding_file'])
             if target.is_symlink() or target.parent.resolve() != current.parent.resolve():
                 raise RuntimeError('Successor binding must stay in Watchdog state')
@@ -122,6 +127,9 @@ class Session:
         data = json.loads(self.file.read_text())
         target = data.get('successor_binding_file')
         if data.get('ownership') != 'released' or not target:
+            return None
+        from .relink_confirmation import blocked_file
+        if blocked_file(self.file, transfer=data.get('outgoing_transfer_operation', data.get('transfer_operation'))):
             return None
         path = Path(target)
         if path.is_symlink() or path.parent.resolve() != self.file.parent.resolve():

@@ -1,10 +1,12 @@
 """Manual Codex identity proof; only Watchdog state is written here."""
 from dataclasses import asdict
 import importlib
+import os
 import json
 from pathlib import Path
 import shlex
 import sys
+import subprocess
 import time
 import uuid
 
@@ -20,16 +22,24 @@ def path_for(file):
 def required(session, candidate):
     old = session.binding
     return (old.kind == candidate.kind == 'codex' and
-            (old.pane, old.session) == (candidate.pane, candidate.session))
+            old.pane == candidate.pane and
+            (old.session == candidate.session or blocked(session)))
 
 
 def blocked(session):
-    if not session.file:
+    return blocked_file(session.file)
+
+
+def blocked_file(file, *, transfer=None):
+    if not file:
         return False
-    path = path_for(session.file)
+    path = path_for(file)
     if not path.exists():
         return False
     attempt = json.loads(path.read_text())
+    # An explicit move to another pane has its own transfer and remains valid.
+    if transfer is not None and transfer != attempt.get('transfer_id', attempt['id']):
+        return False
     return (attempt['state'] in ('pending', 'ready') or
             (attempt['state'] != 'confirmed' and attempt.get('helper_started', False)))
 
@@ -43,6 +53,10 @@ def begin(session, candidate):
                    state='pending', created=time.time(), repo=str(session.repo),
                    binding_file=str(session.file.resolve()), target=asdict(candidate))
     with locked(path, root=path.parent):
+        source = json.loads(session.file.read_text())
+        attempt['transfer_id'] = (source.get('outgoing_transfer_operation')
+                                  if source.get('ownership') in ('transferring', 'released')
+                                  else attempt['id'])
         atomic(path, attempt)
     return attempt
 
@@ -77,42 +91,69 @@ def validate(session, attempt, actor):
 
 def produce(file, attempt_id):
     """Called by the chosen conversation, never by the Tasks process."""
-    bindings.engine()
-    recovery = importlib.import_module('left_undone.recovery')
     path = path_for(file)
-    with locked(path, root=path.parent):
-        attempt = json.loads(path.read_text())
-        if attempt['id'] != attempt_id or attempt['state'] != 'pending':
-            raise RuntimeError('Tentativa cancelada ou substituída')
-        attempt['helper_started'] = True
-        atomic(path, attempt)
-    try:
-        actor = recovery.recover(attempt['marker'])
-        from watchdog_app.actions import Session
-        session = Session(file, attempt['repo'], allow_unavailable=True, follow=True)
-        validate(session, attempt, actor)
-        result = dict(state='ready', proof=asdict(actor))
-    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
-        result = dict(state='failed', error=str(error))
-    with locked(path, root=path.parent):
-        current = json.loads(path.read_text())
-        if current['id'] != attempt_id or current['state'] != 'pending':
-            raise RuntimeError('Tentativa cancelada ou substituída')
-        current.update(result)
-        atomic(path, current)
-    return current['state'] == 'ready'
+    # The native helper registers with Herdr before returning evidence. Serialize
+    # that effect across attempts (and binding files), not just the proof write.
+    initial = json.loads(path.read_text())
+    with locked('relink:' + initial['repo'], root=path.parent):
+        with locked(path, root=path.parent):
+            attempt = json.loads(path.read_text())
+            if attempt['id'] != attempt_id or attempt['state'] != 'pending':
+                raise RuntimeError('Tentativa cancelada ou substituída')
+            attempt['helper_started'] = True
+            atomic(path, attempt)
+        try:
+            from watchdog_app.actions import Session
+            from watchdog_app.leader_link import choices
+            session = Session(file, attempt['repo'], allow_unavailable=True, follow=True)
+            # Revalidate the selected destination before any native registration.
+            candidates = choices(session)
+            matching = [b for b in candidates if all(getattr(b, k) == attempt['target'][k]
+                        for k in ('kind', 'account', 'pane', 'terminal', 'workspace', 'pid', 'started'))]
+            if len(matching) != 1:
+                raise RuntimeError('O destino da confirmação mudou')
+            validate(session, attempt, matching[0])
+            recovery = importlib.import_module('left_undone.recovery')
+            # Read-only evidence in the selected pane must precede the native
+            # registration, even if the command was pasted in another pane.
+            native = recovery.runtime
+            target = matching[0]
+            proc = native.process_info(target.pid)
+            if any(proc[k] != getattr(target, k) for k in ('kind', 'account', 'pane', 'pid', 'started')):
+                raise RuntimeError('O processo da confirmação mudou')
+            history = native.resolve_history('codex', target.account, os.environ.get('CODEX_THREAD_ID', ''))
+            if not recovery.has_fresh_marker(history, attempt['marker']):
+                raise RuntimeError('Marcador ausente no histórico da conversa')
+            env = native.process_environment(target.pid)
+            context = {k:v for k,v in os.environ.items() if not k.startswith('HERDR_')}
+            context.update({k:v for k,v in env.items() if k.startswith('HERDR_')})
+            live = recovery.check_pane(proc, context, attempt['marker'])
+            if live.get('terminal_id') != target.terminal:
+                raise RuntimeError('O terminal da confirmação mudou')
+            actor = recovery.recover(attempt['marker'])
+            validate(session, attempt, actor)
+            result = dict(state='ready', proof=asdict(actor))
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError, ImportError, subprocess.SubprocessError) as error:
+            result = dict(state='failed', error=str(error))
+        with locked(path, root=path.parent):
+            current = json.loads(path.read_text())
+            if current['id'] != attempt_id or current['state'] != 'pending':
+                raise RuntimeError('Tentativa cancelada ou substituída')
+            current.update(result)
+            atomic(path, current)
+        return current['state'] == 'ready'
 
 
 def finish(session, attempt):
     from watchdog_app.leader_link import connect
     path = path_for(session.file)
-    with locked(path, root=path.parent):
+    with locked('relink:' + str(session.repo), root=path.parent), locked(path, root=path.parent):
         value = json.loads(path.read_text())
         if value['id'] != attempt['id'] or value['state'] != 'ready':
             raise RuntimeError(value.get('error', 'Prova ausente; confirme na conversa ou tente novamente'))
         actor = session.runtime.Binding(**value['proof'])
         validate(session, value, actor)
-        successor = connect(session, actor)
+        successor = connect(session, actor, operation_id=value.get('transfer_id', value['id']))
         successor.verify()
         persisted = json.loads(successor.file.read_text())
         if persisted['binding'] != asdict(actor):
@@ -123,13 +164,16 @@ def finish(session, attempt):
 
 
 def main(argv=None):
-    file, attempt_id = list(sys.argv[1:] if argv is None else argv)
     try:
+        args = list(sys.argv[1:] if argv is None else argv)
+        if len(args) != 2:
+            raise RuntimeError('Uso: confirm-session ARQUIVO TENTATIVA; copie a instrução do Tasks')
+        file, attempt_id = args
         if not produce(file, attempt_id):
             print('Sessão não confirmada')
             return 1
         print('Prova produzida. Volte ao Tasks e pressione Enter para conferir.')
         return 0
-    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, ImportError, subprocess.SubprocessError) as error:
         print('Sessão não confirmada: ' + str(error))
         return 1

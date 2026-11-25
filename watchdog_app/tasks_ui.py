@@ -140,7 +140,7 @@ class TasksUI:
                 self.next_reconnect=time.monotonic()+2
                 self.clean.poll_file(self.binding_file)
                 self.session=Session.for_panel(self.binding_file,self.repo)
-            target = self.session.successor_file()
+            target = self.session.successor_file() if self.mode != 'relink_confirm' else None
             if target:
                 self.job.close()
                 before = self.session.binding
@@ -703,8 +703,8 @@ class TasksUI:
                 try:
                     successor = finish(self.session, self.pending)
                 except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
-                    cancel(self.session, self.pending)
                     self.notice = 'Sessão não confirmada: ' + str(error)
+                    return True
                 else:
                     self.job.close()
                     self.session = successor
