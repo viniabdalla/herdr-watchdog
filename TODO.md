@@ -20,6 +20,16 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
+- [ ] T6 (#7) Trava por pane e aviso do executor
+  ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
+  Resumo:
+    toda escrita no pane do líder passa por uma trava; comando de aviso pronto/BLOQUEIO para executores.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #7 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
 - [ ] T8 (#9) Kit do líder: abrir executor e fechar tarefa
@@ -266,16 +276,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Bloqueado por: T1 (#2).
   Aceite:
     Líder Claude mostra /to-spec e líder Codex mostra $to-spec. Skill não instalada para aquele harness não aparece. O texto pode ser editado antes do Enter. to-tickets vem com a referência da spec quando o painel a encontra. Tracker sem a seção de cópia local mostra o aviso.
-- [x] 2026-11-25 T6 (#7) Trava por pane e aviso do executor
-  ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
-  Resumo:
-    toda escrita no pane do líder passa por uma trava; comando de aviso pronto/BLOQUEIO para executores.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #7 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 - [x] 2026-11-25 T4 (#5) Prévia que classifica a seleção
   ID: ab2a4cc9-bd50-4311-8733-942263533c3a
   Resumo:
