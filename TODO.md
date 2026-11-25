@@ -22,16 +22,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
-- [ ] T3 (#4) Despacho com meta ativa e zerar o grupo
-  ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
-  Resumo:
-    com meta ativa, enviar só "Grupo atualizado: +…"; zerar sozinho quando tudo está concluído e chega novo despacho; tecla para zerar à mão.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #4 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
 - [ ] T5 (#6) Implementar aqui
   ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
   Resumo:
@@ -256,6 +246,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T3 (#4) Despacho com meta ativa e zerar o grupo
+  ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
+  Resumo:
+    com meta ativa, enviar só "Grupo atualizado: +…"; zerar sozinho quando tudo está concluído e chega novo despacho; tecla para zerar à mão.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #4 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
 - [x] 2026-11-25 T7 (#8) Faixa de skills do Matt
   ID: 43ab9d91-244f-45d3-8185-29c844e2de7c
   Resumo:
