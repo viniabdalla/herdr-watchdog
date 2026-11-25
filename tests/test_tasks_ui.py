@@ -169,13 +169,15 @@ from watchdog_app.tasks_ui import run""")
         self.assertEqual((self.repo/'TODO.md').read_text(),self.original)
 
     def test_review_proposal_does_not_change_file_until_confirmed(self):
+        # Spec #1, lines 127 and 168: Review Curator labels its proposal/confirmation.
         terminal = self.bound_terminal(with_reply=True)
         self.assertTrue(terminal.wait_for('1 suggestions'),terminal.output.decode(errors='replace'))
         self.assertEqual((self.repo/'TODO.md').read_text(),self.original)
         os.write(terminal.master,b'r')
+        self.assertTrue(terminal.wait_for('Review Curator · propostas'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('Proposals only'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b'a')
-        self.assertTrue(terminal.wait_for('Confirm reviewed changes'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('confirmar alterações'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b'\x1b')
         self.assertTrue(terminal.wait_for('Cancelled'))
         self.assertEqual((self.repo/'TODO.md').read_text(),self.original)

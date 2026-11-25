@@ -244,8 +244,8 @@ class TasksUI:
                      'queue': 'Conversation is working — confirm queue',
                      'fresh': 'Novo executor · confirmar',
                      'orchestrate': 'Confirm orchestration', 'single': 'Confirmar envio para um agente',
-                     'apply': 'Confirm reviewed changes',
-                     'verify': 'Pedir verificação à sessão principal'}[offer['kind']]
+                     'apply': 'Review Curator · confirmar alterações',
+                     'verify': 'Verify Leader · pedir verificação ao líder'}[offer['kind']]
             rows.append((title, 'In progress', None))
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
@@ -303,6 +303,7 @@ class TasksUI:
                          else 'Only confirm after checking the selected changes.', None, None))
             return rows
         if self.mode == 'proposals':
+            rows.append(('Review Curator · propostas', 'In progress', None))
             if not self.result:
                 return [('No review is available yet.', None, None)]
             source = self.result['source']
@@ -389,12 +390,12 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         elif not full_controls():
-            buttons = [('Review r', 'r'), ('Verificar v', 'v'), ('Acompanhar no Progress g', 'g'), ('Quit q', 'q')]
-            hint = 'Space: selecionar · Enter/▸: resumo · v: pedir verificação à sessão principal'
+            buttons = [('Review Curator r', 'r'), ('Verify Leader v', 'v'), ('Acompanhar no Progress g', 'g'), ('Quit q', 'q')]
+            hint = 'Space: selecionar · Enter/▸: resumo · r: Review Curator · v: Verify Leader'
         else:
-            buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
+            buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review Curator r', 'r'), ('Verify Leader v', 'v'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q'), ('Acompanhar no Progress g', 'g')]
-            hint = 'Space: select · Enter/▸: resumo · 0: novo agente · P: planejar · C: opções'
+            hint = 'Space: select · Enter/▸: resumo · r: Review Curator · v: Verify Leader · 0: novo agente · P: planejar · C: opções'
         packed, x, line = [], 0, 0
         for label, action in buttons:
             label = '[' + label + ']'
