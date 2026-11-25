@@ -22,16 +22,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
-- [ ] T5 (#6) Implementar aqui
-  ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
-  Resumo:
-    segundo modo de despacho, em que o próprio líder implementa numa worktree própria e faz merge na integração.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #6 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    A prévia mostra qual modo foi escolhido. Implementar aqui digita a meta com o texto de implementar nesta sessão. O padrão do dispatch descreve o modo Implementar aqui e o uso de worktree pelo líder. O grupo soma igual ao Despachar.
 - [ ] T8 (#9) Kit do líder: abrir executor e fechar tarefa
   ID: b50f11f9-edf0-4402-9061-33885c8e1436
   Resumo:
@@ -236,6 +226,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T5 (#6) Implementar aqui
+  ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
+  Resumo:
+    segundo modo de despacho, em que o próprio líder implementa numa worktree própria e faz merge na integração.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #6 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    A prévia mostra qual modo foi escolhido. Implementar aqui digita a meta com o texto de implementar nesta sessão. O padrão do dispatch descreve o modo Implementar aqui e o uso de worktree pelo líder. O grupo soma igual ao Despachar.
 - [x] 2026-11-25 T9 (#10) Skill e botão merge-danger
   ID: 28d47bb7-865e-44f9-9c45-ce72d2baa1c1
   Resumo:
