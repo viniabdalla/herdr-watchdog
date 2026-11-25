@@ -20,19 +20,6 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
-- [ ] Trazer a orquestração do Left Undone para o Watchdog
-  ID: 9a1da315-9c0d-40b1-a576-dd3bdcfc65d2
-  Resumo:
-    abrir novos executores Codex ou Claude pelo Watchdog, com tarefas juntas ou separadas e planejamento antes da execução.
-  Origem: pedido-humano
-  Execução:
-    Escopo corrigido por Vini em 2026-11-19: modificar apenas Watchdog, manter Left Undone intacto e congelar Gossip.
-    Adaptar o fluxo do LU ao registro de execuções e às worktrees do Watchdog; não chamar o dispatcher nem alterar dados do LU.
-    Implementado em 2026-11-19: novo executor, contrato no lançamento, callbacks autenticados, continuação em nova tentativa, agrupamento, planejamento nativo e confirmação na interface. Verificação: 435 testes, sem falhas, 7 ignorados; revisão independente com seis correções comprovadas por regressões; telas conferidas em janela temporária. Evidências em docs/verification-orchestration-2026-11-19.md.
-    Não interpretar a entrega como aprovação das outras decisões do brainstorm. Validação com modelos reais e aceite operacional continuam separados dos testes automatizados.
-  Aceite:
-    Comprovar despacho e retorno no Watchdog para Codex e Claude, sem alterar LU; propostas não concluem implementação e resultados aguardam revisão do líder.
-
 
 ## Próximo
 - [ ] T1 (#2) Despachar a seleção com a meta do grupo
@@ -304,6 +291,19 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Demonstrar com evidência verificável o resultado já solicitado: confirmar uma tarefa real no novo fluxo Orchestrate e acompanhar seu progresso de ponta a ponta.
 
 ## Bloqueado
+- [ ] Trazer a orquestração do Left Undone para o Watchdog
+  ID: 9a1da315-9c0d-40b1-a576-dd3bdcfc65d2
+  Resumo:
+    abrir novos executores Codex ou Claude pelo Watchdog, com tarefas juntas ou separadas e planejamento antes da execução.
+  Origem: pedido-humano
+  Execução:
+    Escopo corrigido por Vini em 2026-11-19: modificar apenas Watchdog, manter Left Undone intacto e congelar Gossip.
+    Adaptar o fluxo do LU ao registro de execuções e às worktrees do Watchdog; não chamar o dispatcher nem alterar dados do LU.
+    Implementado em 2026-11-19: novo executor, contrato no lançamento, callbacks autenticados, continuação em nova tentativa, agrupamento, planejamento nativo e confirmação na interface. Verificação: 435 testes, sem falhas, 7 ignorados; revisão independente com seis correções comprovadas por regressões; telas conferidas em janela temporária. Evidências em docs/verification-orchestration-2026-11-19.md.
+    Não interpretar a entrega como aprovação das outras decisões do brainstorm. Validação com modelos reais e aceite operacional continuam separados dos testes automatizados.
+  Aceite:
+    Comprovar despacho e retorno no Watchdog para Codex e Claude, sem alterar LU; propostas não concluem implementação e resultados aguardam revisão do líder.
+  Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
 - [x] 2026-11-25 Brainstorm do Watchdog como painel do long run, setup das skills do Matt, spec #1 e tickets T1–T14 publicados
