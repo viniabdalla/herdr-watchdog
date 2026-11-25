@@ -1,9 +1,10 @@
-"""Painel de acompanhamento: sem botões de despacho, curador e verificação pela sessão principal."""
+"""Painel de acompanhamento, despacho confirmado e verificação pelo líder."""
 from dataclasses import asdict
 import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 import time
 import unittest
 
@@ -33,7 +34,8 @@ class TasksMonitorTests(unittest.TestCase):
         self.log = self.repo / 'herdr.log'
         self.env = {k: v for k, v in os.environ.items() if k != 'WATCHDOG_FULL_CONTROLS'}
         self.env.update(TERM='xterm-256color', WATCHDOG_STATE_DIR=str(self.repo / 'state'),
-                        PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], HERDR_LOG=str(self.log))
+                        PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], HERDR_LOG=str(self.log),
+                        HERDR_BIN_PATH=str(bin_dir / 'herdr'))
 
     def unbound(self):
         terminal = Terminal(['python3', str(SCRIPT), 'tasks', '--repo', str(self.repo)], self.env)
@@ -49,13 +51,15 @@ class TasksMonitorTests(unittest.TestCase):
         return terminal
 
     def test_monitor_buttons_are_shown(self):
+        # Spec #1 L29,129: despacho disponível; gravação manual removida.
         terminal = self.unbound()
         self.assertTrue(terminal.wait_for('Verificar v'), terminal.output.decode(errors='replace'))
         screen = terminal.output.decode(errors='replace')
         self.assertIn('Review r', screen)
-        self.assertIn('Acompanhar no Progress g', screen)
+        self.assertIn('Despachar p', screen)
+        self.assertNotIn('Acompanhar no Progress g', screen)
         self.assertIn('Quit q', screen)
-        for gone in ('Agents m', 'Send s', 'Done d', 'Start i', 'Next n', 'Orchestrate o', 'Despachar p',
+        for gone in ('Agents m', 'Send s', 'Done d', 'Start i', 'Next n', 'Orchestrate o',
                      'Clean sessions c', 'Auditoria A'):
             self.assertNotIn(gone, screen)
 
@@ -64,18 +68,24 @@ class TasksMonitorTests(unittest.TestCase):
         self.assertTrue(terminal.wait_for('Verificar v'))
         os.write(terminal.master, b' ')
         self.assertTrue(terminal.wait_for('1 task(s) selected'), terminal.output.decode(errors='replace'))
-        os.write(terminal.master, b'dsinomcpPA0C')
+        os.write(terminal.master, b'dsinomcDPA0C')
         time.sleep(1)
         screen = terminal.output.decode(errors='replace')
         for absent in ('Confirm completion', 'Confirm send', 'Moved selected', 'No conversation binding', 'Agents aberto'):
             self.assertNotIn(absent, screen)
         self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
 
-    def test_selection_in_tasks_is_reopened_in_progress(self):
-        terminal = self.unbound()
-        self.assertTrue(terminal.wait_for('Acompanhar no Progress g'))
-        os.write(terminal.master, b' j g')
-        self.assertTrue(terminal.wait_for('Long run salvo · 2 tarefa(s)'), terminal.output.decode(errors='replace'))
+    def test_dispatched_selection_is_reopened_in_progress(self):
+        # Spec #1 L44,153-154: grupo confirmado no Tasks aparece no Progress real.
+        for args in (('init', '-q', '-b', 'integration'), ('add', 'TODO.md'),
+                     ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base')):
+            subprocess.run(['git', '-C', str(self.repo), *args], check=True, capture_output=True)
+        terminal = self.bound()
+        self.assertTrue(terminal.wait_for('Despachar p'))
+        os.write(terminal.master, b' j p')
+        self.assertTrue(terminal.wait_for('Confirmar despacho'), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'y')
+        self.assertTrue(terminal.wait_for('Despacho enviado'), terminal.output.decode(errors='replace'))
         progress = Terminal(['python3', str(SCRIPT), 'progress', '--repo', str(self.repo),
                              '--binding-file', str(self.repo / 'offline-session.json')], self.env)
         self.addCleanup(progress.close)

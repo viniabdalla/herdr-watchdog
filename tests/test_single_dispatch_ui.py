@@ -30,12 +30,12 @@ class DispatchUITests(unittest.TestCase):
     def body(self):return '\n'.join(row[0] for row in self.ui.body())
 
     def select_executor(self):
-        self.ui.handle('p'); self.ui.draw(); self.ui.handle('enter')
+        self.ui.handle('D'); self.ui.draw(); self.ui.handle('enter')
         self.assertEqual(self.ui.mode,'executors')
         self.ui.draw(); self.ui.handle('enter')
 
     def test_dispatch_menu_and_executor_panel_require_separate_confirmation(self):
-        self.ui.handle('p')
+        self.ui.handle('D')
         self.assertIn('Para um agente',self.body()); self.assertIn('Orquestrar equipe',self.body())
         self.ui.draw(); self.ui.handle('enter')
         self.assertIn(self.f.worker.pane,self.body())
@@ -55,7 +55,7 @@ class DispatchUITests(unittest.TestCase):
         self.assertFalse(Snapshot.read(self.f.repo).tasks[0].done)
 
     def test_mouse_selects_mode_then_executor_and_escape_sends_nothing(self):
-        self.ui.handle('p'); self.ui.draw()
+        self.ui.handle('D'); self.ui.draw()
         for identity in ('single',0):
             target=next(t for t in self.ui.targets if t[3]==('item',identity))
             x,y,_,_=target
@@ -69,7 +69,7 @@ class DispatchUITests(unittest.TestCase):
 
     def test_no_eligible_executor_explains_requirement_without_side_effect(self):
         self.f.live['agent_status']='working'
-        self.ui.handle('p'); self.ui.draw(); self.ui.handle('enter')
+        self.ui.handle('D'); self.ui.draw(); self.ui.handle('enter')
         self.assertIn('Nenhum executor',self.body())
         self.ui.draw(); self.ui.handle('enter'); self.ui.handle('y')
         self.assertFalse(self.f.messages)
@@ -84,7 +84,7 @@ class DispatchUITests(unittest.TestCase):
         self.assertFalse(self.f.messages)
 
     def test_team_choice_and_old_shortcut_preserve_two_actor_flow(self):
-        self.ui.handle('p'); self.ui.draw(); self.ui.handle('down'); self.ui.draw(); self.ui.handle('enter')
+        self.ui.handle('D'); self.ui.draw(); self.ui.handle('down'); self.ui.draw(); self.ui.handle('enter')
         self.assertEqual(self.ui.pending['kind'],'orchestrate')
         self.assertIn('one Codex worker + one Codex QA',self.body())
         self.ui.handle('escape'); self.ui.handle('o')
@@ -94,7 +94,7 @@ class DispatchUITests(unittest.TestCase):
 
     def test_single_mode_rejects_multiple_tasks_before_selecting_executor(self):
         self.ui.selected={t.id for t in self.ui.snapshot.tasks}
-        self.ui.handle('p'); self.ui.draw()
+        self.ui.handle('D'); self.ui.draw()
         with self.assertRaisesRegex(RuntimeError,'uma tarefa'):self.ui.handle('enter')
         self.assertFalse(self.f.messages)
 
@@ -134,7 +134,7 @@ run(repo,Path(sys.argv[2]))
                           str(self.f.worktree),json.dumps(asdict(self.f.worker)),str(receipt)],dict(os.environ,TERM='xterm-256color'))
         self.addCleanup(terminal.close)
         self.assertTrue(terminal.wait_for('Despachar p'),terminal.output.decode(errors='replace'))
-        os.write(terminal.master,b' p')
+        os.write(terminal.master,b' D')
         self.assertTrue(terminal.wait_for('Para um agente'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('Orquestrar equipe'),terminal.output.decode(errors='replace'))
         terminal.output=b'';os.write(terminal.master,b'\r')

@@ -8,7 +8,6 @@ import signal
 import textwrap
 import time
 
-from . import long_run
 from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
@@ -84,13 +83,13 @@ def task_summary(snapshot, task):
     return 'Conclusão registrada no histórico.' if task.done else 'Resumo ainda não informado.'
 
 
-# Painel de acompanhamento: só seleção, curador e pedido de verificação à sessão principal.
-# WATCHDOG_FULL_CONTROLS=1 restaura os botões de despacho, orquestração e edição manual.
+# Seleção, despacho ao líder, curador e verificação ficam disponíveis no painel.
+# WATCHDOG_FULL_CONTROLS=1 restaura os fluxos anteriores de execução e edição manual.
 def full_controls():
     return os.environ.get('WATCHDOG_FULL_CONTROLS') == '1'
 
 
-DISABLED_KEYS = {'A', 'm', 'M', 'c', 'C', 'p', 'P', '0', 'o', 's', 'd', 'i', 'n'}
+DISABLED_KEYS = {'A', 'm', 'M', 'c', 'C', 'D', 'P', '0', 'o', 's', 'd', 'i', 'n'}
 
 
 def verification_prompt(tasks):
@@ -240,7 +239,7 @@ class TasksUI:
                 return confirmation_rows(self.session, offer['policy'])
             if offer['kind'] == 'clean_stuck':
                 return self.clean.stuck_rows() if self.clean.stuck else [('Clean sessions is no longer stopped.', 'Done', None)]
-            title = {'done': 'Confirm completion', 'send': 'Confirm send',
+            title = {'group_dispatch': 'Confirmar despacho', 'done': 'Confirm completion', 'send': 'Confirm send',
                      'queue': 'Conversation is working — confirm queue',
                      'fresh': 'Novo executor · confirmar',
                      'orchestrate': 'Confirm orchestration', 'single': 'Confirmar envio para um agente',
@@ -250,12 +249,13 @@ class TasksUI:
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
-            if offer['kind'] == 'verify':
-                rows.append(('Enviar para o painel ' + self.session.binding.pane + ' · sessão ' + self.session.binding.session, None, None))
+            if offer['kind'] in ('verify', 'group_dispatch'):
+                rows.append(('Enviar para o painel ' + offer.get('pane', self.session.binding.pane) + ' · sessão ' + self.session.binding.session, None, None))
                 rows.append(('', None, None))
                 rows.extend((line, None, None) for line in textwrap.wrap(offer['prompt'], 70))
                 rows.append(('', None, None))
-                rows.append(('y digita o pedido no prompt da sessão principal e aperta Enter.', 'In progress', None))
+                rows.append((('y digita a meta no pane do líder e aperta Enter.' if offer['kind'] == 'group_dispatch'
+                              else 'y digita o pedido no prompt da sessão principal e aperta Enter.'), 'In progress', None))
             if offer['kind'] == 'single':
                 actor = offer['executor']['binding']
                 rows.extend([('Executor: ' + actor['pane'] + ' · ' + actor['session'], None, None),
@@ -389,11 +389,11 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         elif not full_controls():
-            buttons = [('Review r', 'r'), ('Verificar v', 'v'), ('Acompanhar no Progress g', 'g'), ('Quit q', 'q')]
+            buttons = [('Review r', 'r'), ('Verificar v', 'v'), ('Despachar p', 'p'), ('Quit q', 'q')]
             hint = 'Space: selecionar · Enter/▸: resumo · v: pedir verificação à sessão principal'
         else:
             buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
-                       ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q'), ('Acompanhar no Progress g', 'g')]
+                       ('Start i', 'i'), ('Next n', 'n'), ('Envio avançado D', 'D'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · 0: novo agente · P: planejar · C: opções'
         packed, x, line = [], 0, 0
         for label, action in buttons:
@@ -538,6 +538,10 @@ class TasksUI:
             self.job.close()
             operation = self.clean.start(self.session, offer['policy'])
             self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
+        elif offer['kind'] == 'group_dispatch':
+            from .dispatch import deliver
+            deliver(self.session, offer)
+            self.notice = 'Despacho enviado · grupo com ' + str(len(offer['group']['members'])) + ' tarefa(s)'
         elif offer['kind'] == 'verify':
             self.session.verify()
             pane = self.session.binding.pane
@@ -714,17 +718,11 @@ class TasksUI:
             return False
         elif not full_controls() and key in DISABLED_KEYS:
             return True
-        elif key == 'g':
+        elif key == 'p':
             self.require_selection()
-            group = long_run.save(self.snapshot, self.selected)
-            self.job.close()
-            self.job = ReviewJob()
-            self.last_auto_key = None
-            self.next_check = 0
-            self.result = None
-            self.proposal_selected.clear()
-            self.selected.clear()
-            self.notice = f'Long run salvo · {len(group)} tarefa(s) em Progress'
+            from .dispatch import preview
+            self.pending = preview(self.session, self.snapshot, self.selected)
+            self.mode, self.scroll = 'confirm', 0
         elif key == 'v':
             self.require_selection()
             if not self.selected:
@@ -771,7 +769,7 @@ class TasksUI:
             self.fresh_dispatch('plan')
         elif key == '0':
             self.fresh_dispatch()
-        elif key == 'p':
+        elif key == 'D':
             self.require_selection(); self.session.verify()
             self.mode, self.cursor, self.scroll = 'dispatch', 0, 0
         elif key == 'o':

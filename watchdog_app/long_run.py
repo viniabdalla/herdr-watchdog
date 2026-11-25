@@ -1,4 +1,4 @@
-"""Fixed project task group shared by Tasks, Progress and the curator."""
+"""Project task group shared by Tasks, Progress and the curator."""
 from collections import defaultdict
 import hashlib
 import json
@@ -14,15 +14,21 @@ def path_for(repo):
     return state_root() / 'long-runs' / (key + '.json')
 
 
-def load(repo):
+def record(repo):
     try:
-        group = json.loads(path_for(repo).read_text())
+        value = json.loads(path_for(repo).read_text())
     except FileNotFoundError:
         return None
+    group = value.get('members') if isinstance(value, dict) else value
     if not (isinstance(group, list) and group and all(isinstance(k, str) for k in group)
             and len(group) == len(set(group))):
         raise RuntimeError('Grupo do long run inválido')
-    return group
+    return value if isinstance(value, dict) else {'members': group}
+
+
+def load(repo):
+    value = record(repo)
+    return value['members'] if value else None
 
 
 def identity(snapshot, task):
