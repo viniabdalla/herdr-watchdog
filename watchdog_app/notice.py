@@ -3,7 +3,7 @@ import argparse
 import sys
 
 from .herdr import Herdr
-from .pane_delivery import send
+from .pane_delivery import DeliveryPending, send
 
 
 def nonempty(value):
@@ -33,6 +33,9 @@ def main(argv=None):
         text = prefix + 'BLOQUEIO: ' + args.duvida
     try:
         send(args.lider, text, api=Herdr(args.session))
+    except DeliveryPending as error:
+        print(str(error)+'; não reenvie o aviso.', file=sys.stderr)
+        return 2
     except (RuntimeError, OSError) as error:
         print(str(error), file=sys.stderr)
         return 1

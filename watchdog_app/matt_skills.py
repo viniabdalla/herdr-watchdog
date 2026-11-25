@@ -61,4 +61,4 @@ def deliver(session, offer):
         text = offer['prompt'].strip()
         if not text or any(not character.isprintable() for character in text):
             raise RuntimeError('Digite um comando em uma única linha')
-        send(offer['pane'], text)
+        send(offer['pane'], text, binding=offer['binding'])

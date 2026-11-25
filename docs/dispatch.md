@@ -58,7 +58,7 @@ local e o acompanhamento, escrevendo "Tn concluído: commit, testes" na conversa
   `[Tn · painel <pane próprio>] Tn pronto: commit <sha>, testes <resultado>. <resumo>`.
   Para dúvida não decidida pela spec, envie `BLOQUEIO: <dúvida>` e espere resposta.
   Use `watchdog aviso` conforme a CLI abaixo; ela mantém a trava por pane desde
-  o texto até o Enter. Inclua o caminho absoluto do Watchdog no contrato para
+  o texto até a confirmação de consumo do rascunho. Inclua o caminho absoluto do Watchdog no contrato para
   funcionar também na worktree do executor.
 
 ### CLI de aviso (kit T6, usada por T7/T8)
@@ -69,18 +69,45 @@ local e o acompanhamento, escrevendo "Tn concluído: commit, testes" na conversa
 ```
 
 Substitua pane do líder, pane próprio e ticket pelos valores do contrato. O
-comando escreve uma mensagem inteira e dá Enter; `pronto` exige commit, testes
-e resumo, e `BLOQUEIO` exige dúvida. Para uma sessão Herdr explícita, acrescente
-`--session <nome>` antes do evento. Saída zero confirma os dois comandos; erro
-retorna saída não zero, sem repetição automática: confira o pane antes de tentar
-novamente.
+comando escreve uma mensagem inteira, espera sua materialização no compositor,
+dá Enter e confirma que ela foi consumida. `pronto` exige commit, testes e resumo;
+`BLOQUEIO` exige dúvida. Para uma sessão Herdr explícita, acrescente
+`--session <nome>` antes do evento. Saída zero confirma o consumo, e não apenas
+o sucesso dos comandos do Herdr.
+
+Um rascunho existente é preservado: a entrega aguarda o compositor ficar vazio.
+Após 30 segundos, saída 2 significa aviso guardado e espera em segundo plano;
+o executante não precisa reenviar. O caminho do registro e o PID da espera
+aparecem na resposta. Uma segunda entrega fica guardada atrás da primeira.
+A espera continua somente para o mesmo pane, terminal, harness e sessão nativa.
+Uma troca de identidade ou edição do rascunho depois do paste suspende a entrega
+com estado `uncertain`, sem apagar nem colar outra cópia.
+
+O Enter ocorre somente após observar o texto próprio inteiro no compositor.
+Se ele não for consumido e continuar exatamente igual em leituras sucessivas,
+a entrega pode usar um segundo Enter. Para um aviso simples do Codex ocupado,
+essa segunda tecla é Tab (fila visível). Comandos `/...` e `$...`, inclusive
+`/goal`, nunca usam Tab. Claude e Codex continuam recebendo texto pelo pane,
+inclusive ocupados; a CLI não substitui essa rota pela fila nativa do Codex.
+
+A materialização precisa ser verificável. Paste recolhido em um marcador,
+compositor sem leitura reconhecível ou texto alterado não autoriza enviar teclas
+às cegas: preserve o registro e informe BLOQUEIO com a evidência. Antes de
+retomar um registro suspenso, confira a identidade e o rascunho real. O módulo
+`python -m watchdog_app.pane_delivery resume <registro>` continua a etapa salva,
+sem repetir o paste; ele não resolve uma entrega `uncertain` automaticamente.
 
 Despacho, Verify Leader e avisos usam a mesma trava por pane e socket Herdr em
 `$XDG_STATE_HOME/herdr-watchdog/pane-locks` (padrão `~/.local/state`). A trava
 independe da worktree e de `WATCHDOG_STATE_DIR`; executores e painéis devem usar
 o mesmo usuário, socket e `XDG_STATE_HOME`. Escritores novos usam
 `watchdog_app.pane_delivery.send(pane, texto, api=Herdr(...))` em vez de separar
-texto e Enter. O envio pelo Herdr continua sendo texto seguido de Enter.
+texto e Enter. Os registros privados `*.pending.json` e `*.queued.*.json`
+guardam a mensagem intacta, a identidade e a etapa do envio até sua confirmação;
+o log da espera fica ao lado. A trava continua mantida durante paste,
+materialização, Enter e consumo. O Herdr 0.9.1 não oferece compare-and-send
+atômico da identidade/compositor: eles são conferidos imediatamente antes das
+teclas e após o consumo; uma mudança observada suspende o envio.
 
 ## Acompanhar e integrar
 

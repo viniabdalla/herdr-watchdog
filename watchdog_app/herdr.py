@@ -14,7 +14,8 @@ class Herdr:
         if session:
             self.prefix += ['--session', session]
 
-    def call(self, *args):
+    def output(self, *args):
+        """Raw output, including ANSI snapshots used to inspect the composer."""
         try:
             result = subprocess.run(self.prefix + list(args), capture_output=True,
                                     text=True, timeout=20)
@@ -22,9 +23,13 @@ class Herdr:
             raise RuntimeError('Herdr request timed out; inspect the panes before retrying') from error
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or 'Herdr command failed')
-        if not result.stdout.strip():
+        return result.stdout
+
+    def call(self, *args):
+        output = self.output(*args)
+        if not output.strip():
             return {}
-        value = json.loads(result.stdout)
+        value = json.loads(output)
         if 'error' in value:
             raise RuntimeError(str(value['error']))
         return value['result']

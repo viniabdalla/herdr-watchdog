@@ -5,7 +5,7 @@ import subprocess
 
 from . import long_run
 from .dispatch_preview import classify, warnings, blocked
-from .pane_delivery import send
+from .pane_delivery import DeliveryPending, send
 from .store import atomic
 from .todo import locked
 
@@ -104,11 +104,15 @@ def resend(session, offer):
         session.verify()
         if session.binding != offer['binding'] or long_run.record(session.repo) != offer['group']:
             raise RuntimeError('O líder ou o grupo mudou; confira uma nova prévia da meta')
+        state = dict(offer['group'], goal=goal_identity(session.binding))
         try:
-            send(offer['pane'], offer['prompt'])
+            send(offer['pane'], offer['prompt'], binding=offer['binding'], on_confirm={
+                'path': str(long_run.path_for(session.repo)), 'expected': offer['group'], 'value': state})
+        except DeliveryPending as error:
+            raise DeliveryPending('Meta guardada; aguarde a confirmação, sem reenviar. '+str(error)) from error
         except (RuntimeError, OSError) as error:
             raise RuntimeError('Reenvio não confirmado; confira o pane antes de tentar novamente. Nada foi reenviado automaticamente.') from error
-        atomic(long_run.path_for(session.repo), dict(offer['group'], goal=goal_identity(session.binding)))
+        atomic(long_run.path_for(session.repo), state)
 
 
 def deliver(session, offer):
@@ -129,11 +133,14 @@ def deliver(session, offer):
                 raise RuntimeError('A integração mudou; confira uma nova prévia antes de despachar')
         # The leader can read the group as soon as Enter reaches its pane.
         atomic(long_run.path_for(snapshot.repo), offer['group'])
+        state = dict(offer['group'], goal=goal_identity(session.binding))
         try:
-            send(offer['pane'], offer['prompt'])
+            send(offer['pane'], offer['prompt'], binding=offer['binding'], on_confirm={
+                'path': str(long_run.path_for(snapshot.repo)), 'expected': offer['group'], 'value': state})
+        except DeliveryPending as error:
+            raise DeliveryPending('Despacho guardado; aguarde a confirmação, sem reenviar. '+str(error)) from error
         except (RuntimeError, OSError) as error:
             raise RuntimeError('Despacho não confirmado; grupo preservado. Confira o pane do líder '
                                'antes de tentar novamente; nada foi reenviado automaticamente.') from error
 
-        state = dict(offer['group'], goal=goal_identity(session.binding))
         atomic(long_run.path_for(snapshot.repo), state)

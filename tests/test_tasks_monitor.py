@@ -15,11 +15,7 @@ from watchdog_app.tasks_ui import verification_prompt
 from watchdog_app.todo import Snapshot
 
 ROOT = SCRIPT.parents[1]
-FAKE_HERDR = '''#!/usr/bin/env python3
-import json, os, sys
-with open(os.environ['HERDR_LOG'], 'a') as f:
-    f.write(json.dumps(sys.argv[1:]) + '\\n')
-'''
+from pane_submission_fixture import IDLE_SCRIPT as FAKE_HERDR
 
 
 class TasksMonitorTests(unittest.TestCase):
