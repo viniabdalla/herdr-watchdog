@@ -1,4 +1,5 @@
 """Spec #1 L72-82, L115, L136, L145, L172-176: kit at external boundaries."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -224,6 +225,19 @@ p.write_text(json.dumps(v));print(json.dumps(v))
         self.env['KIT_SESSION_ON_PROMPT']='1'
         result=json.loads(self.open().stdout)
         self.assertEqual(result['session'],'thread1')
+
+    def test_two_dependents_share_overflow_tab_of_their_leva(self):
+        # L74: after dependency tab fills, dependents reuse their own live leva.
+        a=json.loads(self.open('A','--capacidade','2').stdout)
+        self.open('B','--depende','A','--capacidade','2')
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending=[pool.submit(self.open,ticket,'--depende','A','--capacidade','2',
+                                 '--leva','Next C D') for ticket in ('C','D')]
+            c,d=[json.loads(result.result().stdout) for result in pending]
+        self.assertNotEqual(a['tab'],c['tab'])
+        self.assertEqual(c['tab'],d['tab'])
+        calls=[json.loads(s) for s in (self.root/'herdr.jsonl').read_text().splitlines()]
+        self.assertEqual(sum(c[:2]==['tab','create'] for c in calls),2)
 
 
 if __name__ == '__main__':unittest.main()

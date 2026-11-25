@@ -119,7 +119,9 @@ projeto. Cria `.worktrees/<ticket>` a partir da ponta da integração, com branc
 própria; mantém `.watchdog/` e `.worktrees/` fora do git por exclusões locais.
 Cria uma aba nomeada pela leva ou divide a aba existente. `--depende` pode ser
 repetido para reaproveitar a leva de uma dependência do mesmo grupo; a ocupação
-real é limitada por `--capacidade` (padrão 4). Sem espaço, cria outra aba.
+real é limitada por `--capacidade` (padrão 4). Primeiro procura uma aba da
+dependência com espaço, depois uma aba viva da mesma leva com espaço; se ambas
+estiverem cheias ou fechadas, cria outra aba.
 Use `--session NOME` em `abrir` quando o Herdr exigir sessão explícita.
 
 O contrato em `.watchdog/run/<data>/` inclui os ponteiros, configuração, panes,

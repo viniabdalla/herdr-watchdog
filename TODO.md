@@ -42,16 +42,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Bloqueado por: T6 (#7).
   Aceite:
     Abrir executor cria a worktree e a branch a partir da integração e o pane na aba da leva. Tarefas liberadas depois entram na aba da leva de que dependiam, enquanto houver espaço. O executor aberto fica registrado para o painel, com tarefa e pane. Modelo e esforço vêm da seção Dispatch do projeto. Fechar tarefa comenta e fecha a issue e atualiza a cópia local. O padrão do dispatch passa a citar o kit, a checagem aos 2, 3 e 4 minutos e o merge da integração antes do aviso. Testes no ponto de teste B cobrem abrir e fechar.
-- [ ] T9 (#10) Skill e botão merge-danger
-  ID: 28d47bb7-865e-44f9-9c45-ce72d2baa1c1
-  Resumo:
-    skill nova que classifica porta e raio da integração e devolve integra, revisar ou não integrar; botão na faixa.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #10 (docs/issues/)
-  Execução:
-    Bloqueado por: T7 (#8).
-  Aceite:
-    A skill fica instalada para Claude e Codex. O botão aparece na faixa com o prefixo do harness. A resposta lista porta, raio e decisão por parte. Itens da lista de "sempre mão única" do projeto saem sempre como porta única.
 - [ ] T10 (#11) Vínculo que acompanha o líder
   ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
   Resumo:
@@ -246,6 +236,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T9 (#10) Skill e botão merge-danger
+  ID: 28d47bb7-865e-44f9-9c45-ce72d2baa1c1
+  Resumo:
+    skill nova que classifica porta e raio da integração e devolve integra, revisar ou não integrar; botão na faixa.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #10 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8).
+  Aceite:
+    A skill fica instalada para Claude e Codex. O botão aparece na faixa com o prefixo do harness. A resposta lista porta, raio e decisão por parte. Itens da lista de "sempre mão única" do projeto saem sempre como porta única.
 - [x] 2026-11-25 T3 (#4) Despacho com meta ativa e zerar o grupo
   ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
   Resumo:

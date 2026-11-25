@@ -133,14 +133,15 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
             record['operation'] = 'pane'; save()
             # Later dependent tasks follow the dependency's leva. Inspect live
             # occupancy, including panes not created by the kit; never overfill.
-            candidates = [r for r in data['executors'] if r is not record and r['group'] == group
-                          and r['workspace'] == workspace and r.get('herdr_session') == session
-                          and r['state'] == 'ready' and
-                          (r['ticket'] in dependencies if dependencies else r['leva'] == leva)]
+            eligible = [r for r in data['executors'] if r is not record and r['group'] == group
+                        and r['workspace'] == workspace and r.get('herdr_session') == session
+                        and r['state'] == 'ready']
+            candidates = [r for r in reversed(eligible) if r['ticket'] in dependencies]
+            candidates += [r for r in reversed(eligible) if r['leva'] == leva and r not in candidates]
             target = None
             if candidates:
                 live = api.call('pane','list','--workspace',workspace)['panes']
-                for candidate in reversed(candidates):
+                for candidate in candidates:
                     members = [p for p in live if p['tab_id'] == candidate['tab']]
                     anchor = next((p for p in members if p['pane_id'] == candidate['pane']
                                    and p['terminal_id'] == candidate['terminal']), None)
