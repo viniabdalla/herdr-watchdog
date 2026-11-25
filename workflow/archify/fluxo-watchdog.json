@@ -1,0 +1,364 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Workflow do Watchdog Tasks",
+    "subtitle": "Do planejamento com Matt à revisão da integração no TropicDesk",
+    "output": "workflow/archify/fluxo-watchdog.html",
+    "quality_profile": "showcase",
+    "visual_preset": "signal-flow"
+  },
+  "lanes": [
+    {
+      "id": "planejamento",
+      "label": "Planejamento com Matt"
+    },
+    {
+      "id": "execucao",
+      "label": "Long run no Herdr"
+    },
+    {
+      "id": "revisao",
+      "label": "Aba Code Review"
+    },
+    {
+      "id": "fechamento",
+      "label": "Validação da spec e teste final"
+    }
+  ],
+  "mainPath": [
+    "aba",
+    "padroes",
+    "relatorios",
+    "aceite",
+    "corrigir",
+    "retro",
+    "teste"
+  ],
+  "nodes": [
+    {
+      "id": "diagnostico",
+      "lane": "planejamento",
+      "col": 0,
+      "type": "external",
+      "label": "Diagnóstico",
+      "sublabel": "Pendências do deploy",
+      "width": 150
+    },
+    {
+      "id": "entrevista",
+      "lane": "planejamento",
+      "col": 1,
+      "type": "frontend",
+      "label": "Entrevista",
+      "sublabel": "grilling com os docs",
+      "width": 150
+    },
+    {
+      "id": "spec",
+      "lane": "planejamento",
+      "col": 2,
+      "type": "database",
+      "label": "/to-spec",
+      "sublabel": "Critérios de aceite",
+      "width": 150
+    },
+    {
+      "id": "tickets",
+      "lane": "planejamento",
+      "col": 3,
+      "type": "database",
+      "label": "/to-tickets",
+      "sublabel": "Issues e dependências",
+      "width": 150
+    },
+    {
+      "id": "tasks",
+      "lane": "planejamento",
+      "col": 4,
+      "type": "frontend",
+      "label": "Watchdog Tasks",
+      "sublabel": "TODO e sessão líder",
+      "width": 150
+    },
+    {
+      "id": "primeiros",
+      "lane": "execucao",
+      "col": 4,
+      "type": "backend",
+      "label": "Abrir executores",
+      "sublabel": "Um Codex por ticket",
+      "width": 150
+    },
+    {
+      "id": "meta",
+      "lane": "execucao",
+      "col": 3,
+      "type": "frontend",
+      "label": "/goal do líder",
+      "sublabel": "Escopo e limites",
+      "width": 150
+    },
+    {
+      "id": "trabalho",
+      "lane": "execucao",
+      "col": 2,
+      "type": "backend",
+      "label": "Executar e avisar",
+      "sublabel": "Commit ou bloqueio",
+      "width": 150
+    },
+    {
+      "id": "integrar",
+      "lane": "execucao",
+      "col": 1,
+      "type": "security",
+      "label": "Revisar entrega",
+      "sublabel": "Testar e integrar",
+      "width": 150
+    },
+    {
+      "id": "saldo",
+      "lane": "execucao",
+      "col": 0,
+      "type": "database",
+      "label": "Atualizar TODO",
+      "sublabel": "Feitos e pendências",
+      "width": 150
+    },
+    {
+      "id": "aba",
+      "lane": "revisao",
+      "col": 0,
+      "type": "frontend",
+      "label": "/code-review",
+      "sublabel": "Nova aba no Herdr",
+      "width": 150
+    },
+    {
+      "id": "padroes",
+      "lane": "revisao",
+      "col": 1,
+      "type": "backend",
+      "label": "Standards",
+      "sublabel": "Padrões do projeto",
+      "width": 150
+    },
+    {
+      "id": "requisitos",
+      "lane": "fechamento",
+      "col": 1,
+      "type": "backend",
+      "label": "Spec",
+      "sublabel": "Aceite dos tickets",
+      "width": 150
+    },
+    {
+      "id": "relatorios",
+      "lane": "revisao",
+      "col": 2,
+      "type": "messagebus",
+      "label": "Dois relatórios",
+      "sublabel": "Avisos ao líder",
+      "width": 150
+    },
+    {
+      "id": "aceite",
+      "lane": "revisao",
+      "col": 3,
+      "type": "security",
+      "label": "Vini autoriza",
+      "sublabel": "Escopo da correção",
+      "width": 150
+    },
+    {
+      "id": "corrigir",
+      "lane": "revisao",
+      "col": 4,
+      "type": "backend",
+      "label": "Corrigir achados",
+      "sublabel": "Um Codex novo",
+      "width": 150
+    },
+    {
+      "id": "retro",
+      "lane": "fechamento",
+      "col": 4,
+      "type": "frontend",
+      "label": "/retro",
+      "sublabel": "Etapa prevista",
+      "width": 150
+    },
+    {
+      "id": "teste",
+      "lane": "fechamento",
+      "col": 5,
+      "type": "external",
+      "label": "Teste do Vini",
+      "sublabel": "Após a retro",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "id": "diagnostico-entrevista",
+      "from": "diagnostico",
+      "to": "entrevista",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "entrevista-spec",
+      "from": "entrevista",
+      "to": "spec",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "spec-tickets",
+      "from": "spec",
+      "to": "tickets",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "tickets-tasks",
+      "from": "tickets",
+      "to": "tasks",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "tasks-primeiros",
+      "from": "tasks",
+      "to": "primeiros",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "primeiros-meta",
+      "from": "primeiros",
+      "to": "meta",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "meta-trabalho",
+      "from": "meta",
+      "to": "trabalho",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "trabalho-integrar",
+      "from": "trabalho",
+      "to": "integrar",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "integrar-saldo",
+      "from": "integrar",
+      "to": "saldo",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "saldo-aba",
+      "from": "saldo",
+      "to": "aba",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "aba-padroes",
+      "from": "aba",
+      "to": "padroes",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "padroes-relatorios",
+      "from": "padroes",
+      "to": "relatorios",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "relatorios-aceite",
+      "from": "relatorios",
+      "to": "aceite",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "aceite-corrigir",
+      "from": "aceite",
+      "to": "corrigir",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "corrigir-retro",
+      "from": "corrigir",
+      "to": "retro",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "retro-teste",
+      "from": "retro",
+      "to": "teste",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "aba-requisitos",
+      "from": "aba",
+      "to": "requisitos",
+      "role": "branch"
+    },
+    {
+      "id": "requisitos-relatorios",
+      "from": "requisitos",
+      "to": "relatorios",
+      "role": "return"
+    },
+    {
+      "id": "saldo-trabalho",
+      "from": "saldo",
+      "to": "trabalho",
+      "label": "ticket liberado",
+      "role": "return",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "A seleção no Tasks",
+      "items": [
+        "Na sessão original, a meta foi definida depois do primeiro despacho.",
+        "Proposta para o painel: gerar /goal com os IDs e títulos marcados."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Quando há bloqueio",
+      "items": [
+        "O líder consulta a spec e reavalia as dependências após cada entrega.",
+        "Na meta proposta, tarefas ainda bloqueadas aparecem no aviso final."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Revisão em paralelo",
+      "items": [
+        "Standards e Spec leem o mesmo intervalo de commits em painéis próprios.",
+        "Cada revisor avisa ao terminar. O líder aguarda os dois antes de apresentar."
+      ]
+    }
+  ]
+}

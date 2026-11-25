@@ -1,0 +1,7 @@
+/code-review Revise a branch de integração {branch}, da base {commit_base} até {commit_final}, contra {spec} e os critérios de aceite de {tickets}. Abra uma nova aba “Code Review” no Herdr. Inicie dois Codex novos e visíveis em paralelo, um painel por eixo, com contexto independente e o mesmo intervalo de commits.
+
+Standards: leia os padrões do projeto. Para cada violação, cite a regra e o arquivo:linha. Apresente possíveis problemas de qualidade do código separadamente, como julgamentos fundamentados. Spec: compare o diff integrado com a spec e os critérios dos tickets. Procure requisitos ausentes, parciais ou incorretos e comportamentos fora de escopo, inclusive nas interações entre tickets. Cite o requisito e o arquivo:linha. Respeite as exclusões acordadas em {escopo}.
+
+Nesta etapa, cada Codex revisa em leitura e grava só seu relatório em português, de até 400 palavras, em {relatorio_standards} ou {relatorio_spec}. Ao terminar, avisa a sessão líder {destino_lider} com o eixo, o painel, o caminho do relatório, o número de achados e o achado de maior impacto. Aguarde os avisos, com uma espera em segundo plano se algum revisor parar sem avisar. Quando os dois chegarem, apresente os relatórios lado a lado, identificados por eixo, com a contagem e o pior achado de cada um.
+
+Apresente a proposta de correção. Com meu ok, abra um único Codex novo para corrigir os achados acordados. Depois da correção, seguimos para /retro e então eu testo.

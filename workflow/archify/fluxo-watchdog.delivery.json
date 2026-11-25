@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "e499dae6-44f7-4031-98fc-a795df2c235a",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/home/tropico/Projects/herdr-watchdog/.worktrees/tasks-somente-leitura/workflow/archify/fluxo-watchdog.json",
+  "output": "/home/tropico/Projects/herdr-watchdog/.worktrees/tasks-somente-leitura/workflow/archify/fluxo-watchdog.html",
+  "specification": {
+    "sha256": "de832b3346a4d2203ef49d85911e255eefa88a4beb9d51ba6464928ef9ffb51a",
+    "bytes": 7841
+  },
+  "artifact": {
+    "sha256": "68862175047c8b7469101ab919301eab74e3d99746cc951f8340ab31bac09e19",
+    "bytes": 770893
+  }
+}
