@@ -1,8 +1,8 @@
 ---
 number: 16
 title: "T15 — Fila travada no pane do líder"
-state: open
-labels: [ready-for-agent]
+state: closed
+labels: ["ready-for-agent"]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/16
 parent: 1
 blocked_by: []
@@ -60,3 +60,12 @@ Pronto quando a fila tem no máximo uma entrega de cada pedido e o Vini sabe o q
 - [ ] O Tasks exibe a frase aprovada enquanto aguarda a resolução do líder. Preservar identidade, rascunho e confirmação de consumo nos dois harnesses.
 - [ ] A reconciliação segue a seção “Fila travada”, preservando somente o pedido atual mais recente de cada repetição e a ordem dos que ficaram. A fila volta a andar.
 - [ ] Há cobertura no ponto B com relógio controlado e Herdr falso, incluindo a entrega normal, o aviso único, a recuperação da fila e o texto do Tasks. A seção aprovada consta no padrão do dispatch.
+
+
+## Comentários
+
+### 2026-11-25T17:29:24Z · viniabdalla
+
+Após dois minutos sem progresso, o Watchdog arquiva a frente e a fila, envia ao líder um aviso único pelo pane verificado e mostra o estado Fila travada no Tasks após confirmar a entrega. O líder escolhe os pedidos atuais e o Watchdog mantém o mais recente de cada repetição na ordem. A seção Fila travada documenta a triagem e a recuperação explícita inclusive quando o próprio aviso não chegou. Na prova com os seis registros da ocorrência original e Herdr isolado, o aviso chegou em 123,7 segundos, os seis originais foram preservados, o comando mais recente entrou uma vez e a fila esvaziou.
+
+Commit do executor `4465a99`, integrado em `b650e39`. A suíte executou 674 testes em cada modo de controles, com 7 ignorados e nenhuma falha.

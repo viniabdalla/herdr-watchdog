@@ -20,16 +20,6 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
-- [ ] T15 (#16) Fila travada no pane do líder
-  ID: 184d02f0-64ad-48c1-9af4-c75d8fd5d1d2
-  Resumo:
-    Detectar dois minutos sem progresso, preservar a entrega e avisar o líder pelo pane.
-  Origem: pedido-humano
-  Referência: Spec #1 e issue #16 (docs/issues/16-t15-fila-travada.md).
-  Execução:
-    Implementar em worktree própria na integração após a correção da revisão R1.
-  Aceite:
-    Aviso único, cópia preservada, fila retomada e estado visível no Tasks. Ver critérios e seção aprovada na issue.
 
 ## Próximo
 - [ ] Decidir os itens restantes do brainstorm do Watchdog
@@ -187,6 +177,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T15 (#16) Fila travada no pane do líder
+  ID: 184d02f0-64ad-48c1-9af4-c75d8fd5d1d2
+  Resumo:
+    Detectar dois minutos sem progresso, preservar a entrega e avisar o líder pelo pane.
+  Origem: pedido-humano
+  Referência: Spec #1 e issue #16 (docs/issues/16-t15-fila-travada.md).
+  Execução:
+    Implementar em worktree própria na integração após a correção da revisão R1.
+  Aceite:
+    Aviso único, cópia preservada, fila retomada e estado visível no Tasks. Ver critérios e seção aprovada na issue.
 - [x] 2026-11-25 T13 (#14) Pergunta pendente e meta encerrada
   ID: 595712f8-ab5f-4540-b943-940648397038
   Resumo:
