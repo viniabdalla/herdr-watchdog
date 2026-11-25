@@ -251,13 +251,21 @@ class TasksUI:
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
+            if offer['kind'] == 'group_dispatch':
+                from .dispatch_preview import rows as classification_rows
+                rows.extend(classification_rows(offer))
             if offer['kind'] in ('verify', 'group_dispatch'):
                 rows.append(('Enviar para o painel ' + offer.get('pane', self.session.binding.pane) + ' · sessão ' + self.session.binding.session, None, None))
                 rows.append(('', None, None))
                 rows.extend((line, None, None) for line in textwrap.wrap(offer['prompt'], 70))
                 rows.append(('', None, None))
-                rows.append((('y digita a meta no pane do líder e aperta Enter.' if offer['kind'] == 'group_dispatch'
-                              else 'y digita o pedido no prompt da sessão principal e aperta Enter.'), 'In progress', None))
+                if offer['kind'] == 'group_dispatch':
+                    from .dispatch_preview import blocked
+                    instruction = ('i inclui a dependência e volta à prévia; ! manda assim mesmo.' if blocked(offer)
+                                   else 'y digita a meta no pane do líder e aperta Enter.')
+                else:
+                    instruction = 'y digita o pedido no prompt da sessão principal e aperta Enter.'
+                rows.append((instruction, 'In progress', None))
             if offer['kind'] == 'single':
                 actor = offer['executor']['binding']
                 rows.extend([('Executor: ' + actor['pane'] + ' · ' + actor['session'], None, None),
@@ -379,6 +387,11 @@ class TasksUI:
         if self.mode == 'audit':
             buttons = [('Confirmar y', 'y'), ('Escolher Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Setas/j/k: escolher · Enter/clique: continuar · y: confirmar · Esc: cancelar'
+        elif self.mode == 'confirm' and self.pending['kind'] == 'group_dispatch':
+            from .dispatch_preview import blocked
+            buttons = [('Incluir dependência i', 'i'), ('Cancelar Esc', 'escape')]
+            buttons.insert(0, ('Mandar assim mesmo !', '!') if blocked(self.pending) else ('Confirmar y', 'y'))
+            hint = 'i: incluir e revisar prévia · !: mandar assim mesmo · Esc: cancelar'
         elif self.mode == 'confirm':
             buttons = [('Confirm y', 'y'), ('Cancel Esc', 'escape')]
             hint = 'y: confirm · Esc: cancel · j/k: scroll'
@@ -653,6 +666,20 @@ class TasksUI:
                 self.notice = 'Clean sessions ' + operation['operation_id'][:8] + ' closed · press c to start again'
                 self.mode, self.pending = 'tasks', None
             elif key in ('y', 'enter') and self.clean.stuck and self.clean.stuck['state'] == 'partial':
+                self.execute()
+            return True
+        if self.mode == 'confirm' and self.pending['kind'] == 'group_dispatch':
+            from .dispatch_preview import blocked
+            if key == 'i':
+                from .dispatch import preview
+                additions = {identity for task in self.pending['classification'] for identity in task['outside']}
+                selection = self.selected | additions
+                offer = preview(self.session, self.pending['snapshot'], selection)
+                self.selected, self.pending, self.scroll = selection, offer, 0
+            elif key == '!' and blocked(self.pending):
+                self.pending['allow_blocked'] = True
+                self.execute()
+            elif key in ('y', 'enter') and self.can_confirm and not blocked(self.pending):
                 self.execute()
             return True
         if self.mode == 'confirm':
