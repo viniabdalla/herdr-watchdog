@@ -121,7 +121,7 @@ def rows(repo, store=None, *, progress=None, width=80):
             result.extend(heading + [('', None, None)])
         result.extend(project + [('', None, None)])
         if not group:
-            result.extend([('Long run · selecione tarefas em Tasks e use Acompanhar no Progress (g).', None, None),
+            result.extend([('Long run · selecione tarefas em Tasks e use Despachar (p).', None, None),
                            ('', None, None)])
         if snapshot.format_version == 1:
             from .project_history import observe

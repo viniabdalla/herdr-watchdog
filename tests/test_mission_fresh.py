@@ -92,7 +92,7 @@ class FreshUITests(unittest.TestCase):
     setUp = test_single_dispatch_ui.DispatchUITests.setUp
 
     def test_new_agent_is_offered_and_confirmation_keeps_todo_open(self):
-        self.ui.handle('p')
+        self.ui.handle('D')
         self.assertIn('fresh', [row[2] for row in self.ui.body()])
         self.ui.confirm('fresh'); self.ui.draw()
         self.assertIn('Novo executor', '\n'.join(row[0] for row in self.ui.body()))

@@ -40,17 +40,24 @@ Files. Watchdog reads that binding and never edits Left Undone's state.
 
 ## Painel de acompanhamento (branch feat/tasks-somente-leitura)
 
-Por padrão, **WATCHDOG / TASKS** mostra **[Review Curator r]**, **[Verify Leader v]**, **[Acompanhar no Progress g]** e **[Quit q]**.
+Por padrão, **WATCHDOG / TASKS** mostra **[Review Curator r]**, **[Verify Leader v]**, **[Despachar p]** e **[Quit q]**.
 Space seleciona tarefas, Enter/▸ abre o Resumo e o curador continua revisando cada resposta.
 **Verify Leader (v)** monta um pedido de verificação das tarefas selecionadas, mostra a prévia com o painel e a
 sessão do líder anotados e, com **y**, digita o pedido no prompt dessa sessão via
 `herdr pane send-text` + Enter, depois de reconfirmar a identidade da sessão. Esc cancela sem enviar.
-Selecione as tarefas com Space e use **g** para guardar o grupo do long run neste projeto.
-O Progress abre com a barra do projeto. Com um grupo salvo, a barra do long run ocupa o topo e a barra geral fica logo abaixo. Um novo grupo salvo substitui o anterior.
+Selecione as tarefas com Space e use **p** para despachá-las. A prévia mostra a meta e o pane do líder;
+**y** confirma e digita o texto seguido de Enter, **Esc** cancela sem alterar o grupo.
+A primeira meta aponta para o grupo, o [padrão do dispatch](docs/dispatch.md) e a seção Dispatch do AGENTS.md.
+Claude e Codex recebem `/goal`; outros harnesses recebem a mesma frase como mensagem comum.
+Cada despacho confirmado soma as tarefas ao grupo, sem duplicá-las. A primeira gravação anota
+a ponta da branch de integração como base e a preserva nos acréscimos. Configure a branch na
+seção Dispatch conforme o [modelo para projetos](docs/templates/dispatch-agents.md).
+O Progress abre com a barra do projeto. Com um grupo, a barra do long run ocupa o topo e a barra geral fica logo abaixo.
+Grupos antigos continuam legíveis; a ação de gravar um grupo manualmente foi removida.
 O curador recebe as tarefas abertas do grupo como prioridade a cada resposta concluída da sessão vinculada.
 A porcentagem muda quando o estado muda no TODO.md, inclusive após aplicar uma proposta do curador.
-Despacho, orquestração, Agents, Clean sessions, Auditoria e Done/Start/Next ficam desligados;
-`WATCHDOG_FULL_CONTROLS=1` restaura todos os botões.
+Orquestração, Agents, Clean sessions, Auditoria e Done/Start/Next ficam desligados;
+`WATCHDOG_FULL_CONTROLS=1` restaura esses controles. Os modos anteriores de envio ficam em **Envio avançado D**.
 
 ## Agents and individual panels
 
@@ -76,8 +83,8 @@ Click a task or use arrows/j/k and Space to select it. `s` prepares a request
 for the verified Codex conversation; confirm with `y`, or Esc to cancel. Requests
 go through Codex's account-specific inbox using the full thread UUID. A working
 conversation needs a separate queue confirmation. Tasks stay open after sending.
-Claude conversations can be watched, but task delivery is unavailable until a
-thread-addressed transport exists; Watchdog does not type into a pane prompt.
+This legacy `s` action requires Codex's thread-addressed transport. The group
+dispatch action `p` uses the leader's pane for both Claude and Codex.
 
 `d` requests confirmed completion. `i` moves to In progress; `n` moves to Next.
 Section colors: Next blue, In progress yellow, Blocked red, Done green.
@@ -165,7 +172,7 @@ links and keeps state; it does not close running panels or stop Herdr.
 ## Fresh workers and planning
 
 In Tasks, select tasks and use **0** (new executor), **P** (plan only), or the
-**Despachar p** menu. Several tasks offer **Juntas** (one worker and one contract
+**Envio avançado D** menu (with full controls). Several tasks offer **Juntas** (one worker and one contract
 covering all selected IDs) or **Separadas** (one fresh worker per task). The
 confirmation lists the project checkpoint before any dispatch. One message asks
 the verified leader to prepare the contracts, choose a model and effort, and launch.
@@ -194,7 +201,7 @@ records remain readable. Fresh dispatch uses native launch/report paths.
 
 ## Mission Control pilot
 
-Select open tasks in Tasks and press **p / Despachar**. Choose **Para um agente**
+Select open tasks in Tasks with full controls and press **D / Envio avançado**. Choose **Para um agente**
 for one existing executor with leader review, or **Orquestrar equipe** for worker
 and QA. **o / Orchestrate** still opens the team confirmation directly. Confirm the project,
 main conversation, account and team. This queues a coordination request to that
