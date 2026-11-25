@@ -332,3 +332,50 @@ permitida; itens posteriores presos à sessão antiga também precisam de retira
 com evidência. Novos envios usam a identidade nova. A reconciliação compara o
 registro lido com o que ainda está sob a trava; se tiver mudado, releia e decida
 novamente. Nenhum desses passos deve ser aplicado ao pane real como teste.
+
+## Fila travada
+
+Quando o Watchdog avisar "Fila travada", destrave a fila do seu pane:
+
+1. Guarde uma cópia da fila na pasta de execução.
+2. Para cada entrega, decida: já tratada (aviso de tarefa integrada) → retire; repetida → mantenha a mais recente; atual → mantenha.
+3. Entregue o que ficou, uma vez cada, na ordem.
+4. Responda ao Vini numa mensagem: o que retirou e por quê, o que entregou, e o que depende dele.
+
+Pronto quando a fila tem no máximo uma entrega de cada pedido e o Vini sabe o que depende dele.
+
+Os registros `*.stalled.json` na pasta compartilhada de trava por pane apontam
+para a cópia intacta da frente (`front.json`) e da fila (`queue.json`). As novas
+entregas continuam guardadas em `*.queued.*.json`; nenhuma sai antes da decisão.
+Copie esses registros para a pasta de execução. Leia o snapshot da triagem, com
+IDs estáveis inclusive para os registros antigos sem `delivery_id`:
+
+```bash
+python -m watchdog_app.pane_delivery queue-snapshot --pane PANE
+```
+
+O snapshot é o da detecção da trava; entregas posteriores ficam preservadas
+mesmo quando não constam em `--keep`. Textos iguais com callbacks ou identidades
+diferentes são pedidos distintos.
+Depois de conferir que o paste antigo terminou e que o compositor está vazio,
+registre a decisão com:
+
+```bash
+python -m watchdog_app.pane_delivery resolve-queue --pane PANE --keep ID_ATUAL ID_OUTRO --evidence 'Motivos das retiradas e confirmação do paste antigo encerrado'
+```
+
+Use `--session NOME` quando o vínculo usa uma sessão Herdr explícita. Sem IDs
+em `--keep`, todas as entregas do snapshot são retiradas; posteriores sobrevivem. Os IDs escolhidos são entregues
+pelo worker na ordem original; textos repetidos preservam somente o mais recente.
+A decisão e todos os originais ficam arquivados. Se o processo de espera foi
+interrompido, retome `python -m watchdog_app.pane_delivery watch REGISTRO` usando
+um registro pendente ou enfileirado; não reenvie o pedido original.
+
+Se o próprio aviso estiver `uncertain`, o worker não o reenvia nem cria outro.
+Confira identidade, compositor e consumo real. A reconciliação R1 com
+`--resolution materialized` continua um paste comprovadamente materializado.
+Para um aviso já lido pelo líder cujo consumo não foi observado, use
+`python -m watchdog_app.pane_delivery reconcile REGISTRO --resolution consumed
+--evidence 'Confirmação do líder e compositor vazio'` (na mesma linha).
+Essa confirmação exige o mesmo líder e compositor vazio. Só então resolva a
+fila. O worker retoma uma decisão interrompida sem liberar cópias descartadas.

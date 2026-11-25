@@ -419,7 +419,14 @@ class TasksUI:
             screen.refresh()
             return
         put(screen, 2, self.review_status)
-        put(screen, 3, self.notice, curses.A_BOLD)
+        from .pane_delivery import queue_notice
+        binding = self.session.binding
+        delivery_notice = queue_notice(binding.pane, None) if binding else ''
+        if getattr(self, '_queue_was_stalled', False) and not delivery_notice:
+            if self.notice.startswith(('Aguardando a entrega', 'Entrega guardada', 'Envio não confirmado')):
+                self.notice = ''
+        self._queue_was_stalled = bool(delivery_notice)
+        put(screen, 3, delivery_notice or self.notice, curses.A_BOLD)
         if self.mode == 'skill_preview':
             buttons = [('Enviar Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Digite para editar · ←/→: cursor · Ctrl+U: limpar'
