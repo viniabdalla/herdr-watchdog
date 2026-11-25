@@ -29,7 +29,7 @@ Abaixo das barras Long run e Projeto, que não mudam, AGENTES responde "quem est
 
 ## Decisões de implementação
 
-- Ordem: BLOQUEADOS, LÍDER, grupos por tab. O topo do Progress (título, Long run, Projeto) não muda. A faixa "Meta encerrada" sai do topo; o resumo final vira uma linha recolhida no fim de AGENTES, que abre as evidências com um clique. Seções separadas por uma linha em branco. Perguntas que aguardam o Vini continuam no topo de AGENTES.
+- Ordem: BLOQUEADOS, LÍDER, grupos por tab. O topo do Progress (título, Long run, Projeto) não muda. A faixa "Meta encerrada" sai do topo; o resumo final vira uma linha recolhida no fim de AGENTES, que abre as evidências com um clique. Uma linha horizontal separa AGENTES do topo, o bloco vermelho, o líder, cada grupo e o resumo da meta. Perguntas que aguardam o Vini continuam no topo de AGENTES.
 - Bloqueado: executor cujo pane o Herdr marca como bloqueado, cujo contrato falhou, ou que enviou `BLOQUEIO` pelo aviso e ainda não enviou `pronto` nem foi desbloqueado pelo líder. Um executor trabalhando há mais de um minuto depois do aviso de bloqueio deixa o bloco vermelho.
 - Na fila: tarefa do grupo ainda sem executor. Fica no bloco vermelho com bolinha amarela e a marca "na fila", com o motivo (espera outra tarefa, depende do Vini, aguardando executor).
 - Rodadas do líder: registros do kit cujo líder é o pane do líder ligado, ou cujo grupo é a base do long run atual (herdada no Religar). Os demais registros vivos vão para o grupo "Outros", que só aparece quando existe.

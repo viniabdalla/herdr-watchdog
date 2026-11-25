@@ -145,7 +145,7 @@ class ProgressNoticeTests(unittest.TestCase):
         for n in range(1,14):args.extend(['--concluida',f'T{n}|commit e testes {n}'])
         args.extend(['--bloqueada','T14|Falta decisão|Vini escolhe destino'])
         self.assertEqual(self.command(*args),0)
-        lines=self.text().splitlines()
+        lines=[line for line in self.text().splitlines() if line]  # separator rows have no text
         self.assertEqual(lines[1],'BLOQUEADOS')
         self.assertIn('T14',lines[2])
         self.assertLess(self.text().index('Vini escolhe destino'),self.text().index('Concluída'))
@@ -221,7 +221,7 @@ curses.wrapper(panel,repo)
         self.assertEqual(self.command('perguntar','--ticket','T2','--duvida','Pergunta antiga B'),0)
         self.assertEqual(self.command('encerrar','--concluida','T1|commit e testes',
                                      '--bloqueada','T2|Sem resposta|Vini responde'),0)
-        lines=self.text().splitlines()
+        lines=[line for line in self.text().splitlines() if line]  # separator rows have no text
         self.assertTrue(lines[1].startswith('pergunta de T1'),lines)
         self.assertLess(self.text().index('Líder'),self.text().index('Meta encerrada'))
         self.assertLess(self.text().index('Meta encerrada'),self.text().index('Concluída T1'))

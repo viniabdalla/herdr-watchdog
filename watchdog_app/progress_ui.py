@@ -16,7 +16,7 @@ from .clean_sessions_ui import Controller
 from .progress_agents import Item
 
 FOOTER='j/k · clique seleciona · [ir] [fechar] [unblock] · Enter: grupo/execução · x: fechar run · z: zerar grupo · q: sair'
-DOTS={'blocked':'dot_blocked','working':'dot_working','queued':'dot_queued','done':'dot_done','idle':'dot_idle'}
+DOTS={'blocked':'alarm','working':'dot_working','queued':'dot_queued','done':'dot_done','idle':'dot_idle'}
 
 
 def buttons(item, selected):
@@ -30,10 +30,14 @@ def buttons(item, selected):
 
 def draw_item(screen, y, width, item, text, color, palette, attr=0, *, selected=False):
     """Draw one AGENTES line; return the clickable button ranges as (name, x0, x1)."""
+    if item.kind=='rule':
+        shape,weight={'1':('━',curses.A_BOLD),'2':('─',0),'3':('╌',curses.A_DIM)}.get(item.state,('─',0))
+        put(screen,y,shape*max(0,width-2),palette.get('rule',0)|weight)
+        return []
     names=buttons(item,selected)
     labels=' '.join('['+name+']' for name in names)
     room=max(4,width-2-(len(labels)+1 if labels else 0))
-    red=palette.get('blocked',0) if color=='blocked' else 0
+    red=palette.get('alarm',0) if color=='blocked' else 0
     x=0
     parts=list(item.segments) or [(text,None)]
     if item.kind in ('agent','queue'):
@@ -188,7 +192,8 @@ def panel(screen, repo, binding_file=None):
             gray=8 if curses.COLORS>=16 else 7
             for i,(name,color) in enumerate((('ready',12),('working',11),('blocked',9),('review',13),('done',10),('unavailable',7),
                                              ('dot_blocked',9),('dot_working',10),('dot_queued',11),('dot_done',12),('dot_idle',gray),
-                                             ('level_ok',10),('level_warn',11),('level_full',9)),1):
+                                             ('level_ok',10),('level_warn',11),('level_full',9),
+                                             ('alarm',curses.COLOR_RED),('rule',12)),1):
                 curses.init_pair(i,color if curses.COLORS>=16 else color%8,bg);palette[name]=curses.color_pair(i)
     except curses.error:pass
     selected=offset=0;notice='';armed=None;closing=None

@@ -190,7 +190,7 @@ finally:f.doCleanups()
         self.assertTrue(terminal.wait_for('Líder'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('concluída'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('Inspect fixtures'),terminal.output.decode(errors='replace'))
-        os.write(terminal.master,b'jjjjjjjjjjjj')
+        os.write(terminal.master,b'jjjjjjjjjjjjjjjj')  # spec #21 L32: separator lines take rows
         self.assertTrue(terminal.wait_for('checagem inicial 3/3'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj')
         self.assertTrue(terminal.wait_for('T12'),terminal.output.decode(errors='replace'))

@@ -44,6 +44,11 @@ class Item:
     unblock_key: tuple = None
 
 
+def RULE_ROW(level=2):
+    """Separator: 1 before AGENTES, 2 between sections, 3 between tab groups."""
+    return ('', None, Item('rule', state=str(level)))
+
+
 def context(usage):
     """'12k/100k ' plus a 10-cell bar coloured by context level (spec #21 L38)."""
     if not usage or usage.get('context') is None or not usage.get('window'):
@@ -80,7 +85,7 @@ class Agents:
     # -- reading -----------------------------------------------------------
     def poll(self):
         from .progress_notices import rows as notice_rows
-        result = [('AGENTES', 'ready', None)]
+        result = [RULE_ROW(1), ('AGENTES', 'ready', None)]
         group = long_run.record(self.repo) or {}
         result.extend(notice_rows(group, ended_banner=False))
         try:
@@ -142,9 +147,9 @@ class Agents:
 
         queued = self.queued(snapshot, tasks, records)
         if blocked or queued:
-            result.append(('BLOQUEADOS', 'blocked', None))
+            result.append(('BLOQUEADOS', 'blocked', Item('title', segments=[('BLOQUEADOS', None)])))
             result.extend(blocked + queued)
-            result.append(('', None, None))
+            result.append(RULE_ROW())
 
         if leader:
             state, usage = describe({'binding': leader}, live.get(leader['pane']), self.cache)
@@ -159,9 +164,8 @@ class Agents:
             segments = [('Líder · — · identidade indisponível', None)]
             result.append((segments[0][0], 'unavailable', Item('agent', 'idle', segments, leader=True)))
 
-        if order:
-            result.append(('', None, None))
-        for key in sorted(order, key=lambda k: k == OTHERS):
+        for number, key in enumerate(sorted(order, key=lambda k: k == OTHERS)):
+            result.append(RULE_ROW(2 if number == 0 else 3))  # spec #21 L32: sections and groups
             lines = groups[key]['lines']
             states = [line[2].state for line, _ in lines]
             default = key == OTHERS or 'working' not in states
@@ -189,7 +193,7 @@ class Agents:
             collapsed = self.toggled.get('meta', True)
             self.collapsed['meta'] = collapsed
             text = ('▶ ' if collapsed else '▼ ') + ended['title']
-            result.extend([('', None, None), (text, None, Item('header', segments=[(text, 'dot_done')], group='meta'))])
+            result.extend([RULE_ROW(), (text, None, Item('header', segments=[(text, 'dot_done')], group='meta'))])
             if not collapsed:
                 result.extend(('  ' + line, None, None) for line in ended['body'].splitlines())
         return result + [('', None, None)]
