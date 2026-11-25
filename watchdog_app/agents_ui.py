@@ -48,7 +48,7 @@ def agent_rows(session, runs):
     return rows
 
 
-def describe(row, pane, cache, window=None):
+def describe(row, pane, cache, window=None, *, on_verified=None):
     actor = row['binding']
     if not pane or pane.get('terminal_id') != actor['terminal']:
         return 'Fechado', None
@@ -60,7 +60,9 @@ def describe(row, pane, cache, window=None):
              'blocked': 'Bloqueado'}.get(pane.get('agent_status'), 'Desconhecido')
     try:
         runtime = bindings.engine()
-        runtime.verify(runtime.Binding(**actor))
+        binding = runtime.Binding(**actor)
+        runtime.verify(binding)
+        if on_verified: on_verified(binding)
         path = Path(actor['history'])
         if actor['kind'] == 'codex':
             context, size, total = read_usage(path, cache)

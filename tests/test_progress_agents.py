@@ -67,6 +67,32 @@ class ProgressAgentsTests(unittest.TestCase):
             stream.write(self.history.read_text().replace('12000','24000'))
         self.assertIn('24%', '\n'.join(t for t,_,_ in monitor.poll()))
 
+    def test_executor_activity_uses_own_verified_history_and_keeps_task_and_checks(self):
+        # Spec #1 L92-94,153,167: normal Progress presentation, separate native sources.
+        from test_session_progress import codex_call, codex_result
+        from dataclasses import replace
+        history=self.tree/'worker.jsonl'
+        history.write_text('\n'.join(json.dumps(e) for e in (codex_call(),codex_result()))+'\n')
+        self.worker=replace(self.worker,history=str(history))
+        self.record['checks']=[{'summary':'rumo conferido'}]
+        monitor=self.monitor()
+        lines=[t for t,_,_ in monitor.poll()]
+        worker=next(t for t in lines if t.startswith('T1 ·'))
+        self.assertIn('Inspect fixtures',worker)
+        self.assertIn('T1 (#2) — Work',worker)
+        self.assertIn('checagem inicial 1/3',worker)
+        self.assertNotIn('Inspect fixtures',next(t for t in lines if t.startswith('Líder ·')))
+        self.live[1]['agent_session']={'kind':'id','value':'replacement'}
+        self.assertNotIn('Inspect fixtures',next(t for t,_,_ in monitor.poll() if t.startswith('T1 ·')))
+
+    def test_executor_binding_is_verified_once_per_refresh(self):
+        # Spec #1 L92-94,141: reuse the monitor verification for activity and context.
+        from watchdog_app import bindings
+        calls=[]
+        bindings.engine().verify=lambda binding:calls.append(binding.session)
+        self.monitor().poll()
+        self.assertEqual(calls.count('worker'),1)
+
     def test_replaced_terminal_worktree_or_session_hides_usage(self):
         # Spec #1 L95: never associate telemetry with a different native actor.
         for field,value in (('terminal_id','other'),('cwd',str(self.repo)),

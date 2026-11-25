@@ -183,21 +183,25 @@ class Progress:
                 self.binding_file = self.session.file
             self.session.verify()
             binding = self.session.binding
-            source = (binding.kind, binding.session, binding.history)
-            if source != self.source:
-                self.reader = Reader(binding.history)
-                self.checklist = Checklist(binding.kind, binding.session)
-                self.source = source
-            batch = self.reader.read()
-            if batch.reset: self.checklist = Checklist(binding.kind, binding.session)
-            if batch.unavailable: return View('unavailable', 'Transcript unavailable')
-            if batch.discarded:
-                self.checklist.gap()
-            for row in batch.records: self.checklist.feed(row)
-            if batch.catching_up: return View('catching_up', 'Reading conversation checklist records')
-            if batch.incomplete: return View('catching_up', 'Waiting for a complete transcript row')
-            return self.checklist.view()
+            return self.poll_verified(binding)
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
             # Do not resume a stale plan after a period of unverifiable identity.
             self.session = self.reader = self.checklist = self.source = None
             return View('unavailable', str(error))
+
+    def poll_verified(self, binding):
+        """Read only the native source whose identity the caller just verified."""
+        source = (binding.kind, binding.session, binding.history)
+        if source != self.source:
+            self.reader = Reader(binding.history)
+            self.checklist = Checklist(binding.kind, binding.session)
+            self.source = source
+        batch = self.reader.read()
+        if batch.reset: self.checklist = Checklist(binding.kind, binding.session)
+        if batch.unavailable: return View('unavailable', 'Transcript unavailable')
+        if batch.discarded:
+            self.checklist.gap()
+        for row in batch.records: self.checklist.feed(row)
+        if batch.catching_up: return View('catching_up', 'Reading conversation checklist records')
+        if batch.incomplete: return View('catching_up', 'Waiting for a complete transcript row')
+        return self.checklist.view()

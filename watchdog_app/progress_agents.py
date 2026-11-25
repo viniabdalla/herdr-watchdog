@@ -18,6 +18,7 @@ class Agents:
         self.repo = Path(repo)
         self.binding_file = binding_file
         self.cache = {}
+        self.activities = {}
         self.progress = Progress(repo, binding_file)
 
     def poll(self):
@@ -73,7 +74,20 @@ class Agents:
                                b.terminal == record['terminal'] and b.session == sid and b.kind == pane.get('agent')]
                     if len(matches) == 1:
                         actor = asdict(matches[0])
-            state, usage = describe({'binding':actor}, pane, self.cache) if actor else ('Identidade indisponível', None)
+            activity = ''
+            verified = False
+            key = (actor['pane'], actor['terminal'], actor['kind'], actor['session'], actor['history']) if actor else None
+            def read_activity(binding):
+                nonlocal activity, verified
+                verified = True
+                try:
+                    monitor = self.activities.setdefault(key, Progress(self.repo))
+                    activity = monitor.poll_verified(binding).current
+                except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+                    self.activities.pop(key, None)
+            state, usage = describe({'binding':actor}, pane, self.cache, on_verified=read_activity) if actor else ('Identidade indisponível', None)
+            self.activities = {k:v for k,v in self.activities.items()
+                               if k[0] != record.get('pane') or (verified and k == key)}
             matching = by_ticket.get(record['ticket'], [])
             task = matching[0] if len(matching) == 1 else None
             note = ('concluída · ' + task.title if task and task.done else
@@ -85,6 +99,7 @@ class Agents:
                 if len(checks) < 3 and record.get('state') == 'ready':
                     next_check = len(checks) + 1
                     note += f' · próxima checagem prevista {next_check}/3 aos {next_check + 1} min'
+            if activity: note += ' · ' + activity
             result.append((f"{record['ticket']} · {record.get('pane') or '—'} · {state} · {usage_meter(usage)} · {note}",
                            'done' if task and task.done else 'blocked' if record.get('state') == 'failed' else 'working', None))
         try:
