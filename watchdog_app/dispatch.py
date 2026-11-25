@@ -43,9 +43,11 @@ def preview(session, snapshot, ids):
     keys = [long_run.identity(snapshot, task) for task in tasks]
     if None in long_run.members(snapshot, keys):
         raise RuntimeError('A seleção contém uma tarefa ambígua no TODO.md')
-    for key in keys:
+    added = []
+    for task, key in zip(tasks, keys):
         if key not in group:
             group.append(key)
+            added.append(task)
     state = dict(previous or {}, members=group)
     if restart:
         for field in ('base', 'integration_branch', 'goal'):
@@ -60,7 +62,8 @@ def preview(session, snapshot, ids):
               'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
     prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
     if group and not restart and previous and previous.get('goal') == goal_identity(session.binding):
-        prompt = 'Grupo atualizado: ' + ', '.join('+' + task.title for task in tasks)
+        prompt = 'Grupo atualizado: ' + (', '.join('+' + task.title for task in added)
+                                           or 'nenhuma tarefa nova.')
     return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
             'previous': previous, 'group': state, 'new_base': new_base}

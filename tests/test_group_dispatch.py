@@ -125,7 +125,8 @@ class GroupDispatchTests(unittest.TestCase):
         self.git('update-ref', 'refs/heads/integration', self.git('rev-parse', 'HEAD'))
         self.assertEqual(self.dispatch(terminal, b'jjj j j ', 'Grupo atualizado'),
                          'Grupo atualizado: +D, +E, +F')
-        self.dispatch(terminal, b' ')
+        self.assertEqual(self.dispatch(terminal, b' ', 'Grupo atualizado'),
+                         'Grupo atualizado: nenhuma tarefa nova.')
         with patch.dict(os.environ, self.env):
             self.assertEqual(len(long_run.load(self.repo)), 6)
             self.assertIn('0 de 6', '\n'.join(text for text, _, _ in rows(self.repo)))
@@ -202,3 +203,12 @@ class GroupDispatchTests(unittest.TestCase):
         self.assertTrue(self.dispatch(terminal, b' ', 'Concluir').startswith('/goal '))
         with patch.dict(os.environ, self.env):
             self.assertEqual(long_run.load(self.repo), ['title:A'])
+
+    def test_partially_repeated_selection_announces_only_new_members(self):
+        # Spec #1 L46,50,155-156: a repeated task is not announced as a new entry.
+        terminal = self.open()
+        self.dispatch(terminal, b' j ')
+        self.assertEqual(self.dispatch(terminal, b' j j ', 'Grupo atualizado'),
+                         'Grupo atualizado: +C')
+        with patch.dict(os.environ, self.env):
+            self.assertEqual(long_run.load(self.repo), ['title:A', 'title:B', 'title:C'])
