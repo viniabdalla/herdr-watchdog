@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import sys
 import time
 
@@ -145,7 +146,12 @@ def apply(binding, repo, preset):
         # Native LU can have replaced or closed its old panel since last time.
         reconcile_companion(binding, api, state)
         # Ownership checks happen before creating or moving any terminal.
+        roles = ('tasks', 'progress', 'artifacts')
+        if shutil.which('yazi'):
+            roles += ('files',)
         for role, pane in state['panes'].items():
+            if role == 'files' and role not in roles:
+                continue
             if role == 'left_undone':
                 api.checked(pane)
             else:
@@ -153,11 +159,14 @@ def apply(binding, repo, preset):
         conversation = api.call('pane', 'get', binding.pane)['pane']
         state['conversation'] = conversation
         save()
-        ensure_panels(api, state, save)
+        ensure_panels(api, state, save, roles=roles)
         bindings.verify(binding)
         state['operation'] = 'arranging'
         save()
-        tab = arrange(api, conversation, state['panes'], preset, save)
+        panes = dict(state['panes'])
+        if 'files' not in roles:
+            panes.pop('files', None)
+        tab = arrange(api, conversation, panes, preset, save)
         bindings.verify(binding)
         state['layout'] = preset
         state['operation'] = 'ready'

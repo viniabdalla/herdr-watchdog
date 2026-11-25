@@ -107,6 +107,8 @@ def linked_client(binding_file,repo,client):
     state=json.loads(session.file.read_text())
     if not client or not client.isdecimal() or not 0<int(client)<2**64 or state.get('yazi_client_id')!=client:
         raise RuntimeError('Files client differs from linked binding')
+    if 'files' not in state.get('panes', {}):
+        raise RuntimeError('Abra o painel Files com Yazi para revelar o arquivo.')
     api=Herdr();pane=api.panel(state['panes']['files'],repo)
     running,_=panel_process(api,pane,'files',state)
     if not running:raise RuntimeError('Linked Files pane is not running its owned Yazi client')

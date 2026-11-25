@@ -1,0 +1,11 @@
+[Unit]
+Description=Mostra o ID de cada pane do Herdr na borda
+
+[Service]
+ExecStart=%h/.local/bin/herdr-pane-ids run
+Environment=PATH=/usr/bin:/bin
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

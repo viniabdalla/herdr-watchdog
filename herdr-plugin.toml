@@ -6,7 +6,7 @@ platforms = ["linux", "macos", "windows"]
 description = "Verified conversation layouts and project monitoring panels"
 
 [[build]]
-command = ["python", "install.py", "--no-plugin"]
+command = ["python", "install.py", "--plugin-build"]
 
 [[actions]]
 id = "open"

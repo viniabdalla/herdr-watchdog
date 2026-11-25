@@ -97,3 +97,26 @@ class LayoutTests(unittest.TestCase):
             ensure_panels(self.api, state, lambda: None)
         info = self.api.call('pane', 'process-info', '--pane', pane['pane_id'])['process_info']
         self.assertTrue(any(p['name'] == 'sleep' for p in info['foreground_processes']))
+
+
+class LayoutWithoutYaziTests(unittest.TestCase):
+    def test_all_presets_place_the_available_panels_without_files(self):
+        from unittest.mock import Mock
+        for preset in (1, 2, 3, 4):
+            with self.subTest(preset=preset):
+                panes = {name: {'pane_id': name, 'tab_id': 'tab'} for name in
+                         ('tasks', 'progress', 'artifacts', 'left_undone')}
+                conversation = {'pane_id': 'leader', 'workspace_id': 'work', 'tab_id': 'tab'}
+                api = Mock()
+                api.checked.side_effect = lambda pane: pane
+
+                def call(*args):
+                    if args[:2] == ('pane', 'list'):
+                        return {'panes': []}
+                    if args[:2] == ('pane', 'move'):
+                        return {'move_result': {'changed': True, 'pane': panes[args[2]]}}
+                    return {}
+                api.call.side_effect = call
+                arrange(api, conversation, panes, preset)
+                moved = {args.args[2] for args in api.call.call_args_list if args.args[:2] == ('pane', 'move')}
+                self.assertEqual(moved, set(panes))

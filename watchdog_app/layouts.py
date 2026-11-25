@@ -11,7 +11,7 @@ PRESETS = {
 def arrange(api, conversation, panes, preset, save=lambda: None):
     if preset not in PRESETS:
         raise RuntimeError('Choose layout 1, 2, 3 or 4')
-    if not {'tasks', 'progress', 'artifacts', 'files'} <= panes.keys():
+    if not {'tasks', 'progress', 'artifacts'} <= panes.keys():
         raise RuntimeError('Watchdog panel set is incomplete')
     ids = [conversation['pane_id']] + [p['pane_id'] for p in panes.values()]
     if len(set(ids)) != len(ids):
@@ -60,12 +60,16 @@ def arrange(api, conversation, panes, preset, save=lambda: None):
         tasks = move('tasks', target, live['pane_id'], ratio=.64)
         progress = move('progress', target, tasks, 'down', .25)
         artifacts = move('artifacts', target, progress, 'down', 1 / 3)
-        move('files', target, artifacts, 'down')
+        if 'files' in panes:
+            move('files', target, artifacts, 'down')
         focus = target
     elif preset == 2:
-        files = move('files', target, live['pane_id'], 'down', .68)
-        artifacts = move('artifacts', target, files, ratio=.32)
-        api.call('pane', 'swap', '--source-pane', files, '--target-pane', artifacts)
+        if 'files' in panes:
+            files = move('files', target, live['pane_id'], 'down', .68)
+            artifacts = move('artifacts', target, files, ratio=.32)
+            api.call('pane', 'swap', '--source-pane', files, '--target-pane', artifacts)
+        else:
+            move('artifacts', target, live['pane_id'], 'down', .68)
         tasks = move('tasks', target, live['pane_id'], ratio=.64)
         move('progress', target, tasks, 'down')
         focus = target
@@ -74,20 +78,22 @@ def arrange(api, conversation, panes, preset, save=lambda: None):
         dashboard = panes['tasks']['tab_id']
         progress = move('progress', dashboard, tasks)
         move('artifacts', dashboard, tasks, 'down')
-        move('files', dashboard, progress, 'down')
+        if 'files' in panes:
+            move('files', dashboard, progress, 'down')
         focus = dashboard
     else:
         tasks = move('tasks', target, live['pane_id'], ratio=.7)
         move('progress', target, tasks, 'down')
         artifacts = move('artifacts', new_label='Watchdog files')
         focus = target
-        move('files', panes['artifacts']['tab_id'], artifacts, ratio=.4)
+        if 'files' in panes:
+            move('files', panes['artifacts']['tab_id'], artifacts, ratio=.4)
     if 'agents' in panes:
         tasks = panes['tasks']
         move('agents', tasks['tab_id'], panes['progress']['pane_id'], 'down')
     if 'left_undone' in panes:
-        files = panes['files']
-        move('left_undone', files['tab_id'], files['pane_id'], ratio=.62)
+        neighbor = panes.get('files', panes['artifacts'])
+        move('left_undone', neighbor['tab_id'], neighbor['pane_id'], ratio=.62)
     for pane in panes.values():
         api.checked(pane)
     api.call('tab', 'focus', focus)

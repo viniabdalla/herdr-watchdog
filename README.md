@@ -18,6 +18,12 @@ watchdog list                  # verified conversations in the current project
 watchdog status                # inspect the selected conversation without opening panels
 ```
 
+Na instalação pelo terminal, o Watchdog confere o Herdr antes de fazer alterações. Se faltar o Herdr 0.9.1+, pergunta se deve instalá-lo. Recusar encerra a instalação. Em seguida, oferece o pacote Yazi se faltar `yazi` ou `ya`. Sem Yazi, os layouts abrem Tasks, Progress e Artifacts sem o painel Files. Sem `ya`, o Files abre, mas o Artifacts não consegue revelar o arquivo selecionado.
+
+Em Linux com systemd de usuário, o instalador também oferece mostrar o ID na borda de cada pane. Se você aceitar, instala e inicia o `herdr-pane-ids`, que exibe o ID no lugar do título. A configuração anterior das bordas fica em `~/.config/herdr/config.toml.bak-herdr-pane-ids` quando o arquivo de configuração já existe. O atalho `prefix+y` copia o ID quando está livre. Um serviço já instalado e parado recebe apenas a pergunta de ativação.
+
+Quando o Herdr fornece um terminal interativo, o build do plugin também oferece essas opções. Em segundo plano, segue sem perguntas. Para escolher os aplicativos depois, execute `python3 install.py --tools-only` na pasta do Watchdog. Essa opção também serve para acrescentar uma ferramenta recusada anteriormente.
+
 A skill `merge-danger` fica em `skills/merge-danger`; `install-skills.py` a liga
 às pastas `.claude/skills` e `.agents/skills` deste checkout. Para outro projeto
 ou conta, passe `--claude-skills-dir` e `--codex-skills-dir`. O instalador preserva

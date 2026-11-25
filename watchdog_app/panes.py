@@ -2,6 +2,7 @@
 import argparse
 import curses
 import os
+import shutil
 from pathlib import Path
 import sys
 
@@ -38,6 +39,8 @@ def choose_panel(screen):
 def open_pane(binding_file, repo, role, *, api=None):
     if role not in ROLES:
         raise ValueError('Painel desconhecido: ' + role)
+    if role == 'files' and not shutil.which('yazi'):
+        raise RuntimeError('O painel Files precisa do Yazi. Execute install.py para instalá-lo.')
     session = Session.for_panel(binding_file, Path(repo).resolve())
     binding, repo = session.binding, session.repo
     api, store = api or Herdr(), Store(session.file.parent)

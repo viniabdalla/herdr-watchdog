@@ -22,7 +22,7 @@ sua lista de skills antes da instalação.
 Ações/panes do plugin chamam `plugin-boot.py`, que seleciona o Python instalado
 antes de importar a aplicação. A instalação GitHub pelo Herdr usa o build do
 manifesto; `plugin link` não executa build, por isso execute nosso instalador
-antes de usar um checkout local. `--no-plugin` prepara somente app/skill;
+antes de usar um checkout local. O build sem terminal permite escolher os aplicativos depois com `python install.py --tools-only`. `--no-plugin` prepara somente app/skill;
 `--skip-dependencies` reutiliza o Python atual e exige dependências já presentes.
 
 `python uninstall.py` remove somente launcher/skill pertencentes a este checkout
