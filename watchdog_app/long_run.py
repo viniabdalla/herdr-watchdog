@@ -66,6 +66,6 @@ def reset(repo):
     """Clear the measured group and its goal, keeping state owned by other tools."""
     with locked(repo):
         state = dict(record(repo) or {}, members=[])
-        for field in ('base', 'integration_branch', 'goal'):
+        for field in ('base', 'integration_branch', 'goal', 'modes'):
             state.pop(field, None)
         atomic(path_for(repo), state)

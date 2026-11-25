@@ -205,3 +205,147 @@ print(json.dumps({'result':{'pane':{'pane_id':b['pane'],'terminal_id':b['termina
         os.write(t.master,b'L');self.wait(t,'Religar · escolher líder')
         os.write(t.master,b'\r');self.wait(t,'Líder ligado')
         self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(new))
+
+    def test_resend_uses_each_member_mode_and_rejects_an_empty_group(self):
+        # Spec #1 L87,123,138,151 and T5/T10: /clear must preserve identity-scoped modes.
+        from types import SimpleNamespace
+        from watchdog_app.actions import Session
+        from watchdog_app import dispatch, long_run
+        from watchdog_app.store import atomic
+        runtime=SimpleNamespace(Binding=Binding,verify=lambda b:{})
+        with patch.dict(os.environ,self.env), patch('watchdog_app.bindings.engine',return_value=runtime), \
+             patch('watchdog_app.bindings.project_for',return_value=self.repo):
+            session=Session(self.file,self.repo)
+            for modes, phrase in (({'title:A':'here','title:B':'here'},'Implementar nesta sessão'),
+                                  ({'title:A':'here','title:B':'dispatch'},'Concluir'),
+                                  ({},'Concluir')):
+                group={'members':['title:A','title:B'],'modes':modes}
+                atomic(long_run.path_for(self.repo),group)
+                offer=dispatch.resend_preview(session)
+                self.assertIn('/goal '+phrase+' somente',offer['prompt'])
+                self.assertIn('modo por identidade no campo modes',offer['prompt'])
+                if all(modes.get(key)=='here' for key in group['members']):
+                    self.assertNotIn('Despache um executor por tarefa',offer['prompt'])
+                else:
+                    self.assertNotIn('Despache um executor por tarefa;',offer['prompt'])
+                self.assertEqual(long_run.record(self.repo),group)
+            atomic(long_run.path_for(self.repo),{'members':[]})
+            with self.assertRaisesRegex(RuntimeError,'Não há grupo'):dispatch.resend_preview(session)
+        self.assertFalse((self.repo/'commands.jsonl').exists())
+
+    def test_existing_claude_codex_claude_cycle_keeps_progress_and_older_panels(self):
+        # Spec #1 L120-123,165,180: explicit A->B->A with both agents alive, no redirect cycle.
+        from types import SimpleNamespace
+        from watchdog_app.actions import Session
+        from watchdog_app.leader_link import connect
+        from watchdog_app.session_progress import Progress
+        from watchdog_app import long_run
+        from watchdog_app.store import atomic
+        from test_session_progress import claude_call, claude_result, codex_call, codex_result
+        a=replace(self.old,kind='claude',session='A',history=str(self.repo/'a.jsonl'))
+        b=replace(self.old,session='B',pane='project:p9',terminal='B-terminal',history=str(self.repo/'b.jsonl'))
+        def history(path, records):
+            Path(path).write_text(''.join(json.dumps(r)+'\n' for r in records))
+        acall=claude_call(); aresult=claude_result()
+        acall['sessionId']=aresult['sessionId']='A'
+        history(a.history,[acall,aresult])
+        bcall=codex_call(); bcall['payload']['arguments']=json.dumps({'plan':[{'step':'Codex work','status':'in_progress'}]})
+        history(b.history,[bcall,codex_result()])
+        live=[self.old,a,b]
+        def verify(actor):
+            if actor not in live:raise RuntimeError('identity changed')
+            return {'agent_status':'idle'}
+        runtime=SimpleNamespace(Binding=Binding,verify=verify)
+        self.live(*live)
+        with patch.dict(os.environ,self.env), patch('watchdog_app.bindings.engine',return_value=runtime), \
+             patch('watchdog_app.bindings.discover',return_value=(live,[])), \
+             patch('watchdog_app.bindings.project_for',return_value=self.repo):
+            atomic(long_run.path_for(self.repo),{'members':['title:A'],'modes':{'title:A':'here'}})
+            group=long_run.path_for(self.repo).read_bytes()
+            origin=self.file
+            session=Session(origin,self.repo)
+            session=connect(session,a)
+            afile=session.file
+            progress=Progress(self.repo,afile)
+            self.assertEqual(progress.poll().current,'Inspect fixtures')
+            session=connect(session,b)
+            bfile=session.file
+            self.assertEqual(progress.poll().current,'Codex work')
+            session=connect(session,a)
+            self.assertEqual(session.file,afile)
+            self.assertEqual(progress.poll().current,'Inspect fixtures')
+            for file in (origin,afile,bfile):
+                self.assertEqual(Session.for_panel(file,self.repo).binding,a)
+            self.assertEqual(json.loads(afile.read_text())['ownership'],'active')
+            self.assertNotIn('successor_binding_file',json.loads(afile.read_text()))
+            self.assertEqual(json.loads(bfile.read_text())['ownership'],'released')
+            self.assertEqual(long_run.path_for(self.repo).read_bytes(),group)
+            # Repeat both directions: retired receipts must not form a loop.
+            session=connect(session,b);session=connect(session,a)
+            self.assertEqual(Session.for_panel(origin,self.repo).binding,a)
+            self.assertEqual(progress.poll().current,'Inspect fixtures')
+
+    def test_return_refuses_active_unrelated_or_tampered_ownership_without_writes(self):
+        # Spec #1 L121,151: choosing a pane cannot steal another group's panel resources.
+        from watchdog_app.herdr import Herdr
+        from watchdog_app.store import atomic
+        a=replace(self.old,kind='claude',session='A',pane='project:p9')
+        b=replace(self.old,session='B',pane='project:p10')
+        self.live(self.old,a,b)
+        with patch.dict(os.environ,self.env):
+            afile=Path(self.store.transfer(self.file,self.old,a,self.repo,'first',api=Herdr()))
+            target=json.loads(self.file.read_text())
+            cases=[dict(target,ownership='active'), dict(target,ownership='transferring'),
+                   dict(target,repo=str(self.repo/'other')), dict(target,yazi_client_id='other-group'),
+                   dict(target,outgoing_transfer_operation='tampered'),
+                   dict(target,successor_binding_file=str(self.store.root/(b.key+'.json')))]
+            for value in cases:
+                atomic(self.file,value)
+                before={p:p.read_bytes() for p in (afile,self.file)}
+                with self.assertRaises((RuntimeError,OSError)):
+                    self.store.transfer(afile,a,self.old,self.repo,'return',api=Herdr())
+                self.assertEqual({p:p.read_bytes() for p in before},before)
+            # An independent released group is not an ancestor, even in the same project.
+            atomic(self.file,target)
+            self.store.save(b,self.store.load(b,self.repo))
+            bfile=self.store.root/(b.key+'.json')
+            independent=json.loads(bfile.read_text()); independent.update(ownership='released',
+                successor_binding_file=str(bfile),outgoing_transfer_operation='unrelated')
+            atomic(bfile,independent)
+            before={p:p.read_bytes() for p in (afile,self.file,bfile)}
+            with self.assertRaises(RuntimeError):self.store.transfer(afile,a,b,self.repo,'return',api=Herdr())
+            self.assertEqual({p:p.read_bytes() for p in before},before)
+
+    def test_religar_existing_agents_both_directions_in_terminal(self):
+        # Spec #1 L120-122,165,180: prefix and explicit pane choice in both directions.
+        a=replace(self.old,kind='claude',session='A-session')
+        b=replace(self.old,session='B-session',pane='project:p9',terminal='B-terminal')
+        t=self.open(a)
+        self.live(a,b)
+        self.wait(t,'/to-spec')
+        t.output=b'';os.write(t.master,b'Lj\r')
+        self.wait(t,'Harness alterado: claude → codex');self.wait(t,'$to-spec')
+        t.output=b'';os.write(t.master,b'L\r')
+        self.wait(t,'→ claude');self.wait(t,'/to-spec')
+        self.assertEqual(json.loads(self.file.read_text())['ownership'],'active')
+        self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(a))
+
+    def test_failed_return_leaves_no_two_active_owners(self):
+        # Spec #1 L121,151: an interrupted explicit return never gives both panes ownership.
+        from types import SimpleNamespace
+        from watchdog_app.actions import Session
+        from watchdog_app.herdr import Herdr
+        a=replace(self.old,kind='claude',session='A',pane='project:p9')
+        self.live(self.old,a)
+        with patch.dict(os.environ,self.env):
+            afile=Path(self.store.transfer(self.file,self.old,a,self.repo,'first',api=Herdr()))
+            with patch.object(self.store,'save',side_effect=OSError('simulated disk failure')):
+                with self.assertRaisesRegex(OSError,'disk failure'):
+                    self.store.transfer(afile,a,self.old,self.repo,'return',api=Herdr())
+            self.assertEqual(json.loads(afile.read_text())['ownership'],'transferring')
+            self.assertEqual(json.loads(self.file.read_text())['ownership'],'released')
+            runtime=SimpleNamespace(Binding=Binding,verify=lambda b:{})
+            with patch('watchdog_app.bindings.engine',return_value=runtime), \
+                 patch('watchdog_app.bindings.project_for',return_value=self.repo):
+                for file in (afile,self.file):
+                    with self.assertRaises(RuntimeError):Session.for_panel(file,self.repo)
