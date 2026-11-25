@@ -55,6 +55,8 @@ class GroupDispatchTests(unittest.TestCase):
         terminal = Terminal(['python3', '-B', '-c', BOUND_SCRIPT, str(self.repo),
                              str(self.binding), str(ROOT/'tests')], env)
         self.addCleanup(terminal.close)
+        self.wait(terminal, 'Mostrar ações')
+        os.write(terminal.master, b'?')
         self.assertTrue(terminal.wait_for('Despachar p'), terminal.output.decode(errors='replace'))
         return terminal
 

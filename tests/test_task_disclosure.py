@@ -39,6 +39,33 @@ class DisclosureTests(unittest.TestCase):
     def body(self):
         return '\n'.join(text for text, _, _ in self.ui.body())
 
+    def test_actions_toggle_by_click_reclaims_rows_and_preserves_selection(self):
+        # Spec #1 L127–129: existing Review, Verify and dispatch actions remain available.
+        self.path.write_text('## Next\n' + ''.join(f'- [ ] Tarefa {i}\n' for i in range(40)))
+        self.ui.refresh()
+        self.ui.draw()
+        self.ui.handle(' ')
+        selection = self.ui.selected.copy()
+
+        def visible_tasks():
+            return sum('▸ Tarefa' in text for row in self.ui.screen.lines.values() for text in row)
+
+        def click_button(label):
+            y = next(row for row, texts in self.ui.screen.lines.items() if label in texts)
+            with patch('curses.getmouse', return_value=(0, 1, y, 0, curses.BUTTON1_CLICKED)):
+                self.ui.handle(self.ui.mouse())
+            self.ui.draw()
+
+        collapsed = visible_tasks()
+        self.assertEqual([text for row in self.ui.screen.lines.values() for text in row
+                          if text.startswith('[') and not '▸' in text], ['[Mostrar ações]'])
+        click_button('[Mostrar ações]')
+        self.assertIn('[Despachar p]', [text for row in self.ui.screen.lines.values() for text in row])
+        self.assertLess(visible_tasks(), collapsed)
+        click_button('[Ocultar ações]')
+        self.assertEqual(visible_tasks(), collapsed)
+        self.assertEqual(self.ui.selected, selection)
+
     def test_collapsed_rows_show_title_only_without_summary_metadata_or_technical_content(self):
         body = self.body()
         self.assertIn('▸ Resolver o áudio', body)

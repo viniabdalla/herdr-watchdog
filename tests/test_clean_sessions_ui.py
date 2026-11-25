@@ -110,7 +110,7 @@ class CleanSessionsUITests(unittest.TestCase):
             dict(os.environ,TERM='xterm-256color',WATCHDOG_STATE_DIR=str(self.f.store.root)))
         self.addCleanup(terminal.close)
         self.terminal=terminal
-        self.assertTrue(terminal.wait_for('Clean sessions c'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master,b'c');self.assertTrue(terminal.wait_for('Clean sessions pending'),terminal.output.decode(errors='replace'))
         delivery=json.loads((self.f.repo/'delivery.json').read_text())
         self.assertEqual(delivery['session'],self.f.old.session);self.assertIn('memory_handoff_begin',delivery['text'])
