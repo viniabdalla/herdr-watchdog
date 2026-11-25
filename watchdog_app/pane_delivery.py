@@ -1,6 +1,6 @@
 """Confirmed native submissions, serialized across panels and executors."""
 from contextlib import contextmanager
-import fcntl
+from .compat import fcntl
 import hashlib
 import json
 import os
@@ -161,6 +161,8 @@ def advance(api, job, pending, *, deadline=None):
     while True:
         if deadline is not None and time.monotonic() >= deadline:
             raise DeliveryPending('Entrega guardada, aguardando confirmação em '+str(pending))
+        if pending.with_suffix('.relink.json').exists():
+            raise DeliveryPending('Religar protege este pane; entrega anterior preservada')
         agent = live(api, pane, job['identity'])
         rows = surface(api, pane)
         phase = job['phase']
@@ -255,6 +257,8 @@ def check_stalled(pending):
     A restart finishes that same transition and handshake, never a second notice.
     All original entries remain available until the leader's explicit decision.
     """
+    if pending.with_suffix('.relink.json').exists():
+        return  # Recovery holds the old queue; no new stall notice may bypass it.
     state_path = queue_state_path(pending)
     if state_path.exists():
         state = json.loads(state_path.read_text())

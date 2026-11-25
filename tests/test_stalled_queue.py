@@ -269,8 +269,10 @@ from watchdog_app.tasks_ui import run""")
                 result=super().call(*args)
                 if args[:2]==('pane','send-text'):now[0]=1100
                 return result
-        with patch.object(d.time,'time',side_effect=lambda:now[0]), \
-             patch.object(d.time,'sleep',side_effect=d.DeliveryPending('pausa do teste')):
+        # Keep the subprocess wait clock real while pausing the delivery loop.
+        with patch.object(d, 'time', wraps=d.time) as clock:
+            clock.time.side_effect = lambda: now[0]
+            clock.sleep.side_effect = d.DeliveryPending('pausa do teste')
             with self.assertRaises(d.DeliveryPending):
                 d.advance(ClockedHerdr(),self.front,self.pending)
         progressed=json.loads(self.pending.read_text())

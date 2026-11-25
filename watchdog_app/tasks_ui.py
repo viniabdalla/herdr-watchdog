@@ -125,53 +125,101 @@ class TasksUI:
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
             self.session = Session(None, self.repo)
             self.notice = str(error)
+        self.relink_ref = None
+        self.restore_relink()
         if not self.session.binding:
             self.review_status = 'Codex: unbound · open with watchdog to review or send'
 
+    def restore_relink(self):
+        if not self.binding_file:
+            return
+        try:
+            from . import relink
+            current = self.session.file or self.binding_file
+            self.relink_ref = relink.pending_for(current)
+            if not self.relink_ref and Path(current) != Path(self.binding_file):
+                self.relink_ref = relink.pending_for(self.binding_file)
+            if self.relink_ref:
+                self.mode = 'relink_wait'
+        except ImportError:
+            pass  # Legacy installation with no core attempts yet.
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+            self.notice = 'Religar: ' + str(error)
+
+    def poll_relink(self):
+        from . import relink
+        from .relink_delivery import step
+        attempt = relink.read(self.relink_ref)
+        delivery = step(self.relink_ref, attempt, read_attempt=relink.read)
+        self.notice = delivery['notice']
+        if attempt['state'] == 'confirmed':
+            successor = Session.for_panel(Path(attempt['successor']), self.repo)
+            self.job.close()
+            self.session = successor
+            self.last_auto_key, self.result = None, None
+            self.mode, self.pending = 'tasks', None
+            self.notice = ('Líder ligado · ' + successor.binding.pane + ' · '
+                           + successor.binding.session[:8])
+        elif attempt['state'] in ('failed', 'cancelled'):
+            self.mode, self.pending = 'tasks', None
+            self.notice = attempt.get('notice', attempt['state'])
+        elif delivery['state'] == 'failed':
+            relink.cancel(self.relink_ref)
+            step(self.relink_ref, relink.read(self.relink_ref))
+            self.mode, self.pending = 'tasks', None
+        elif delivery['state'] == 'sent':
+            self.notice = attempt.get('notice') or delivery['notice']
+
     def refresh(self):
+        if self.mode == 'relink_wait':
+            try:
+                self.poll_relink()
+            except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+                self.notice = 'Religar: ' + str(error)
         if self.mode == 'audit' and time.monotonic() >= getattr(self, 'audit_refresh', 0):
             self.audit_refresh = time.monotonic() + 2
             try:
                 self.audit.refresh(self.session)
             except (OSError, RuntimeError, ValueError, KeyError) as error:
                 self.notice = str(error)
-        try:
-            if self.binding_file and not self.session.binding and time.monotonic()>=self.next_reconnect:
-                self.next_reconnect=time.monotonic()+2
-                self.clean.poll_file(self.binding_file)
-                self.session=Session.for_panel(self.binding_file,self.repo)
-            target = self.session.successor_file()
-            if target:
-                self.job.close()
-                before = self.session.binding
-                self.session = Session(target, self.repo)
-                self.last_auto_key, self.result = None, None
-                self.mode, self.pending = 'tasks', None
-                after = self.session.binding
-                if (before.pane, before.terminal) == (after.pane, after.terminal):
-                    self.notice = ('Harness alterado: ' + before.kind + ' → ' + after.kind
-                                   if before.kind != after.kind else '')
-                else:
-                    self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + after.session
-            if self.session.binding:
-                self.clean.poll(self.session.binding)
-                if time.monotonic() >= self.next_leader_check:
-                    self.next_leader_check = time.monotonic() + 2
+        if self.mode != 'relink_wait':
+            try:
+                if self.binding_file and not self.session.binding and time.monotonic()>=self.next_reconnect:
+                    self.next_reconnect=time.monotonic()+2
+                    self.clean.poll_file(self.binding_file)
+                    self.session=Session.for_panel(self.binding_file,self.repo)
+                target = self.session.successor_file()
+                if target:
+                    self.job.close()
                     before = self.session.binding
-                    try:
-                        self.session.verify()
-                    except RuntimeError:
-                        from .leader_link import follow
-                        successor = follow(self.session)
-                        self.job.close()
-                        self.session = successor
-                        self.last_auto_key, self.result = None, None
-                        self.mode, self.pending = 'tasks', None
-                        self.notice = ('Harness alterado: ' + before.kind + ' → ' + successor.binding.kind
-                                       if before.kind != successor.binding.kind else '')
-        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
-            if self.mode == 'tasks':
-                self.notice = str(error)
+                    self.session = Session(target, self.repo)
+                    self.last_auto_key, self.result = None, None
+                    self.mode, self.pending = 'tasks', None
+                    after = self.session.binding
+                    if (before.pane, before.terminal) == (after.pane, after.terminal):
+                        self.notice = ('Harness alterado: ' + before.kind + ' → ' + after.kind
+                                       if before.kind != after.kind else '')
+                    else:
+                        self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + after.session
+                if self.session.binding:
+                    self.clean.poll(self.session.binding)
+                    if time.monotonic() >= self.next_leader_check:
+                        self.next_leader_check = time.monotonic() + 2
+                        before = self.session.binding
+                        try:
+                            self.session.verify()
+                        except RuntimeError:
+                            from .leader_link import follow
+                            successor = follow(self.session)
+                            self.job.close()
+                            self.session = successor
+                            self.last_auto_key, self.result = None, None
+                            self.mode, self.pending = 'tasks', None
+                            self.notice = ('Harness alterado: ' + before.kind + ' → ' + successor.binding.kind
+                                           if before.kind != successor.binding.kind else '')
+            except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+                if self.mode == 'tasks':
+                    self.notice = str(error)
         try:
             snapshot = Snapshot.read(self.repo)
             if self.snapshot and snapshot.digest != self.snapshot.digest:
@@ -192,7 +240,7 @@ class TasksUI:
                     if self.pending['kind'] in ('orchestrate', 'fresh'):
                         self.pending['changes'] = pending(self.repo)
                     self.notice = 'TODO changed elsewhere; selected tasks unchanged, confirmation updated'
-                elif self.mode not in ('tasks', 'clean_setup', 'audit', 'skill_preview'):
+                elif self.mode not in ('tasks', 'clean_setup', 'audit', 'skill_preview', 'relink_wait'):
                     self.notice = 'A selected task changed; confirmation cancelled. Select again.'
                     self.mode, self.pending = 'tasks', None
             self.snapshot = snapshot
@@ -216,7 +264,7 @@ class TasksUI:
                 self.review_status = 'Codex result is stale; press r to review again'
         if self.job.running:
             self.review_status = 'Codex: reviewing the last completed reply…'
-        if (self.session.binding and self.snapshot and time.monotonic() >= self.next_check and
+        if (self.mode != 'relink_wait' and self.session.binding and self.snapshot and time.monotonic() >= self.next_check and
                 not (self.clean.operation and self.clean.operation['state'] not in SETTLED)):
             self.next_check = time.monotonic() + 5
             try:
@@ -235,6 +283,9 @@ class TasksUI:
                     ('Líder: ' + offer['pane'] + ' · ' + self.session.label, None, None),
                     (offer['warning'], 'Blocked', None),
                     (offer['prompt'][:self.skill_cursor] + '▏' + offer['prompt'][self.skill_cursor:], None, None)]
+        if self.mode == 'relink_wait':
+            return [('Religar · aguardando confirmação', 'In progress', None),
+                    (self.notice, None, None), ('Esc cancela a tentativa', None, None)]
         if self.mode == 'relink':
             return [('Religar · escolher líder', 'In progress', None)] + [
                 (b.pane + ' · ' + b.kind + ' · ' + b.session, None, i)
@@ -427,7 +478,10 @@ class TasksUI:
                 self.notice = ''
         self._queue_was_stalled = bool(delivery_notice)
         put(screen, 3, delivery_notice or self.notice, curses.A_BOLD)
-        if self.mode == 'skill_preview':
+        if self.mode == 'relink_wait':
+            buttons = [('Cancelar Esc', 'escape')]
+            hint = 'Aguardando a skill no destino escolhido · Esc invalida a tentativa'
+        elif self.mode == 'skill_preview':
             buttons = [('Enviar Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Digite para editar · ←/→: cursor · Ctrl+U: limpar'
         elif self.mode == 'audit':
@@ -662,12 +716,19 @@ class TasksUI:
 
     def handle(self, key):
         if key == 'escape':
+            if self.mode == 'relink_wait':
+                from . import relink
+                from .relink_delivery import step
+                relink.cancel(self.relink_ref)
+                step(self.relink_ref, relink.read(self.relink_ref))
             if self.mode != 'tasks':
                 self.mode, self.pending = 'tasks', None
                 self.notice = 'Cancelled';self.scroll = 0;self.cursor = 0;self.follow_cursor = True
             else:
                 return False
             return True
+        if self.mode == 'relink_wait':
+            return key != 'q'
         h, w = self.screen.getmaxyx()
         if h < 10 or w < 24:
             return key != 'q'
@@ -776,6 +837,18 @@ class TasksUI:
                 identities = getattr(self, 'visible_identifiers', [])
                 if identities:
                     candidate = self.leader_choices[identities[min(self.cursor, len(identities)-1)]]
+                    if candidate.kind == 'codex':
+                        from . import relink
+                        from .relink_delivery import start
+                        try:
+                            ref = start(self.session, candidate, relink.begin)
+                        except (RuntimeError, OSError, ValueError, KeyError, TypeError):
+                            self.restore_relink()
+                            raise
+                        self.relink_ref = ref
+                        self.mode, self.pending = 'relink_wait', None
+                        self.notice = 'Religar · ' + candidate.pane + ' · aguardando confirmação'
+                        return True
                     from .leader_link import connect
                     before = self.session.binding
                     successor = connect(self.session, candidate)
@@ -851,7 +924,7 @@ class TasksUI:
         elif not full_controls() and key in DISABLED_KEYS:
             return True
         elif key == 'L':
-            from .leader_link import choices
+            from .relink_delivery import choices
             self.leader_choices = choices(self.session)
             self.mode, self.cursor, self.scroll = 'relink', 0, 0
         elif key == 'G':
@@ -1001,7 +1074,8 @@ def run(repo, binding_file=None):
     def stop(*_):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGHUP, stop)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, stop)
     try:
         curses.wrapper(lambda screen: TasksUI(screen, repo, binding_file).loop())
     except KeyboardInterrupt:

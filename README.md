@@ -1,8 +1,9 @@
 # Herdr Watchdog
 
 Watch a verified AI conversation alongside project tasks, progress and artifacts.
-Linux, Python 3.10+, standard library only, Herdr 0.9.1+, Yazi and `ya`.
-The installed Left Undone identity engine is currently required.
+Python 3.10+, Herdr 0.9.1+, Yazi and `ya`. Codex Religar includes a portable
+identity runtime for Linux, macOS and Windows; the installer resolves psutil
+and Windows curses. See [installation, evidence and platform limits](docs/religar-platforms.md).
 
 ## Use
 
@@ -168,6 +169,8 @@ checkout when the left-undone command is not in PATH. No Git repo is required.
 
 ## Verify
 
+On Python 3.10, install `requirements-test.txt` in the test environment for TOML parsing.
+
 ```sh
 python3 -B -m unittest discover -s tests -q
 # With the disposable wd-test server running:
@@ -204,7 +207,7 @@ for the leader. Implementation results still require exact-candidate leader revi
 a Together result must cover every selected task.
 
 Only Watchdog code/state changes in this port. Left Undone's code, buttons,
-installation and data remain intact. Its existing identity dependency is unchanged.
+installation and data remain intact. Its Linux identity engine is reused when available; Codex also has a bundled portable fallback.
 Gossip is frozen for maintenance; no new integrations are planned, and legacy run
 records remain readable. Fresh dispatch uses native launch/report paths.
 

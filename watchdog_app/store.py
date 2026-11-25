@@ -1,7 +1,8 @@
 """Watchdog-owned state and locks; no writes to Left Undone's folder."""
 from contextlib import contextmanager
 from dataclasses import asdict
-import fcntl
+from .compat import fcntl, fsync_directory
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,9 +25,7 @@ def atomic(path, value):
             os.fsync(stream.fileno())
         temporary.chmod(0o600)
         temporary.replace(path)
-        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try: os.fsync(directory)
-        finally: os.close(directory)
+        fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -143,8 +142,42 @@ class Store:
             for binding in sorted({b.key: b for b in (old, new)}.values(), key=lambda b: b.key):
                 stack.enter_context(self.lock(binding))
             state = json.loads(source_file.read_text())
+            if (old.key == new.key and state.get('last_refresh_operation') == operation_id and
+                    state.get('binding') == asdict(new) and state.get('repo') == str(repo.resolve()) and
+                    state.get('ownership', 'active') == 'active'):
+                return str(source_file)
             if state.get('binding') != asdict(old) or state.get('repo') != str(repo.resolve()):
                 raise RuntimeError('Source panel ownership changed')
+            journal = self.root / 'transfers' / (
+                hashlib.sha256(operation_id.encode()).hexdigest() + '.json')
+            if journal.exists():
+                record = json.loads(journal.read_text())
+                if (record.get('operation') != operation_id or record.get('source') != str(source_file) or
+                        record.get('old') != asdict(old) or record.get('new') != asdict(new) or
+                        record.get('repo') != str(repo.resolve())):
+                    raise RuntimeError('Transfer journal identity changed')
+                successor = record['successor']
+                if state.get('ownership') in ('released', 'transferring'):
+                    if state.get('outgoing_transfer_operation') != operation_id:
+                        raise RuntimeError('Another operation owns this transfer')
+                    # The journal was durable before relinquishment. Only this exact
+                    # operation can repair the target or finish the released seal.
+                    if target.exists():
+                        current = json.loads(target.read_text())
+                        if current == record.get('previous_target'):
+                            self.save(new, successor)
+                        elif current != successor and not (
+                                current.get('transfer_operation') == operation_id and
+                                current.get('predecessor_binding') == asdict(old) and
+                                current.get('binding') == asdict(new) and
+                                current.get('repo') == str(repo.resolve()) and
+                                current.get('ownership') == 'active'):
+                            raise RuntimeError('Successor changed after interrupted transfer')
+                    else:
+                        self.save(new, successor)
+                    state.update(ownership='released', successor_binding_file=str(target))
+                    atomic(source_file, state)
+                    return str(target)
             if state.get('ownership') in ('released', 'transferring'):
                 raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
             if state.get('operation') not in (None, 'ready'):
@@ -160,7 +193,8 @@ class Store:
                 # preserving incoming transfer correlation for older panels.
                 state.setdefault('reopened', []).append(asdict(old))
                 state['reopened'] = state['reopened'][-5:]
-                state.update(binding=asdict(new), conversation=conversation, panes=panes)
+                state.update(binding=asdict(new), conversation=conversation, panes=panes,
+                             last_refresh_operation=operation_id)
                 atomic(source_file, state)
                 return str(source_file)
             successor = copy.deepcopy(state)
@@ -187,6 +221,9 @@ class Store:
             # transfer_operation/predecessor_binding describe the immutable
             # incoming hop. A later transfer has a separate outgoing seal so
             # panels launched with any earlier binding can still verify it.
+            atomic(journal, {'operation': operation_id, 'source': str(source_file),
+                             'old': asdict(old), 'new': asdict(new), 'repo': str(repo.resolve()),
+                             'successor': successor, 'previous_target': retired})
             state.update(ownership='transferring', outgoing_transfer_operation=operation_id)
             state['panes'] = {k:v for k,v in state['panes'].items() if k=='left_undone'}
             atomic(source_file, state)

@@ -49,7 +49,7 @@ def accepted(store, identity):
 
 def watch(store, identity):
     # One monitor per run, independently of the short-lived launcher process.
-    import fcntl
+    from .compat import fcntl
     with (store.root/identity/'monitor.lock').open('a') as lock:
         try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:raise RuntimeError('This run already has a monitor')

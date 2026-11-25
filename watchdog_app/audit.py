@@ -1,7 +1,7 @@
 """Independent read-only audits. Host owns artifacts; auditors never own tasks or panels."""
 from contextlib import contextmanager
 from dataclasses import asdict
-import fcntl
+from .compat import fcntl
 import hashlib
 import json
 import os

@@ -140,7 +140,9 @@ class Session:
         if not self.file:
             self.verify()
         store = Store(self.file.parent)
-        with lease(store, self.repo):
+        from .relink import _lock, guard
+        with _lock(self.file), lease(store, self.repo):
+            guard(self.file)
             for operation in operations(store, self.repo):
                 if operation['state'] not in SETTLED:
                     raise RuntimeError('Clean sessions '+operation['state']+'; press c in Tasks to retry or close it before sending new work')
