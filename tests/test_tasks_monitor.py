@@ -50,6 +50,8 @@ class TasksMonitorTests(unittest.TestCase):
         # Spec #1 L29,129: despacho disponível; gravação manual removida.
         # Spec #1 L127-128,168: nomes distintos de curador/líder nos dois modos.
         terminal = self.unbound()
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
+        os.write(terminal.master, b'?')
         self.assertTrue(terminal.wait_for('Verify Leader v'), terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('v: Verify Leader'), terminal.output.decode(errors='replace'))
         screen = terminal.output.decode(errors='replace')
@@ -67,6 +69,8 @@ class TasksMonitorTests(unittest.TestCase):
         # Spec #1, lines 127–128 and 168; T2 acceptance: both control modes.
         self.env['WATCHDOG_FULL_CONTROLS'] = '1'
         terminal = self.bound()
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
+        os.write(terminal.master, b'?')
         self.assertTrue(terminal.wait_for('Verify Leader v'), terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('v: Verify Leader'), terminal.output.decode(errors='replace'))
         screen = terminal.output.decode(errors='replace')
@@ -81,7 +85,7 @@ class TasksMonitorTests(unittest.TestCase):
 
     def test_disabled_keys_do_nothing_and_selection_still_works(self):
         terminal = self.unbound()
-        self.assertTrue(terminal.wait_for('Verify Leader v'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b' ')
         self.assertTrue(terminal.wait_for('1 task(s) selected'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'dsinomcDPA0C')
@@ -97,7 +101,7 @@ class TasksMonitorTests(unittest.TestCase):
                      ('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base')):
             subprocess.run(['git', '-C', str(self.repo), *args], check=True, capture_output=True)
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Despachar p'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b' j p')
         self.assertTrue(terminal.wait_for('Confirmar despacho'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'y')
@@ -110,7 +114,7 @@ class TasksMonitorTests(unittest.TestCase):
 
     def test_verify_requires_selection(self):
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verify Leader v'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b'v')
         self.assertTrue(terminal.wait_for('Selection is empty'), terminal.output.decode(errors='replace'))
         self.assertFalse(self.log.exists())
@@ -118,7 +122,7 @@ class TasksMonitorTests(unittest.TestCase):
     def test_verify_previews_then_types_prompt_into_main_session_pane(self):
         # Spec #1, lines 128 and 168: Verify Leader preview, with fake Herdr.
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verify Leader v'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b' v')
         self.assertTrue(terminal.wait_for('Verify Leader · pedir verificação ao líder'), terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('project:p4'))
@@ -133,7 +137,7 @@ class TasksMonitorTests(unittest.TestCase):
 
     def test_verify_cancel_sends_nothing(self):
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verify Leader v'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b' v')
         self.assertTrue(terminal.wait_for('Verify Leader · pedir verificação ao líder'))
         os.write(terminal.master, b'\x1b')

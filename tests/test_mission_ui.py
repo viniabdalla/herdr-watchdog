@@ -16,7 +16,7 @@ class OrchestrateUITests(unittest.TestCase):
 
     def test_orchestrate_shows_team_and_main_then_requires_confirmation(self):
         terminal=self.bound_terminal()
-        self.assertTrue(terminal.wait_for('Orchestrate'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b' o')
         self.assertTrue(terminal.wait_for('Confirm orchestration'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('one Codex worker'),terminal.output.decode(errors='replace'))
@@ -72,7 +72,7 @@ class CheckpointUITests(unittest.TestCase):
         self.git('add','-A');self.git('commit','-qm','base')
         (self.repo/'feature.py').write_text('ready = True\n')
         terminal=self.bound_terminal()
-        self.assertTrue(terminal.wait_for('Orchestrate'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b' o')
         self.assertTrue(terminal.wait_for('New: feature.py'),terminal.output.decode(errors='replace'))
         self.assertEqual(self.git('log','--oneline').count('\n'),1)

@@ -105,6 +105,7 @@ class TasksUI:
         self.snapshot = None
         self.selected, self.proposal_selected = set(), set()
         self.expanded = set()
+        self.actions_visible = False
         self.cursor, self.scroll = 0, 0
         self.mode, self.pending = 'tasks', None
         self.notice, self.review_status = '', 'Codex: waiting for a completed reply'
@@ -511,7 +512,9 @@ class TasksUI:
             buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Implementar aqui h', 'h'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review Curator r', 'r'), ('Verify Leader v', 'v'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Envio avançado D', 'D'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · r: Review Curator · v: Verify Leader · 0: novo agente · P: planejar · C: opções'
-        if self.mode == 'tasks':
+        if self.mode == 'tasks' and not self.actions_visible:
+            buttons = []
+        elif self.mode == 'tasks':
             buttons += [('Religar L', 'L'), ('Reenviar meta G', 'G')]
             from .matt_skills import installed
             buttons += [(command + ' ' + key, key) for key, command in installed(self.repo, self.session.binding)]
@@ -521,6 +524,12 @@ class TasksUI:
             if x and x + len(label) >= w:
                 line += 1;x = 0
             packed.append((line, x, label, action));x += len(label) + 1
+        if self.mode == 'tasks':
+            label = '[Ocultar ações]' if self.actions_visible else '[Mostrar ações]'
+            if packed:
+                line += 1
+            packed.append((line, 0, label, '?'))
+            hint += ' · ?: ações'
         footer = h - line - 2
         room = max(1, footer - 4)
         rows = []
@@ -884,6 +893,10 @@ class TasksUI:
                         self.mode, self.cursor, self.scroll = 'executors', 0, 0
                 else:
                     self.confirm('single', self.executor_choices[identity])
+            return True
+        if self.mode == 'tasks' and key == '?':
+            self.actions_visible = not self.actions_visible
+            self.follow_cursor = True
             return True
         if self.mode == 'tasks' and key in ('enter', 'toggle', 'left', 'right'):
             identities = getattr(self, 'visible_identifiers', [])

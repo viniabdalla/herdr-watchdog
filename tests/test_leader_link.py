@@ -72,6 +72,8 @@ class LeaderLinkTests(unittest.TestCase):
             self.file=self.store.root/(actor.key+'.json'); self.live(actor)
         terminal=Terminal(['python3','-B','-c',SCRIPT,str(self.repo),str(self.file),str(Path(__file__).parent)], self.env)
         self.addCleanup(terminal.close)
+        self.wait(terminal, 'Mostrar ações')
+        os.write(terminal.master, b'?')
         self.wait(terminal,'Despachar p')
         return terminal
 

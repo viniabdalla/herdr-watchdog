@@ -48,6 +48,8 @@ class TasksUITests(unittest.TestCase):
 
     def test_agents_button_and_shortcut_do_not_require_task_selection(self):
         terminal = self.bound_terminal(with_agents=True)
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
+        os.write(terminal.master, b'?')
         self.assertTrue(terminal.wait_for('Agents m'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'm')
         self.assertTrue(terminal.wait_for('Agents aberto'), terminal.output.decode(errors='replace'))
@@ -58,7 +60,7 @@ class TasksUITests(unittest.TestCase):
 
     def test_unbound_agents_shortcut_refuses_a_guessed_session(self):
         terminal = self.terminal
-        self.assertTrue(terminal.wait_for('Agents m'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'm')
         self.assertTrue(terminal.wait_for('No conversation binding'), terminal.output.decode(errors='replace'))
         self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
@@ -100,7 +102,7 @@ class TasksUITests(unittest.TestCase):
 
     def test_audit_action_selects_account_model_then_requires_explicit_confirmation(self):
         terminal = self.bound_terminal(with_audit=True)
-        self.assertTrue(terminal.wait_for('Auditoria A'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'A')
         self.assertTrue(terminal.wait_for('Escolha a conta Codex'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'\r')
@@ -118,7 +120,7 @@ class TasksUITests(unittest.TestCase):
 
     def test_cancel_audit_does_not_launch_or_change_tasks(self):
         terminal = self.bound_terminal(with_audit=True)
-        self.assertTrue(terminal.wait_for('Auditoria A'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'))
         os.write(terminal.master, b'A')
         self.assertTrue(terminal.wait_for('Escolha a conta Codex'))
         os.write(terminal.master, b'\x1b')

@@ -133,7 +133,7 @@ run(repo,Path(sys.argv[2]))
         terminal=Terminal(['python3','-B','-c',code,str(self.f.repo),str(binding),str(Path(__file__).parent),
                           str(self.f.worktree),json.dumps(asdict(self.f.worker)),str(receipt)],dict(os.environ,TERM='xterm-256color'))
         self.addCleanup(terminal.close)
-        self.assertTrue(terminal.wait_for('Despachar p'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Mostrar ações'),terminal.output.decode(errors='replace'))
         os.write(terminal.master,b' D')
         self.assertTrue(terminal.wait_for('Para um agente'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('Orquestrar equipe'),terminal.output.decode(errors='replace'))
