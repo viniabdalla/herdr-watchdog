@@ -296,7 +296,7 @@ class TasksUI:
                 if offer['kind'] == 'group_dispatch':
                     from .dispatch_preview import blocked
                     instruction = ('i inclui a dependência e volta à prévia; ! manda assim mesmo.' if blocked(offer)
-                                   else 'y digita a meta no pane do líder e aperta Enter.')
+                                   else 'y digita o texto acima no pane do líder e aperta Enter.')
                 else:
                     instruction = 'y digita o pedido no prompt da sessão principal e aperta Enter.'
                 rows.append((instruction, 'In progress', None))

@@ -149,7 +149,9 @@ print(json.dumps({'result':{'pane':{'pane_id':b['pane'],'terminal_id':b['termina
         sends=[c for c in commands if c[:2]==['pane','send-text']]
         self.assertEqual(len(sends),1);self.assertEqual(sends[0][2],new.pane)
         self.assertIn('/goal Concluir somente',sends[0][3])
-        with patch.dict(os.environ,self.env):self.assertEqual(long_run.record(self.repo),group)
+        with patch.dict(os.environ,self.env):
+            value=long_run.record(self.repo)
+            self.assertEqual(value, dict(group,goal={'kind':'codex','account':new.account,'session':'chosen-new'}))
 
     def test_reopened_panel_keeps_religar_available_for_an_unavailable_leader(self):
         # Spec #1 L121,144,190: no automatic move, but explicit Religar still works.
