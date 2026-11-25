@@ -20,16 +20,6 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
-- [ ] T6 (#7) Trava por pane e aviso do executor
-  ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
-  Resumo:
-    toda escrita no pane do líder passa por uma trava; comando de aviso pronto/BLOQUEIO para executores.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #7 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
 - [ ] T13 (#14) Pergunta pendente e meta encerrada
@@ -196,6 +186,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T6 (#7) Trava por pane e aviso do executor
+  ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
+  Resumo:
+    toda escrita no pane do líder passa por uma trava; comando de aviso pronto/BLOQUEIO para executores.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #7 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 - [x] 2026-11-25 T12 (#13) Code review em duas abas
   ID: fdc62343-7c2f-4cfc-99de-347a7cf816e5
   Resumo:
