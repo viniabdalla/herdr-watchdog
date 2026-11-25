@@ -28,7 +28,9 @@ def integration(repo):
     return branch, git(repo, 'rev-parse', '--verify', 'refs/heads/' + branch + '^{commit}')
 
 
-def preview(session, snapshot, ids):
+def preview(session, snapshot, ids, mode='dispatch'):
+    if mode not in ('dispatch', 'here'):
+        raise ValueError('Modo de despacho inválido')
     snapshot.assert_current()
     session.verify()
     tasks = snapshot.selected(ids)
@@ -45,12 +47,15 @@ def preview(session, snapshot, ids):
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
     # T3 owns the active-goal/update policy. T1 always sends the group objective.
-    phrase = ('Concluir somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
+    action = 'Implementar nesta sessão' if mode == 'here' else 'Concluir'
+    execution = ('Implemente em worktree própria a partir da integração; integre com as mesmas '
+                 'checagens e avise "Tn concluído".' if mode == 'here' else 'Despache um executor por tarefa;')
+    phrase = (action + ' somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
               ', acompanhadas no TODO.md de ' + str(snapshot.repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
-              ' e a seção ## Dispatch do AGENTS.md do projeto. Despache um executor por tarefa; '
+              ' e a seção ## Dispatch do AGENTS.md do projeto. ' + execution + ' '
               'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
     prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
-    return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
+    return {'kind': 'group_dispatch', 'mode': mode, 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
             'previous': previous, 'group': state}
 

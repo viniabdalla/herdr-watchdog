@@ -6,6 +6,18 @@ O grupo é o limite do trabalho: siga apenas as tarefas despachadas, cada uma
 com seu ponteiro de aceite (issue e spec, ou seção de plano).
 O painel entrega a seleção; o líder coordena a execução.
 
+## Implementar aqui
+
+O Tasks oferece Despachar (p) e Implementar aqui (h), com o modo escolhido,
+o texto exato e o pane do líder na prévia. Cancelar não envia nem soma ao grupo.
+Ambos usam o mesmo grupo e os mesmos ponteiros de aceite; a escolha vale para
+o envio atual. Em Implementar aqui, o próprio líder implementa nesta sessão,
+abrindo sua worktree e branch próprias a partir da branch de integração.
+Confere o aceite e os testes, incorpora a integração antes do último commit
+e integra exclusivamente no checkout de integração, como faria com a entrega
+de um executor. Ao concluir, fecha a issue com evidências e atualiza a cópia
+local e o acompanhamento, escrevendo "Tn concluído: commit, testes" na conversa.
+
 ## Preparar e abrir uma leva
 
 1. Leia os aceites e suas dependências. Abra somente tarefas liberadas.
