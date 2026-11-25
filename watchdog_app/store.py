@@ -1,7 +1,7 @@
 """Watchdog-owned state and locks; no writes to Left Undone's folder."""
 from contextlib import contextmanager
 from dataclasses import asdict
-import fcntl
+from .compat import fcntl, fsync_directory
 import json
 import os
 from pathlib import Path
@@ -24,9 +24,7 @@ def atomic(path, value):
             os.fsync(stream.fileno())
         temporary.chmod(0o600)
         temporary.replace(path)
-        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try: os.fsync(directory)
-        finally: os.close(directory)
+        fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 

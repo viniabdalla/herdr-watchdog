@@ -1001,7 +1001,8 @@ def run(repo, binding_file=None):
     def stop(*_):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGHUP, stop)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, stop)
     try:
         curses.wrapper(lambda screen: TasksUI(screen, repo, binding_file).loop())
     except KeyboardInterrupt:

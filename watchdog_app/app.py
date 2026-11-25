@@ -11,6 +11,7 @@ import time
 
 from . import bindings
 from .herdr import Herdr
+from .compat import shell_command
 from .layouts import PRESETS, arrange
 from .picker import choose_conversation, choose_layout
 from .store import Store
@@ -113,7 +114,7 @@ def ensure_panels(api, state, save, *, roles=('tasks', 'progress', 'artifacts', 
                 argv += ['--binding-file', state['binding_file']]
         pane['launch_state'] = 'starting'
         save()
-        api.call('pane', 'run', pane['pane_id'], shlex.join(argv))
+        api.call('pane', 'run', pane['pane_id'], shell_command(argv))
         deadline = time.monotonic() + 6
         while True:
             running, _ = panel_process(api, pane, role, state)
@@ -187,6 +188,9 @@ def open_selector(api, repo, binding=None, *, pane=None, session=None, preset=No
 def main(argv=None):
     os.umask(0o077)
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ['plugin-panel']:
+        from .plugin_panel import main as plugin_panel_main
+        return plugin_panel_main(argv[1:])
     if argv[:1] == ['kit']:
         from .leader_kit import main as kit_main
         return kit_main(argv[1:])

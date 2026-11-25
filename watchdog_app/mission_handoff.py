@@ -7,7 +7,7 @@ one atomic RunStore update; no panel, binding file, actor or queue is changed.
 from collections import Counter
 from contextlib import contextmanager
 import copy
-import fcntl
+from .compat import fcntl
 from dataclasses import asdict
 import hashlib
 import json

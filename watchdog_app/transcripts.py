@@ -34,7 +34,7 @@ class Reader:
     def read(self):
         batch = Batch()
         try:
-            with os.fdopen(os.open(self.path, os.O_RDONLY | os.O_NONBLOCK), 'rb') as file:
+            with os.fdopen(os.open(self.path, os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0)), 'rb') as file:
                 info = os.fstat(file.fileno())
                 if not stat.S_ISREG(info.st_mode):
                     raise OSError('Transcript is not a regular file')
@@ -93,9 +93,14 @@ def evidence_tail(path, *, limit=4*1024*1024):
     """Bounded complete records with byte references; partial/malformed data labelled."""
     import hashlib
     records=[];issues=[]
-    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    # Windows lacks O_NOFOLLOW/O_NONBLOCK; compare lstat to the opened file.
+    before=Path(path).lstat()
+    if stat.S_ISLNK(before.st_mode):raise OSError('Transcript symlink is not allowed')
+    fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_NONBLOCK',0))
     with os.fdopen(fd,'rb') as stream:
         info=os.fstat(stream.fileno())
+        if (before.st_dev,before.st_ino)!=(info.st_dev,info.st_ino):
+            raise OSError('Transcript changed while opening')
         if not stat.S_ISREG(info.st_mode):raise RuntimeError('Transcript must be regular')
         start=max(0,info.st_size-limit);stream.seek(start)
         if start:stream.readline();issues.append('bounded tail; older evidence omitted')

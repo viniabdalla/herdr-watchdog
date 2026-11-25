@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 import ctypes
-import fcntl
+from .compat import fcntl
 import hashlib
 import os
 from pathlib import Path

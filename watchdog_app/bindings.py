@@ -30,6 +30,8 @@ def select(candidates, *, pane=None, session=None, thread=None):
 
 @lru_cache(maxsize=1)
 def engine():
+    if sys.platform != "linux":
+        return importlib.import_module("watchdog_app.portable_runtime")
     roots = []
     if os.environ.get('WATCHDOG_LEFT_UNDONE_ROOT'):
         roots.append(Path(os.environ['WATCHDOG_LEFT_UNDONE_ROOT']).expanduser())
@@ -43,8 +45,7 @@ def engine():
                 return importlib.import_module('left_undone.runtime')
             finally:
                 sys.path.pop(0)
-    raise RuntimeError('Left Undone identity engine is missing. Install left-undone, or set '
-                       'WATCHDOG_LEFT_UNDONE_ROOT to its checkout folder.')
+    return importlib.import_module("watchdog_app.portable_runtime")
 
 
 def lu_state():
@@ -56,12 +57,17 @@ def lu_state():
 def discover(repo):
     runtime = engine()
     candidates, errors = runtime.candidates()
+    if runtime.__name__ == 'watchdog_app.portable_runtime':
+        root = runtime.project_root(repo)
+        return [b for b in candidates if runtime.binding_project(b) == root], errors
     repository = importlib.import_module('left_undone.repository')
     return repository.repository_sessions(candidates, repo, lu_state()), errors
 
 
 def project_for(binding):
-    engine()
+    runtime = engine()
+    if runtime.__name__ == 'watchdog_app.portable_runtime':
+        return runtime.binding_project(binding)
     repository = importlib.import_module('left_undone.repository')
     return repository.binding_project(binding, lu_state())
 
@@ -75,7 +81,8 @@ def verify(binding):
 
 
 def native_companion_alive(pane, file):
-    engine()
+    if engine().__name__ == 'watchdog_app.portable_runtime':
+        return False
     app = importlib.import_module('left_undone.app')
     return app.panel_process_alive(pane, file)
 

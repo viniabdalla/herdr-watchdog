@@ -8,7 +8,7 @@ ledgers are never adopted or written. An uncertain side effect is never retried.
 from contextlib import contextmanager
 import copy
 from dataclasses import asdict
-import fcntl
+from .compat import fcntl
 import json
 import os
 from pathlib import Path, PurePosixPath

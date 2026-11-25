@@ -2,35 +2,38 @@ id = "watchdog"
 name = "Watchdog"
 version = "0.1.0"
 min_herdr_version = "0.9.1"
-platforms = ["linux"]
+platforms = ["linux", "macos", "windows"]
 description = "Verified conversation layouts and project monitoring panels"
+
+[[build]]
+command = ["python", "install.py", "--no-plugin"]
 
 [[actions]]
 id = "open"
 title = "Watchdog: choose a layout"
 contexts = ["workspace", "pane"]
-command = ["python3", "watchdog", "open"]
+command = ["python", "plugin-boot.py", "open"]
 
 [[panes]]
 id = "picker"
 title = "Watchdog: choose layout"
 placement = "split"
-command = ["python3", "watchdog", "pick"]
+command = ["python", "plugin-boot.py", "pick"]
 
 [[panes]]
 id = "tasks"
 title = "Watchdog Tasks"
 placement = "split"
-command = ["python3", "watchdog", "panel", "tasks"]
+command = ["python", "plugin-boot.py", "plugin-panel", "tasks"]
 
 [[panes]]
 id = "progress"
 title = "Watchdog Progress"
 placement = "split"
-command = ["python3", "watchdog", "panel", "progress"]
+command = ["python", "plugin-boot.py", "plugin-panel", "progress"]
 
 [[panes]]
 id = "artifacts"
 title = "Watchdog Artifacts"
 placement = "split"
-command = ["python3", "watchdog", "panel", "artifacts"]
+command = ["python", "plugin-boot.py", "plugin-panel", "artifacts"]

@@ -1,7 +1,7 @@
 """Mission Control's durable intent and evidence ledger (never edits TODO.md)."""
 from contextlib import contextmanager
 from dataclasses import asdict
-import fcntl
+from .compat import fcntl
 import json
 from pathlib import Path
 import time

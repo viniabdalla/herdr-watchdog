@@ -4,7 +4,7 @@ This trusts the local user/runtime, not hostile code with unrestricted same-UID
 host access. A shared app-server ancestor alone is NEVER sufficient identity.
 """
 import json
-import fcntl
+from .compat import fcntl
 from contextlib import contextmanager
 import stat
 import os

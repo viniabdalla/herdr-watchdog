@@ -1,6 +1,6 @@
 """Confirmed native submissions, serialized across panels and executors."""
 from contextlib import contextmanager
-import fcntl
+from .compat import fcntl
 import hashlib
 import json
 import os
