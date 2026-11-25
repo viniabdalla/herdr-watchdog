@@ -187,6 +187,9 @@ def open_selector(api, repo, binding=None, *, pane=None, session=None, preset=No
 def main(argv=None):
     os.umask(0o077)
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ['kit']:
+        from .leader_kit import main as kit_main
+        return kit_main(argv[1:])
     if argv[:1] == ['aviso']:
         from .notice import main as notice_main
         return notice_main(argv[1:])

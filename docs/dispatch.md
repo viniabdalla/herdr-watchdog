@@ -11,7 +11,8 @@ O painel entrega a seleção; o líder coordena a execução.
 1. Leia os aceites e suas dependências. Abra somente tarefas liberadas.
    A base da revisão é a ponta da branch de integração anotada pelo Watchdog
    no primeiro despacho confirmado; preserve-a ao somar tarefas ao grupo.
-2. Abra um Codex novo por tarefa no Herdr, em branch e worktree persistentes
+2. Use `watchdog kit abrir` (CLI abaixo) para abrir um Codex novo por tarefa
+   no Herdr, em branch e worktree persistentes
    próprias, criadas a partir da branch de integração. Use `.worktrees/<ticket>`
    dentro do checkout de integração. Modelo e esforço vêm do projeto.
 3. Agrupe os executores abertos juntos numa aba nomeada pelo tema e tarefas.
@@ -73,7 +74,8 @@ texto e Enter. O envio pelo Herdr continua sendo texto seguido de Enter.
    no checkout de integração. Só aceite com commit e evidência verificáveis.
 3. Integre exclusivamente no checkout de integração. O líder implementa em
    worktrees, inclusive no modo Implementar aqui. Após integrar, feche a issue com
-   comentário de evidências, atualize a cópia local e o TODO, faça commit local e
+   comentário de evidências usando `watchdog kit fechar` (CLI abaixo), que atualiza
+   a cópia local; atualize o TODO, faça commit local e
    escreva na conversa `Tn concluído: commit, testes`. Reavalie as tarefas liberadas.
 4. Responda sozinho a bloqueios decididos pela spec. Se ela não decidir, pergunte
    imediatamente ao Vini sem parar as outras tarefas; registre o próximo passo.
@@ -97,3 +99,44 @@ testes, branch de integração, modelo e esforço no `AGENTS.md` do projeto.
 Mantenha a linha `Branch de integração: \`nome-da-branch\`` nesse formato: o
 Watchdog a lê para anotar a base, mesmo quando o líder está em outra branch.
 Sem configuração, usa a branch local atual; confira-a antes do despacho.
+
+
+## CLI do kit do líder
+
+Execute o Watchdog pelo caminho absoluto, com `--repo` apontando para o checkout
+de integração do projeto acompanhado. Leia o aceite antes de abrir: o kit recebe
+a tarefa liberada pelo líder e não decide dependências nem inicia outras tarefas.
+
+```bash
+/caminho/do/watchdog kit abrir --repo /projeto --grupo ID-DO-GRUPO --ticket T8 --lider w11:p8 --workspace w11 --leva 'Kit · T8 T9' --aceite docs/issues/9-ticket.md --spec docs/issues/1-spec.md
+/caminho/do/watchdog kit abrir --repo /projeto --grupo ID-DO-GRUPO --ticket T9 --lider w11:p8 --workspace w11 --leva 'Kit · T8 T9' --depende T8 --aceite docs/issues/10-ticket.md --spec docs/issues/1-spec.md
+/caminho/do/watchdog kit listar --repo /projeto --grupo ID-DO-GRUPO
+/caminho/do/watchdog kit fechar --repo /projeto --issue 9 --copia docs/issues/9-ticket.md --comentario 'T8 concluído: commit SHA, testes RESULTADO. Evidências.'
+```
+
+`abrir` lê branch de integração, modelo, esforço e permissões do Dispatch do
+projeto. Cria `.worktrees/<ticket>` a partir da ponta da integração, com branch
+própria; mantém `.watchdog/` e `.worktrees/` fora do git por exclusões locais.
+Cria uma aba nomeada pela leva ou divide a aba existente. `--depende` pode ser
+repetido para reaproveitar a leva de uma dependência do mesmo grupo; a ocupação
+real é limitada por `--capacidade` (padrão 4). Sem espaço, cria outra aba.
+Use `--session NOME` em `abrir` quando o Herdr exigir sessão explícita.
+
+O contrato em `.watchdog/run/<data>/` inclui os ponteiros, configuração, panes,
+rodapé comum e aviso com trava. O registro `.watchdog/executors.json` versão 1
+identifica projeto, grupo, tarefa, leva, branch, base, worktree, pane, terminal,
+sessão nativa confirmada quando disponível, modelo, esforço, contrato e estado.
+`listar` devolve esse registro em JSON, filtrado pelo grupo quando informado;
+`watchdog_app.leader_kit.executors(repo, group=None)` oferece a mesma leitura
+para Progress e revisão. Sessão nativa indisponível permanece `null`.
+`state: ready` confirma abertura e entrega do contrato; não significa tarefa
+concluída. Estados `preparing`/`failed` conservam a operação e os recursos para
+inspeção. Confira-os antes de repetir; o kit recusa duplicar a mesma tarefa do
+mesmo grupo e nunca remove recursos após resultado incerto.
+
+`fechar` é uma operação externa: use quando o Vini tiver autorizado o fechamento.
+Guarda o comentário de evidências em `.watchdog/run/<data>/`, consulta o estado,
+comenta com `gh issue comment --body-file`, fecha e consulta novamente. Só então
+atualiza estado, corpo e comentários da cópia local, preservando campos próprios
+do cabeçalho. Se falhar, confira o estado remoto e o comentário guardado antes
+de repetir. O kit não integra branches, atualiza TODO, faz commit ou push.
