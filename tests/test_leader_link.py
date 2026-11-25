@@ -31,10 +31,12 @@ def candidates():return [Binding(**b) for b in json.loads((repo/'live.json').rea
 def verify(b,**kw):
  if b not in candidates()[0]:raise RuntimeError('identity changed')
  return {'agent_status':'idle'}
-bindings.engine=lambda:SimpleNamespace(Binding=Binding,verify=verify)
+bindings.engine=lambda:SimpleNamespace(Binding=Binding,verify=verify, processes=lambda:[])
 bindings.discover=lambda repo:candidates()
 bindings.project_for=lambda b:repo
 curate.latest_reply=lambda b:None
+from watchdog_app import relink_delivery,leader_link
+relink_delivery.choices=lambda session:leader_link.choices(session)
 from watchdog_app.tasks_ui import run
 run(repo,Path(sys.argv[2]))
 '''
@@ -115,9 +117,9 @@ class LeaderLinkTests(unittest.TestCase):
             self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(self.old))
             t.close()
 
-    def test_religar_selects_workspace_agent_and_resends_existing_group_only_after_confirm(self):
+    def test_religar_selects_workspace_claude_and_resends_existing_group_only_after_confirm(self):
         # Spec #1 L121,123,165: one explicit choice; group/meta stays intact.
-        t=self.open()
+        t=self.open(replace(self.old,kind='claude'))
         new=replace(self.old,session='chosen-new',pane='project:p9',terminal='new-terminal',pid=99999998)
         outside=replace(new,pane='other:p1',workspace='other',session='outside')
         self.live(new,outside)
@@ -143,11 +145,11 @@ class LeaderLinkTests(unittest.TestCase):
         self.assertIn('/goal Concluir somente',sends[0][3])
         with patch.dict(os.environ,self.env):
             value=long_run.record(self.repo)
-            self.assertEqual(value, dict(group,goal={'kind':'codex','account':new.account,'session':'chosen-new'}))
+            self.assertEqual(value, dict(group,goal={'kind':'claude','account':new.account,'session':'chosen-new'}))
 
     def test_reopened_panel_keeps_religar_available_for_an_unavailable_leader(self):
         # Spec #1 L121,144,190: no automatic move, but explicit Religar still works.
-        old=replace(self.old,pid=99999999)
+        old=replace(self.old,pid=99999999,kind='claude')
         self.old=old;self.store.save(old,self.store.load(old,self.repo))
         self.file=self.store.root/(old.key+'.json')
         new=replace(old,session='restart-new',pane='project:p9',terminal='new-terminal')
@@ -191,7 +193,7 @@ class LeaderLinkTests(unittest.TestCase):
 
     def test_religar_can_explicitly_move_the_same_conversation(self):
         # Spec #1 L121,190: explicit selection permits a pane move of the same session.
-        t=self.open()
+        t=self.open(replace(self.old,kind='claude'))
         new=replace(self.old,pane='project:p9',terminal='new-terminal',pid=99999998)
         self.live(new)
         os.write(t.master,b'L');self.wait(t,'Religar · escolher líder')
@@ -308,17 +310,17 @@ class LeaderLinkTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):self.store.transfer(afile,a,b,self.repo,'return',api=Herdr())
             self.assertEqual({p:p.read_bytes() for p in before},before)
 
-    def test_religar_existing_agents_both_directions_in_terminal(self):
+    def test_religar_existing_claude_panes_both_directions_in_terminal(self):
         # Spec #1 L120-122,165,180: prefix and explicit pane choice in both directions.
         a=replace(self.old,kind='claude',session='A-session')
-        b=replace(self.old,session='B-session',pane='project:p9',terminal='B-terminal')
+        b=replace(self.old,kind='claude',session='B-session',pane='project:p9',terminal='B-terminal')
         t=self.open(a)
         self.live(a,b)
         self.wait(t,'/to-spec')
         t.output=b'';os.write(t.master,b'Lj\r')
-        self.wait(t,'Harness alterado: claude → codex');self.wait(t,'$to-spec')
-        t.output=b'';os.write(t.master,b'L\r')
-        self.wait(t,'→ claude');self.wait(t,'/to-spec')
+        self.wait(t,'Líder ligado');self.wait(t,'B-sessio')
+        t.output=b'';os.write(t.master,b'L');self.wait(t,'Religar · escolher líder')
+        t.output=b'';os.write(t.master,b'\r');self.wait(t,'IN PROGRESS (0)')
         self.assertEqual(json.loads(self.file.read_text())['ownership'],'active')
         self.assertEqual(json.loads(self.file.read_text())['binding'],asdict(a))
 
