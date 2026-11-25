@@ -42,7 +42,7 @@ class TasksUITests(unittest.TestCase):
                          '## Done\n- [x] Old completion\n')
         (self.repo / 'TODO.md').write_text(self.original)
         self.terminal = Terminal(['python3', str(SCRIPT), 'tasks', '--repo', str(self.repo)],
-                                 dict(os.environ, TERM='xterm-256color',
+                                 dict(os.environ, WATCHDOG_FULL_CONTROLS='1', TERM='xterm-256color',
                                       WATCHDOG_STATE_DIR=str(self.repo / 'state')))
         self.addCleanup(self.terminal.close)
 
@@ -147,7 +147,7 @@ from watchdog_app.tasks_ui import run""")
         if with_agents:
             script = script.replace('from watchdog_app.tasks_ui import run', "from watchdog_app import panes\ndef opened(file, project, role):\n (repo/'agents-open.json').write_text(json.dumps({'file':str(file),'role':role}))\n return {'pane_id':'test-agents'}\npanes.open_pane=opened\nfrom watchdog_app.tasks_ui import run")
         terminal = Terminal(['python3','-c',script,str(self.repo),str(binding),str(ROOT/'tests')],
-                            dict(os.environ,TERM='xterm-256color',WATCHDOG_STATE_DIR=str(self.repo/'state')))
+                            dict(os.environ,WATCHDOG_FULL_CONTROLS='1',TERM='xterm-256color',WATCHDOG_STATE_DIR=str(self.repo/'state')))
         self.addCleanup(terminal.close)
         return terminal
 

@@ -118,7 +118,7 @@ class DisclosureTerminalTests(unittest.TestCase):
             terminal = Terminal(['python3', str(SCRIPT), 'tasks', '--repo', str(repo)],
                                 dict(os.environ, TERM='xterm-256color', WATCHDOG_STATE_DIR=str(repo / 'state')))
             self.addCleanup(terminal.close)
-            self.assertTrue(terminal.wait_for('Space: select'))
+            self.assertTrue(terminal.wait_for('Enter/▸: resumo'))
             self.assertNotIn(b'Investigar', terminal.output)
             self.assertNotIn(b'Recuperar os', terminal.output)
             os.write(terminal.master, b'\r')

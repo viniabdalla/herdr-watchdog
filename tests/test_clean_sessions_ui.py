@@ -1,5 +1,6 @@
 """Tasks UI drives the real cleanup backend; model/native boundaries simulated."""
 import json
+import os
 import unittest
 from unittest.mock import patch
 import test_clean_sessions as fixture
@@ -12,6 +13,9 @@ class Screen:
 
 class CleanSessionsUITests(unittest.TestCase):
     def setUp(self):
+        controls = patch.dict(os.environ, WATCHDOG_FULL_CONTROLS='1')
+        controls.start()
+        self.addCleanup(controls.stop)
         self.f=fixture.CleanSessionsTests();self.f.setUp();self.addCleanup(self.f.doCleanups)
         with patch.object(tasks_ui,'colors',return_value={}):
             self.ui=tasks_ui.TasksUI(Screen(),self.f.repo,self.f.file)

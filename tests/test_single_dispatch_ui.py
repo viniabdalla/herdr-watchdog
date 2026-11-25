@@ -15,7 +15,7 @@ from watchdog_app import mission_single as single, mission, progress_ui
 class DispatchUITests(unittest.TestCase):
     def setUp(self):
         f=test_mission_single.SingleTests(); f.setUp(); self.addCleanup(f.doCleanups); self.f=f
-        self.env=patch.dict(os.environ,WATCHDOG_STATE_DIR=str(f.f.root/'ui-state'))
+        self.env=patch.dict(os.environ,WATCHDOG_FULL_CONTROLS='1',WATCHDOG_STATE_DIR=str(f.f.root/'ui-state'))
         self.env.start(); self.addCleanup(self.env.stop)
         self.ui=TasksUI(Screen(54),f.repo,None); self.addCleanup(self.ui.job.close)
         self.ui.snapshot=Snapshot.read(f.repo); self.ui.selected={self.ui.snapshot.tasks[0].id}

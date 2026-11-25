@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import textwrap
 
+from . import long_run
 from .mission import RunStore, task_view, run_status, close, FINISHED
 from .mission_scope import explain
 from .mission_launch import open_run
@@ -32,8 +33,8 @@ def session_rows(view, width=80):
     return result
 
 
-def rows(repo, store=None, *, progress=None, width=80):
-    result=session_rows((progress or Progress(repo)).poll(), width)
+def run_rows(repo, store):
+    result=[]
     finished=0
     for run in (store or RunStore()).list(repo):
         status=run_status(run)
@@ -84,20 +85,59 @@ def rows(repo, store=None, *, progress=None, width=80):
     if finished>3:result.append((f'{finished-3} older finished run(s) hidden',None,None))
     if finished:result.append(('',None,None))
     if not any(run and not run_status(run)['finished'] for _,_,run in result):result.extend([('No active runs. Select tasks and choose Orchestrate.',None,None),('',None,None)])
+    return result
+
+
+def progress_bar(done, total, width):
+    # Leave room for brackets, the percentage and the panel's right margin.
+    size = max(1, min(28, width - 9))
+    filled = size * done // total if total else 0
+    return '[' + '█' * filled + '░' * (size - filled) + ']'
+
+
+def rows(repo, store=None, *, progress=None, width=80):
+    result, history_rows = [], []
     try:
-        snapshot=Snapshot.read(repo)
-        done=sum(t.done for t in snapshot.tasks)
-        result.extend([('PROJECT · TODO.md',None,None),(f'{done}/{len(snapshot.tasks)} tasks complete',None,None),
-            ('Dispatch and run approval do not change project TODO.',None,None)])
+        snapshot = Snapshot.read(repo)
+        done = sum(task.done for task in snapshot.tasks)
+        total = len(snapshot.tasks)
+        count_label = 'concluída' if total == 1 else 'concluídas'
+        title = f'Projeto · {done} de {total} {count_label}' if total else 'Projeto · nenhuma tarefa'
+        percentage = f' {done / total:.0%}' if total else ''
+        project = [(title, 'ready', None), (progress_bar(done, total, width) + percentage, 'done', None)]
+        group = long_run.load(repo)
+        if group:
+            tasks = long_run.members(snapshot, group)
+            total = len(group)
+            done = sum(1 for task in tasks if task and task.done)
+            remaining = total - done
+            label = 'falta' if remaining == 1 else 'faltam'
+            heading = [('Long run', 'ready', None),
+                       (f'{done} de {total} concluídas · {done / total:.0%} · {label} {remaining}', 'done', None),
+                       (progress_bar(done, total, width), 'done', None)]
+            missing = tasks.count(None)
+            if missing:
+                heading.append((f'{missing} sem correspondência única no TODO.md', 'blocked', None))
+            result.extend(heading + [('', None, None)])
+        result.extend(project + [('', None, None)])
+        if not group:
+            result.extend([('Long run · selecione tarefas em Tasks e use Acompanhar no Progress (g).', None, None),
+                           ('', None, None)])
         if snapshot.format_version == 1:
             from .project_history import observe
             history = observe(snapshot)
-            result.append(('PROJECT HISTORY · observed transitions (TODO is authoritative)',None,None))
+            history_rows.append(('PROJECT HISTORY · observed transitions (TODO is authoritative)',None,None))
             for event in history['events'][-12:]:
-                result.append((event['observed_at']+' · '+event['id'][:8]+' · '+
+                history_rows.append((event['observed_at']+' · '+event['id'][:8]+' · '+
                                event['from']+' → '+event['to']+' · '+event['evidence'],None,None))
-    except (OSError,RuntimeError,UnicodeError) as error:
+    except (OSError, RuntimeError, ValueError) as error:
         result.append(('PROJECT · '+str(error),'blocked',None))
+    result.extend(session_rows((progress or Progress(repo)).poll(), width))
+    try:
+        result.extend(run_rows(repo, store))
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+        result.append(('Cannot read runs: ' + str(error), 'blocked', None))
+    result.extend(history_rows)
     return result
 
 
@@ -126,8 +166,11 @@ def panel(screen, repo, binding_file=None):
                 if session.file!=Path(binding_file):
                     binding_file=session.file;progress=Progress(repo,binding_file)
                 clean.poll(session.binding)
-            source=[(text,'blocked' if color=='Blocked' else 'working',None) for text,color,_ in clean.rows()]+rows(repo,progress=progress,width=w)
-        except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:source=[('Cannot read runs: '+str(error),'blocked',None)]
+            cleanup_rows = [(text, 'blocked' if color == 'Blocked' else 'working', None)
+                            for text, color, _ in clean.rows()]
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+            cleanup_rows = [('Session · ' + str(error), 'blocked', None)]
+        source = rows(repo, progress=progress, width=w) + cleanup_rows
         rendered=[]
         for text,color,run in source:
             rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])

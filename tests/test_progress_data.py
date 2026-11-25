@@ -63,7 +63,7 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(view.state,'unavailable');self.assertIsNone(view.total)
         source=rows(self.repo,SimpleNamespace(list=lambda repo:[]),progress=self.progress)
         text='\n'.join(s[0] for s in source)
-        self.assertIn('1/2 tasks complete',text)
+        self.assertIn('Projeto · 1 de 2 concluídas',text)
         self.assertNotIn('0/0',text)
 
     def test_identity_and_project_gates_hide_previously_valid_plan(self):

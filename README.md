@@ -38,6 +38,20 @@ action has no interactive terminal. Left Undone is optional as a visible panel:
 if its panel is already bound to this conversation, it stays to the right of
 Files. Watchdog reads that binding and never edits Left Undone's state.
 
+## Painel de acompanhamento (branch feat/tasks-somente-leitura)
+
+Por padrão, **WATCHDOG / TASKS** mostra **[Review r]**, **[Verificar v]**, **[Acompanhar no Progress g]** e **[Quit q]**.
+Space seleciona tarefas, Enter/▸ abre o Resumo e o curador continua revisando cada resposta.
+**v** monta um pedido de verificação das tarefas selecionadas, mostra a prévia com o painel e a
+sessão principal anotados e, com **y**, digita o pedido no prompt dessa sessão via
+`herdr pane send-text` + Enter, depois de reconfirmar a identidade da sessão. Esc cancela sem enviar.
+Selecione as tarefas com Space e use **g** para guardar o grupo do long run neste projeto.
+O Progress abre com a barra do projeto. Com um grupo salvo, a barra do long run ocupa o topo e a barra geral fica logo abaixo. Um novo grupo salvo substitui o anterior.
+O curador recebe as tarefas abertas do grupo como prioridade a cada resposta concluída da sessão vinculada.
+A porcentagem muda quando o estado muda no TODO.md, inclusive após aplicar uma proposta do curador.
+Despacho, orquestração, Agents, Clean sessions, Auditoria e Done/Start/Next ficam desligados;
+`WATCHDOG_FULL_CONTROLS=1` restaura todos os botões.
+
 ## Agents and individual panels
 
 `watchdog pane` opens a terminal selector for Agents, Tasks, Progress, Artifacts or Files.

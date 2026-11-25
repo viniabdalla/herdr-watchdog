@@ -46,7 +46,7 @@ class OrchestrateUITests(unittest.TestCase):
         self.assertTrue(terminal.wait_for('Missing approved fixture'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('gpt-6.1-sol'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('medium'),terminal.output.decode(errors='replace'))
-        self.assertTrue(terminal.wait_for('PROJECT'),terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Projeto ·'),terminal.output.decode(errors='replace'))
         self.assertIn(b'91m',terminal.output)
 
     def test_cli_inspect_is_available_without_native_binding(self):

@@ -46,6 +46,22 @@ class CuratorTests(unittest.TestCase):
         after = apply_review(session, self.snapshot, first, {0})
         self.assertTrue(next(t for t in after.tasks if 'Add colors' in t.text).done)
 
+    def test_curator_rechecks_saved_group_and_progress_follows_approved_proposal(self):
+        from watchdog_app import long_run
+        from watchdog_app.progress_ui import rows
+        session = self.session()
+        task = self.snapshot.tasks[0]
+        output = {'done': [{'id': task.id, 'evidence': 'Add colors is complete.'}], 'blocked': [], 'add': []}
+        with patch('watchdog_app.curate.ask_codex', return_value=output) as model:
+            review(session, self.snapshot, threading.Event())
+            long_run.save(self.snapshot, [task.id])
+            result = review(session, self.snapshot, threading.Event())
+            self.assertEqual(model.call_count, 2)
+            self.assertEqual(model.call_args.args[0]['long_run_ids'], [task.id])
+        self.assertTrue(any('0 de 1' in line for line, _, _ in rows(self.repo)))
+        apply_review(session, self.snapshot, result, {0})
+        self.assertTrue(any('1 de 1' in line and '100%' in line for line, _, _ in rows(self.repo)))
+
     def test_new_completed_reply_invalidates_an_old_review(self):
         session = self.session()
         raw = {'done': [{'id': self.snapshot.tasks[0].id, 'evidence': 'Add colors is complete.'}],

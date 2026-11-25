@@ -1,11 +1,14 @@
 """Interactive project tasks, explicit routing and confirmed Codex suggestions."""
 import curses
+import os
+import subprocess
 from pathlib import Path
 from dataclasses import asdict
 import signal
 import textwrap
 import time
 
+from . import long_run
 from .actions import Session, Busy
 from .curate import ReviewJob, latest_reply, apply_review
 from .todo import Snapshot, SECTIONS, change
@@ -79,6 +82,23 @@ def task_summary(snapshot, task):
         if text.startswith('Resumo:'):
             return text[len('Resumo:'):].strip() or 'Resumo ainda não informado.'
     return 'Conclusão registrada no histórico.' if task.done else 'Resumo ainda não informado.'
+
+
+# Painel de acompanhamento: só seleção, curador e pedido de verificação à sessão principal.
+# WATCHDOG_FULL_CONTROLS=1 restaura os botões de despacho, orquestração e edição manual.
+def full_controls():
+    return os.environ.get('WATCHDOG_FULL_CONTROLS') == '1'
+
+
+DISABLED_KEYS = {'A', 'm', 'M', 'c', 'C', 'p', 'P', '0', 'o', 's', 'd', 'i', 'n'}
+
+
+def verification_prompt(tasks):
+    titles = '; '.join(task.title.strip() for task in tasks)
+    return ('Verifique se estas tarefas do TODO.md estão realmente prontas: ' + titles + '. '
+            'Para cada uma, confira o Resumo/Aceite contra as evidências (commits, testes, issue no GitHub) '
+            'e responda: pronta (com evidência) ou não pronta (o que falta). '
+            'Se confirmar, atualize o TODO.md e a issue.')
 
 
 class TasksUI:
@@ -224,11 +244,18 @@ class TasksUI:
                      'queue': 'Conversation is working — confirm queue',
                      'fresh': 'Novo executor · confirmar',
                      'orchestrate': 'Confirm orchestration', 'single': 'Confirmar envio para um agente',
-                     'apply': 'Confirm reviewed changes'}[offer['kind']]
+                     'apply': 'Confirm reviewed changes',
+                     'verify': 'Pedir verificação à sessão principal'}[offer['kind']]
             rows.append((title, 'In progress', None))
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
+            if offer['kind'] == 'verify':
+                rows.append(('Enviar para o painel ' + self.session.binding.pane + ' · sessão ' + self.session.binding.session, None, None))
+                rows.append(('', None, None))
+                rows.extend((line, None, None) for line in textwrap.wrap(offer['prompt'], 70))
+                rows.append(('', None, None))
+                rows.append(('y digita o pedido no prompt da sessão principal e aperta Enter.', 'In progress', None))
             if offer['kind'] == 'single':
                 actor = offer['executor']['binding']
                 rows.extend([('Executor: ' + actor['pane'] + ' · ' + actor['session'], None, None),
@@ -361,9 +388,12 @@ class TasksUI:
         elif self.mode == 'proposals':
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
+        elif not full_controls():
+            buttons = [('Review r', 'r'), ('Verificar v', 'v'), ('Acompanhar no Progress g', 'g'), ('Quit q', 'q')]
+            hint = 'Space: selecionar · Enter/▸: resumo · v: pedir verificação à sessão principal'
         else:
             buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review r', 'r'),
-                       ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q')]
+                       ('Start i', 'i'), ('Next n', 'n'), ('Quit q', 'q'), ('Acompanhar no Progress g', 'g')]
             hint = 'Space: select · Enter/▸: resumo · 0: novo agente · P: planejar · C: opções'
         packed, x, line = [], 0, 0
         for label, action in buttons:
@@ -508,6 +538,14 @@ class TasksUI:
             self.job.close()
             operation = self.clean.start(self.session, offer['policy'])
             self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
+        elif offer['kind'] == 'verify':
+            self.session.verify()
+            pane = self.session.binding.pane
+            for command in (['herdr', 'pane', 'send-text', pane, offer['prompt']], ['herdr', 'pane', 'send-keys', pane, 'enter']):
+                result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+                if result.returncode:
+                    raise RuntimeError('Envio ao painel ' + pane + ' falhou: ' + (result.stderr.strip() or 'erro do herdr'))
+            self.notice = f"Pedido de verificação enviado à sessão principal ({len(offer['ids'])} tarefa(s))"
         elif offer['kind'] in ('send', 'queue'):
             try:
                 self.session.dispatch(offer['snapshot'], offer['ids'], offer['kind'] == 'queue')
@@ -674,6 +712,27 @@ class TasksUI:
                 self.mode = 'tasks';self.open_when_ready = True
         elif key == 'q':
             return False
+        elif not full_controls() and key in DISABLED_KEYS:
+            return True
+        elif key == 'g':
+            self.require_selection()
+            group = long_run.save(self.snapshot, self.selected)
+            self.job.close()
+            self.job = ReviewJob()
+            self.last_auto_key = None
+            self.next_check = 0
+            self.result = None
+            self.proposal_selected.clear()
+            self.selected.clear()
+            self.notice = f'Long run salvo · {len(group)} tarefa(s) em Progress'
+        elif key == 'v':
+            self.require_selection()
+            if not self.selected:
+                raise RuntimeError('Selecione as tarefas com Space antes de pedir verificação')
+            self.session.verify()
+            self.pending = {'kind': 'verify', 'snapshot': self.snapshot, 'ids': set(self.selected),
+                            'prompt': verification_prompt(self.snapshot.selected(self.selected))}
+            self.mode, self.scroll = 'confirm', 0
         elif key == 'A':
             from .audit_ui import AuditUI
             self.audit = AuditUI(self.session)
