@@ -58,6 +58,24 @@ Os comandos do manifesto são argv e não passam por esse quoting de shell.
 | Windows | Dublês das fronteiras msvcrt, quote PowerShell, launcher `.cmd` e manifesto | Host Windows indisponível: instalação, curses e seleção real de pane não executadas |
 | macOS | Interface portátil e falha explícita de acesso a processo exercitadas com dublês | Host macOS indisponível: permissões reais de leitura de processos e fluxo humano não executados |
 
+O Vini aceitou nesta entrega a pendência de validação nativa em Windows/macOS.
+Os testes com dublês não constituem esse ensaio operacional.
+
+Validação da branch após incorporar a integração com a correção `da7c305`:
+
+- `env -u WATCHDOG_FULL_CONTROLS python3 -m unittest discover -s tests`:
+  691 testes, OK, 7 pulados (286,315 s).
+- `WATCHDOG_FULL_CONTROLS=1 python3 -m unittest discover -s tests`:
+  691 testes, OK, 7 pulados (288,001 s).
+- Os 17 testes focados estão em `tests/test_portable_relink.py` e
+  `tests/test_platform_compat.py`, com referências às linhas da spec.
+
+As primeiras rodadas expuseram uma intermitência em um teste de fila: o patch
+global de `time.sleep` também atingia a espera interna de subprocessos. O líder
+corrigiu o isolamento do relógio em `da7c305`; os resultados acima incluem essa
+correção. A implementação de entrega da fila recebeu apenas o import portátil
+de locking nesta frente.
+
 Fontes oficiais consultadas em 25/11/2026:
 
 - [Herdr plugins](https://herdr.dev/tui/docs/plugins/): comandos argv,
