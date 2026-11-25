@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
-- [ ] T11 (#12) Seção AGENTES no Progress
-  ID: 8d30059f-5d67-4f25-81ed-c09fd01c5eb3
-  Resumo:
-    sempre visível, sem botão: líder e executores com estado, contexto ao vivo e checagem inicial; tarefas que esperam ou dependem do Vini.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #12 (docs/issues/)
-  Execução:
-    Bloqueado por: T8 (#9).
-  Aceite:
-    O líder e cada executor registrado aparecem com pane, estado e contexto ao vivo. A checagem inicial aparece na linha do executor. Tarefas que esperam outra ou dependem do Vini aparecem sem pane. A seção não tem botão e não envia nada.
 - [ ] T12 (#13) Code review em duas abas
   ID: fdc62343-7c2f-4cfc-99de-347a7cf816e5
   Resumo:
@@ -216,6 +206,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T11 (#12) Seção AGENTES no Progress
+  ID: 8d30059f-5d67-4f25-81ed-c09fd01c5eb3
+  Resumo:
+    sempre visível, sem botão: líder e executores com estado, contexto ao vivo e checagem inicial; tarefas que esperam ou dependem do Vini.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #12 (docs/issues/)
+  Execução:
+    Bloqueado por: T8 (#9).
+  Aceite:
+    O líder e cada executor registrado aparecem com pane, estado e contexto ao vivo. A checagem inicial aparece na linha do executor. Tarefas que esperam outra ou dependem do Vini aparecem sem pane. A seção não tem botão e não envia nada.
 - [x] 2026-11-25 T10 (#11) Vínculo que acompanha o líder
   ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
   Resumo:
