@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 docs/evidence/
 .worktrees/
+.watchdog/
 vim-motions-mix/
 *.before-transfer-*
 .watchdog-todo-*
