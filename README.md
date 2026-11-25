@@ -40,10 +40,10 @@ Files. Watchdog reads that binding and never edits Left Undone's state.
 
 ## Painel de acompanhamento (branch feat/tasks-somente-leitura)
 
-Por padrão, **WATCHDOG / TASKS** mostra **[Review r]**, **[Verificar v]**, **[Acompanhar no Progress g]** e **[Quit q]**.
+Por padrão, **WATCHDOG / TASKS** mostra **[Review Curator r]**, **[Verify Leader v]**, **[Acompanhar no Progress g]** e **[Quit q]**.
 Space seleciona tarefas, Enter/▸ abre o Resumo e o curador continua revisando cada resposta.
-**v** monta um pedido de verificação das tarefas selecionadas, mostra a prévia com o painel e a
-sessão principal anotados e, com **y**, digita o pedido no prompt dessa sessão via
+**Verify Leader (v)** monta um pedido de verificação das tarefas selecionadas, mostra a prévia com o painel e a
+sessão do líder anotados e, com **y**, digita o pedido no prompt dessa sessão via
 `herdr pane send-text` + Enter, depois de reconfirmar a identidade da sessão. Esc cancela sem enviar.
 Selecione as tarefas com Space e use **g** para guardar o grupo do long run neste projeto.
 O Progress abre com a barra do projeto. Com um grupo salvo, a barra do long run ocupa o topo e a barra geral fica logo abaixo. Um novo grupo salvo substitui o anterior.
@@ -87,7 +87,7 @@ requires reviewing the file again. Atomic exchange requires Linux renameat2.
 
 The curator uses Codex gpt-6-luna at low effort, independent of the watched AI.
 It checks each new completed reply against open TODO tasks and completed titles.
-`r` opens suggestions, or requests a fresh review. It proposes Done, Blocked
+**Review Curator (r)** opens suggestions, or requests a fresh curator review. It proposes Done, Blocked
 with a reason, and explicit new tasks. Every proposal displays a supporting
 quote. Apply only the proposals you select, with a separate confirmation.
 

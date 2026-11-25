@@ -49,19 +49,39 @@ class TasksMonitorTests(unittest.TestCase):
         return terminal
 
     def test_monitor_buttons_are_shown(self):
+        # Spec #1, lines 127–128 and 168: distinct curator/leader names (point A).
         terminal = self.unbound()
-        self.assertTrue(terminal.wait_for('Verificar v'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Verify Leader v'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('v: Verify Leader'), terminal.output.decode(errors='replace'))
         screen = terminal.output.decode(errors='replace')
-        self.assertIn('Review r', screen)
+        self.assertIn('Review Curator r', screen)
+        self.assertIn('r: Review Curator', screen)
+        self.assertIn('v: Verify Leader', screen)
         self.assertIn('Acompanhar no Progress g', screen)
         self.assertIn('Quit q', screen)
         for gone in ('Agents m', 'Send s', 'Done d', 'Start i', 'Next n', 'Orchestrate o', 'Despachar p',
                      'Clean sessions c', 'Auditoria A'):
             self.assertNotIn(gone, screen)
 
+    def test_full_controls_keeps_named_curator_and_leader_actions(self):
+        # Spec #1, lines 127–128 and 168; T2 acceptance: both control modes.
+        self.env['WATCHDOG_FULL_CONTROLS'] = '1'
+        terminal = self.bound()
+        self.assertTrue(terminal.wait_for('Verify Leader v'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('v: Verify Leader'), terminal.output.decode(errors='replace'))
+        screen = terminal.output.decode(errors='replace')
+        self.assertIn('Review Curator r', screen)
+        self.assertIn('r: Review Curator', screen)
+        self.assertIn('v: Verify Leader', screen)
+        os.write(terminal.master, b' v')
+        self.assertTrue(terminal.wait_for('Verify Leader · pedir verificação ao líder'),
+                        terminal.output.decode(errors='replace'))
+        self.assertFalse(self.log.exists())
+        self.assertEqual((self.repo / 'TODO.md').read_text(), self.original)
+
     def test_disabled_keys_do_nothing_and_selection_still_works(self):
         terminal = self.unbound()
-        self.assertTrue(terminal.wait_for('Verificar v'))
+        self.assertTrue(terminal.wait_for('Verify Leader v'))
         os.write(terminal.master, b' ')
         self.assertTrue(terminal.wait_for('1 task(s) selected'), terminal.output.decode(errors='replace'))
         os.write(terminal.master, b'dsinomcpPA0C')
@@ -84,16 +104,17 @@ class TasksMonitorTests(unittest.TestCase):
 
     def test_verify_requires_selection(self):
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verificar v'))
+        self.assertTrue(terminal.wait_for('Verify Leader v'))
         os.write(terminal.master, b'v')
         self.assertTrue(terminal.wait_for('Selection is empty'), terminal.output.decode(errors='replace'))
         self.assertFalse(self.log.exists())
 
     def test_verify_previews_then_types_prompt_into_main_session_pane(self):
+        # Spec #1, lines 128 and 168: Verify Leader preview, with fake Herdr.
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verificar v'))
+        self.assertTrue(terminal.wait_for('Verify Leader v'))
         os.write(terminal.master, b' v')
-        self.assertTrue(terminal.wait_for('Pedir verificação à sessão principal'), terminal.output.decode(errors='replace'))
+        self.assertTrue(terminal.wait_for('Verify Leader · pedir verificação ao líder'), terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('project:p4'))
         self.assertFalse(self.log.exists(), 'nothing is sent before confirmation')
         os.write(terminal.master, b'y')
@@ -106,9 +127,9 @@ class TasksMonitorTests(unittest.TestCase):
 
     def test_verify_cancel_sends_nothing(self):
         terminal = self.bound()
-        self.assertTrue(terminal.wait_for('Verificar v'))
+        self.assertTrue(terminal.wait_for('Verify Leader v'))
         os.write(terminal.master, b' v')
-        self.assertTrue(terminal.wait_for('Pedir verificação à sessão principal'))
+        self.assertTrue(terminal.wait_for('Verify Leader · pedir verificação ao líder'))
         os.write(terminal.master, b'\x1b')
         self.assertTrue(terminal.wait_for('Cancelled'))
         self.assertFalse(self.log.exists())
