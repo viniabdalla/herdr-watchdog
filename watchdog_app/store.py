@@ -146,37 +146,7 @@ class Store:
             if state.get('binding') != asdict(old) or state.get('repo') != str(repo.resolve()):
                 raise RuntimeError('Source panel ownership changed')
             if state.get('ownership') in ('released', 'transferring'):
-                if state.get('outgoing_transfer_operation') != operation_id:
-                    raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
-                if state['ownership'] == 'released':
-                    value = json.loads(target.read_text())
-                    if (state.get('successor_binding_file') != str(target) or
-                            value.get('binding') != asdict(new) or value.get('ownership') != 'active' or
-                            value.get('repo') != str(repo.resolve()) or not correlated(state, value)):
-                        raise RuntimeError('Successor panel transfer correlation changed')
-                    return str(target)
-                successor = state.get('pending_successor')
-                if not successor or successor.get('binding') != asdict(new) or not correlated(state, successor):
-                    raise RuntimeError('Pending panel transfer correlation changed')
-                api.checked({'pane_id':new.pane, 'terminal_id':new.terminal})
-                if target.exists():
-                    current = json.loads(target.read_text())
-                    if (current.get('binding') == asdict(new) and current.get('ownership') == 'active'
-                            and current.get('repo') == str(repo.resolve()) and correlated(state, current)):
-                        pass  # The successor may already have progressed; never reapply its snapshot.
-                    elif current == state.get('pending_target'):
-                        self.save(new, successor)
-                    else:
-                        raise RuntimeError('Destination ownership changed during transfer')
-                elif state.get('pending_target') is not None:
-                    raise RuntimeError('Destination ownership changed during transfer')
-                else:
-                    self.save(new, successor)
-                state.pop('pending_target', None)
-                state.pop('pending_successor')
-                state.update(ownership='released', successor_binding_file=str(target))
-                atomic(source_file, state)
-                return str(target)
+                raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
             if state.get('operation') not in (None, 'ready'):
                 raise RuntimeError('Panel layout operation is unfinished; transfer was withheld')
             retired = None
@@ -217,13 +187,10 @@ class Store:
             # transfer_operation/predecessor_binding describe the immutable
             # incoming hop. A later transfer has a separate outgoing seal so
             # panels launched with any earlier binding can still verify it.
-            state.update(ownership='transferring', outgoing_transfer_operation=operation_id,
-                         pending_successor=successor, pending_target=retired)
+            state.update(ownership='transferring', outgoing_transfer_operation=operation_id)
             state['panes'] = {k:v for k,v in state['panes'].items() if k=='left_undone'}
             atomic(source_file, state)
             self.save(new, successor)
-            state.pop('pending_successor')
-            state.pop('pending_target', None)
             state.update(ownership='released', successor_binding_file=str(target))
             atomic(source_file, state)
         return str(target)
