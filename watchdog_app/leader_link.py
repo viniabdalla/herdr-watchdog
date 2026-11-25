@@ -27,6 +27,8 @@ def choices(session):
 def connect(session, candidate):
     """Explicit choice may change panes; revalidate the entire identity at selection."""
     from .actions import Session
+    from .relink import guard
+    guard(session.file)
     if candidate not in choices(session):
         raise RuntimeError('O líder mudou; confira novamente a lista de Religar')
     with session.routing():
