@@ -102,13 +102,102 @@ texto e Enter. O envio pelo Herdr continua sendo texto seguido de Enter.
 
 ## Revisão e saída da máquina
 
-Quando o Vini pedir code review, abra a aba `Code Review` com dois revisores
-novos, Standards e Spec, sobre o mesmo intervalo da base anotada à integração.
-Cada revisor só lê, salva relatório e avisa. Espere ambos antes de apresentar os
-relatórios lado a lado, com contagem e pior achado. Correção só após o ok do Vini,
-num executor novo e numa aba nova. Depois seguem `/retro` e o teste do Vini.
-O Vini decide merge danger e push; integrar uma tarefa localmente não autoriza
-levar a branch para fora da máquina.
+Quando o Vini pedir code review, o botão preenche `/code-review BASE..INTEGRACAO`
+no Claude ou `$code-review BASE..INTEGRACAO` no Codex, usando a base e a branch
+salvas no primeiro despacho do grupo. A prévia permite editar ambos. Grupo
+antigo ou ausente sem esses dados mostra um aviso: preencha o intervalo; não
+invente a base a partir do HEAD atual.
+
+O líder resolve as duas pontas para hashes uma vez antes de abrir a revisão.
+Abra pelo kit dois revisores novos e visíveis, Standards e Spec, numa mesma aba
+`Code Review`, cada um na sua worktree, sobre esses mesmos hashes. Use tickets
+únicos por rodada e a mesma leva nos dois comandos. Por exemplo, substituindo
+os valores BASE_SHA e FIM_SHA pelos hashes já resolvidos e os demais dados
+pelos do contrato do líder:
+
+```bash
+/caminho/do/watchdog kit abrir --repo /projeto --grupo ID-DO-GRUPO --ticket R1-Standards --lider w11:p8 --workspace w11 --leva 'Code Review' --aceite docs/issues/tarefa.md --spec docs/issues/spec.md --revisor Standards --base BASE_SHA --fim FIM_SHA
+/caminho/do/watchdog kit abrir --repo /projeto --grupo ID-DO-GRUPO --ticket R1-Spec --lider w11:p8 --workspace w11 --leva 'Code Review' --aceite docs/issues/tarefa.md --spec docs/issues/spec.md --revisor Spec --base BASE_SHA --fim FIM_SHA
+```
+
+O kit usa os modelos abaixo em vez do rodapé de executor. Salva contratos e
+reserva caminhos distintos para os relatórios em
+`/projeto/.watchdog/run/<data>/`, ignorada pelo git. Cada revisor recebe os
+caminhos absolutos, o intervalo fixo e seu comando de aviso com trava.
+Modelo e esforço continuam vindo do Dispatch. O líder fornece os ponteiros de
+aceite de toda a rodada; se forem vários, use um índice na pasta de execução.
+
+Espere os dois avisos e confira os dois relatórios salvos antes de apresentar
+qualquer conclusão. Mostre uma tabela lado a lado, com eixo, número de achados,
+pior severidade e link para o relatório completo; liste achados com arquivo e
+linha, evidência e consequência. Se um revisor bloquear ou falhar, informe isso
+e aguarde sua conclusão, sem apresentar revisão parcial como completa.
+
+Após apresentar, aguarde o ok explícito do Vini para corrigir. Só então abra
+um único executor novo pelo kit, com ticket e leva novos, numa aba nova só dele,
+e entregue a lista de correções aprovada e os dois relatórios. Não reutilize os
+revisores para implementar. Confira os aceites e testes antes de integrar.
+Depois seguem `/retro` (ou `$retro` no Codex) e o teste do Vini. O Vini decide
+merge danger e push; integrar localmente não autoriza sair da máquina.
+
+### Contrato-modelo Standards
+
+Você é o revisor Standards. Faça uma revisão somente leitura do intervalo fixo
+informado no cabeçalho, na worktree fornecida. Leia AGENTS.md, GLOSSARY.md e
+as normas documentadas apontadas pelo projeto, incluindo ADRs aplicáveis.
+Consulte `git diff BASE..FIM` e o contexto dos arquivos alterados; use os hashes
+do contrato, mesmo que a integração avance durante a revisão.
+
+Foco: violações dos padrões documentados do repositório. Pistas: instruções
+locais dos diretórios alterados, convenções explícitas e invariantes descritas
+nas normas. Cite a regra e sua fonte para cada achado. Preferências pessoais e
+problemas anteriores fora do intervalo ficam excluídos. A conformidade com
+critérios funcionais pertence ao eixo Spec.
+
+Escreva somente o relatório no caminho absoluto reservado no cabeçalho;
+preserve código, índices git, TODO.md, HANDOFF*, issues, Left Undone e serviços
+ou painéis em execução. Não faça correções, commits, merges, push ou envios
+externos. Se faltar uma fonte, registre a limitação ou envie BLOQUEIO ao líder
+pelo comando do contrato. Não abra outros agentes.
+
+Relatório curto: eixo e intervalo; fontes lidas; contagem por severidade e pior
+achado; para cada achado, arquivo:linha, regra, evidência e consequência.
+Declare explicitamente zero achados quando for o caso e liste limitações.
+Depois de salvar o relatório, envie um único aviso ao líder com seu caminho,
+contagem e pior severidade, usando o comando fornecido no contrato.
+
+### Contrato-modelo Spec
+
+Você é o revisor Spec. Faça uma revisão somente leitura do intervalo fixo
+informado no cabeçalho, na worktree fornecida. Leia AGENTS.md, GLOSSARY.md,
+os ponteiros de aceite e a spec/plano indicados no contrato para toda a rodada.
+Consulte `git diff BASE..FIM`, o contexto e os testes relevantes, usando os hashes
+do contrato mesmo que a integração avance durante a revisão.
+
+Foco: atendimento aos critérios de aceite e comportamento observável exigido
+pela spec, inclusive suas costuras entre tarefas. Pistas: cenários de usuário,
+fronteiras, erros, pontos de teste A e B aplicáveis e referências de linha da
+spec nos testes que fixam comportamento. Relacione cada lacuna à fonte e linha
+que exige o comportamento. Hipóteses sem evidência e funcionalidades fora do
+escopo ficam excluídas. Estilo e padrões documentados pertencem a Standards.
+
+Escreva somente o relatório no caminho absoluto reservado no cabeçalho;
+preserve código, índices git, TODO.md, HANDOFF*, issues, Left Undone e serviços
+ou painéis em execução. Não faça correções, commits, merges, push ou envios
+externos. Verificações usam apenas dublês e recursos isolados. Se faltar uma
+fonte, registre a limitação ou envie BLOQUEIO ao líder pelo comando do contrato.
+Não abra outros agentes.
+
+Relatório curto: eixo e intervalo; fontes lidas; contagem por severidade e pior
+achado; para cada achado, arquivo:linha, requisito com linha, evidência e
+consequência. Declare explicitamente zero achados quando for o caso e liste
+limitações. Depois de salvar, envie um único aviso ao líder com caminho,
+contagem e pior severidade, usando o comando fornecido no contrato.
+
+### Fim dos contratos de revisão
+
+Os modelos acima se aplicam apenas aos revisores; executores de correção usam
+o rodapé comum e os testes do Dispatch.
 
 ## Configuração do projeto
 

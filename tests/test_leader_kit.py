@@ -102,6 +102,44 @@ p.write_text(json.dumps(v));print(json.dumps(v))
     def records(self):
         return json.loads(self.cli('listar','--grupo','group-1').stdout)['executors']
 
+    def test_reviewers_share_tab_and_pinned_interval_with_read_only_contracts(self):
+        # Spec #1 L109-115,145,172: kit opens two visible readers, not implementers.
+        head = self.git('rev-parse', 'HEAD')
+        self.git('update-ref', 'refs/heads/integration', head)
+        readers = [json.loads(self.open('Review'+axis, '--leva', 'Code Review',
+                      '--revisor', axis, '--base', self.base, '--fim', head).stdout)
+                   for axis in ('Standards', 'Spec')]
+        self.assertEqual(readers[0]['tab'], readers[1]['tab'])
+        self.assertNotEqual(readers[0]['pane'], readers[1]['pane'])
+        calls = [json.loads(line) for line in (self.root/'herdr.jsonl').read_text().splitlines()]
+        create = next(call for call in calls if call[:2] == ['tab', 'create'])
+        self.assertEqual(create[create.index('--label')+1], 'Code Review')
+        prompts = [call[3] for call in calls if call[:2] == ['agent', 'prompt']]
+        for reader, prompt in zip(readers, prompts):
+            self.assertEqual(reader['review_base'], self.base)
+            self.assertEqual(reader['review_head'], head)
+            self.assertEqual(self.git('-C', reader['worktree'], 'rev-parse', 'HEAD'), head)
+            report = Path(reader['report'])
+            self.assertTrue(report.is_relative_to(self.repo/'.watchdog/run'))
+            self.assertIn(str(report), prompt)
+            self.assertIn(self.base+'..'+head, prompt)
+            self.assertIn('somente leitura', prompt)
+            self.assertNotIn('Antes do último commit', prompt)
+            self.assertNotIn('git merge ', prompt)
+            self.assertIn('watchdog aviso', prompt)
+        self.assertIn('padrões documentados', prompts[0])
+        self.assertIn('critérios de aceite', prompts[1])
+        self.assertNotEqual(readers[0]['report'], readers[1]['report'])
+
+    def test_review_requires_valid_interval_before_creating_resources(self):
+        # Spec #1 L109: reviewers cannot silently review different or missing endpoints.
+        for extra in (('--revisor','Spec'),
+                      ('--revisor','Standards','--base','missing','--fim','integration'),
+                      ('--base',self.base,'--fim','integration')):
+            self.open('Review', *extra, ok=False)
+        self.assertFalse((self.root/'herdr.jsonl').exists())
+        self.assertFalse((self.repo/'.worktrees/Review').exists())
+
     def test_open_isolated_worktree_contract_and_confirmed_identity(self):
         # L72-80, L136, L173: wrong base, missing identity/contract or wrong model must fail.
         before=time.time()
