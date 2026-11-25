@@ -1,7 +1,7 @@
 ---
 number: 5
 title: "T4 — Prévia que classifica a seleção"
-state: open
+state: closed
 labels: [ready-for-agent]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/5
 parent: 1
@@ -23,3 +23,11 @@ A prévia do despacho lê os bloqueios do TODO e mostra cada tarefa como livre, 
 - [ ] Sem nenhuma tarefa livre, nada é enviado até o Vini escolher incluir, cancelar ou mandar assim mesmo.
 - [ ] Incluir a dependência acrescenta a tarefa bloqueadora à seleção.
 - [ ] Projeto sem seção Dispatch ou sem import no CLAUDE.md mostra um aviso, sem impedir o envio.
+
+## Comentários
+
+### 2026-11-25 · viniabdalla
+
+A prévia classifica dependências usando o TODO atual. Incluir uma dependência volta à prévia, e a seleção totalmente bloqueada exige uma escolha explícita. Avisos de configuração permitem prosseguir.
+
+Commit do executor `a54f20e`, integrado em `cf2d425`. A suíte executou 558 testes em cada modo de controles, com 7 ignorados e nenhuma falha.

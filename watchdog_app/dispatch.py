@@ -4,6 +4,7 @@ import re
 import subprocess
 
 from . import long_run
+from .dispatch_preview import classify, warnings, blocked
 from .herdr import Herdr
 from .store import atomic
 from .todo import locked
@@ -66,7 +67,8 @@ def preview(session, snapshot, ids):
                                            or 'nenhuma tarefa nova.')
     return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
-            'previous': previous, 'group': state, 'new_base': new_base}
+            'previous': previous, 'group': state, 'new_base': new_base,
+            'classification': classify(snapshot, set(ids)), 'warnings': warnings(snapshot.repo)}
 
 
 def deliver(session, offer):
@@ -74,6 +76,8 @@ def deliver(session, offer):
     with session.routing(), locked(snapshot.repo):
         snapshot.assert_current()
         snapshot.selected(offer['ids'])
+        if blocked(offer) and not offer.get('allow_blocked'):
+            raise RuntimeError('Nenhuma tarefa livre; escolha incluir, cancelar ou mandar assim mesmo')
         session.verify()
         if session.binding != offer['binding'] or session.binding.pane != offer['pane']:
             raise RuntimeError('O líder mudou; confira uma nova prévia antes de despachar')
