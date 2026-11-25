@@ -34,7 +34,10 @@ class ProgressNoticeTests(unittest.TestCase):
                 return error.code
 
     def text(self):
-        return '\n'.join(t for t,_,_ in Agents(self.repo).poll())
+        # Spec #21 L32: the final summary is a collapsed line; open it to read the evidence.
+        monitor=Agents(self.repo)
+        monitor.toggled['meta']=False
+        return '\n'.join(t for t,_,_ in monitor.poll())
 
     def test_question_persists_notifies_once_and_explicit_answer_clears_it(self):
         # Spec #1 L85,96,166: only an explicit escalation asks the user.

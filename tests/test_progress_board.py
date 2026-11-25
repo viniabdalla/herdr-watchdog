@@ -75,10 +75,10 @@ class BoardTests(test_progress_agents.ProgressAgentsTests):
         monitor, source = self.items()
         text = [t for t, _, _ in source]
         header = next(i for i, t in enumerate(text) if 'tC · Religar Codex' in t)
-        self.assertTrue(text[header].startswith('▾'))
+        self.assertTrue(text[header].startswith('▼'))
         self.assertTrue(text[header + 1].startswith('Religar-18 · w:pW · Trabalhando'))
         others = next(t for t in text if 'Outros' in t)
-        self.assertTrue(others.startswith('▸'))
+        self.assertTrue(others.startswith('▶'))
         self.assertFalse(any(t.startswith('X1 ·') for t in text))
         monitor.toggle('outros')
         self.assertTrue(any(t.startswith('X1 ·') for t, _, _ in monitor.poll()))
@@ -89,7 +89,7 @@ class BoardTests(test_progress_agents.ProgressAgentsTests):
         self.add_worker('R2', 'w:pS', 'tS', tab='w:t8', leva='Code Review', status='idle')
         monitor, source = self.items()
         header = next(t for t, _, _ in source if 't8 · Code Review' in t)
-        self.assertTrue(header.startswith('▸'))
+        self.assertTrue(header.startswith('▶'))
         self.assertIn('2 ociosos', header)
         self.assertFalse(any(t.startswith('R1 ·') for t, _, _ in source))
         item = next(i for t, _, i in source if 't8 · Code Review' in t)
@@ -134,7 +134,7 @@ class BoardTests(test_progress_agents.ProgressAgentsTests):
         self.add_worker('R1', 'w:pR', 'tR', status='idle')
         self.extra[-1]['ready'] = {'at': time.time()}
         monitor, source = self.items()
-        self.assertIn('2 feitos', self.find(source, '▸ t2')[0])
+        self.assertIn('2 feitos', self.find(source, '▶ t2')[0])
         monitor.toggle('w:t2')
         source = monitor.poll()
         self.assertEqual(self.find(source, 'T1 ·')[2].state, 'done')
@@ -229,10 +229,14 @@ class BoardTests(test_progress_agents.ProgressAgentsTests):
         state['notices'] = {'ended': {'title': 'Meta encerrada · 1 de 3', 'body': 'Concluída T1 · evidência: ok',
                                       'completed': [], 'blocked': []}}
         atomic(long_run.path_for(self.repo), state)
-        text = [t for t, _, _ in self.items()[1]]
-        banner = text.index('Meta encerrada · 1 de 3')
+        monitor, source = self.items()
+        text = [t for t, _, _ in source]
+        banner = text.index('▶ Meta encerrada · 1 de 3')
         self.assertLess(next(i for i, t in enumerate(text) if t.startswith('Líder ·')), banner)
-        self.assertEqual(text[banner + 1], 'Concluída T1 · evidência: ok')
+        self.assertNotIn('Concluída T1 · evidência: ok', '\n'.join(text))
+        monitor.toggle(source[banner][2].group)
+        text = [t for t, _, _ in monitor.poll()]
+        self.assertEqual(text[text.index('▼ Meta encerrada · 1 de 3') + 1].strip(), 'Concluída T1 · evidência: ok')
 
 
     def test_pty_clicks_go_select_and_close_with_y(self):

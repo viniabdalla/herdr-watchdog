@@ -144,6 +144,7 @@ class Agents:
         if blocked or queued:
             result.append(('BLOQUEADOS', 'blocked', None))
             result.extend(blocked + queued)
+            result.append(('', None, None))
 
         if leader:
             state, usage = describe({'binding': leader}, live.get(leader['pane']), self.cache)
@@ -158,6 +159,8 @@ class Agents:
             segments = [('Líder · — · identidade indisponível', None)]
             result.append((segments[0][0], 'unavailable', Item('agent', 'idle', segments, leader=True)))
 
+        if order:
+            result.append(('', None, None))
         for key in sorted(order, key=lambda k: k == OTHERS):
             lines = groups[key]['lines']
             states = [line[2].state for line, _ in lines]
@@ -171,7 +174,7 @@ class Agents:
                           plural(states.count('idle'), 'ocioso', 'ociosos') if 'idle' in states else '',
                           plural(states.count('done'), 'feito', 'feitos') if 'done' in states else '']
                 label += ' · ' + ' · '.join(c for c in counts if c) if key != OTHERS else ''
-            text = ('▸ ' if collapsed else '▾ ') + label
+            text = ('▶ ' if collapsed else '▼ ') + label
             tone = ('dot_working' if 'working' in states else 'dot_done' if 'done' in states else 'dot_idle')
             result.append((text, None, Item('header', segments=[(text, tone)], group=key)))
             if not collapsed:
@@ -180,7 +183,16 @@ class Agents:
                     if detail:
                         result.append(detail)
 
-        return result + notice_rows(group, details=True, ended_banner=False) + [('', None, None)]
+        ended = (group.get('notices') or {}).get('ended')
+        if ended:
+            # Spec #21 L32: the leader's final summary is history, one collapsible line.
+            collapsed = self.toggled.get('meta', True)
+            self.collapsed['meta'] = collapsed
+            text = ('▶ ' if collapsed else '▼ ') + ended['title']
+            result.extend([('', None, None), (text, None, Item('header', segments=[(text, 'dot_done')], group='meta'))])
+            if not collapsed:
+                result.extend(('  ' + line, None, None) for line in ended['body'].splitlines())
+        return result + [('', None, None)]
 
     def worker(self, record, live, candidates, by_ticket):
         pane = live.get(record.get('pane'))

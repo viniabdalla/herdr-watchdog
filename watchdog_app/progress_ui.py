@@ -57,6 +57,8 @@ def session_rows(view, width=80):
             'catching_up':('Catching up','review'), 'unsupported':('Unsupported','unavailable'),
             'unavailable':('Unavailable','unavailable')}
     label,color=labels[view.state]
+    if view.total is None and view.state!='working':
+        return []  # spec #21 L43: no checklist, nothing to show in a short panel
     result=[('SESSION · '+label,color,None)]
     if view.total is not None:
         size=max(4,min(28,width-20))
@@ -76,9 +78,7 @@ def run_rows(repo, store):
         status=run_status(run)
         if status['finished']:
             finished+=1
-            if finished<=3:
-                result.append(('RUN '+run['id'][:8]+' · '+status['label']+(' · '+status['detail'] if status['detail'] else ''),status['color'],run))
-            continue
+            continue  # spec #21 L43: finished runs stay in the store, not on the short panel
         result.append(('RUN '+run['id'][:8]+' · '+status['label'].upper()+' · '+status['detail'],status['color'],run))
         from .mission_single import is_single
         if is_single(run):
@@ -118,9 +118,6 @@ def run_rows(repo, store):
         result.append((('Enter: abrir painel do executor · x: fechar execução' if run.get('resources', {}).get('worker') else 'x: fechar execução') if is_single(run) else
                        ('Enter: open execution tab · x: close run' if run.get('tab') else 'x: close run'),None,run))
         result.append(('',None,None))
-    if finished>3:result.append((f'{finished-3} older finished run(s) hidden',None,None))
-    if finished:result.append(('',None,None))
-    if not any(run and not run_status(run)['finished'] for _,_,run in result):result.extend([('No active runs. Select tasks and choose Orchestrate.',None,None),('',None,None)])
     return result
 
 
@@ -175,8 +172,7 @@ def rows(repo, store=None, *, progress=None, width=80, agents=None):
         result.extend(run_rows(repo, store))
     except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
         result.append(('Cannot read runs: ' + str(error), 'blocked', None))
-    result.extend(history_rows)
-    return result
+    return result  # Project history stays in the TODO; spec #21 L43 keeps Progress short.
 
 
 def panel(screen, repo, binding_file=None):

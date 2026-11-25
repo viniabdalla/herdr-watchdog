@@ -86,14 +86,15 @@ class ProgressTests(unittest.TestCase):
         terminal=Terminal(['python3','-B','-c',BOOT,str(self.repo),str(self.file),str(SCRIPT.parents[1]/'tests')],
             dict(os.environ,TERM='xterm-256color',WATCHDOG_STATE_DIR=str(self.repo/'state')))
         self.addCleanup(terminal.close)
-        self.assertTrue(terminal.wait_for('No checklist'),terminal.output.decode(errors='replace'))
+        # Spec #21 L43: without a checklist the SESSION section is hidden.
+        self.assertTrue(terminal.wait_for('AGENTES'),terminal.output.decode(errors='replace'))
+        self.assertNotIn(b'No checklist',terminal.output)
         self.append(codex_call(),codex_result())
         self.assertTrue(terminal.wait_for('Inspect fixtures'),terminal.output.decode(errors='replace'))
         self.assertTrue(terminal.wait_for('0/2'),terminal.output.decode(errors='replace'))
         self.assertIn(b'93m',terminal.output)
         self.append({'type':'event_msg','payload':{'type':'task_started','turn_id':'new-turn'}})
-        terminal.output=b''
-        self.assertTrue(terminal.wait_for('No checklist'),terminal.output.decode(errors='replace'))
+        self.assertEqual(self.progress.poll().state,'no_checklist')  # new turn hides the old plan
         os.write(terminal.master,b'q');self.assertEqual(terminal.process.wait(timeout=3),0)
         self.assertEqual((self.repo/'TODO.md').read_text(),'## Next\n- [ ] Project task\n## Done\n- [x] Old task\n')
 

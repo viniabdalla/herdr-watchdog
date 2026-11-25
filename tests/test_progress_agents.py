@@ -117,10 +117,13 @@ class ProgressAgentsTests(unittest.TestCase):
 
     def test_agents_precede_session_and_runs_even_without_binding(self):
         # Spec #1 L94,141: always present under group and project bars, no button.
-        source=rows(self.repo,NS(list=lambda repo:[]),progress=NS(poll=lambda:NS(state='unavailable',total=None,detail='offline')))
+        # Spec #21 L43: SESSION only appears with a checklist.
+        source=rows(self.repo,NS(list=lambda repo:[]),progress=NS(poll=lambda:NS(state='working',total=2,done=0,current='Passo',detail=None)))
         text=[t for t,_,_ in source]
         self.assertIn('AGENTES',text)
         self.assertLess(text.index('AGENTES'),next(i for i,t in enumerate(text) if t.startswith('SESSION')))
+        source=rows(self.repo,NS(list=lambda repo:[]),progress=NS(poll=lambda:NS(state='unavailable',total=None,detail='offline')))
+        self.assertFalse(any(t.startswith('SESSION') or t.startswith('No active runs') for t,_,_ in source))
 
     def test_group_base_and_initial_check_schedule(self):
         # Spec #1 L95-97,139: checks at 2, 3 and 4 minutes. Spec #21 L35 replaces
@@ -204,7 +207,7 @@ finally:f.doCleanups()
         (self.repo/'TODO.md').write_text(text)
         self.live[1]['agent_status']='idle'
         monitor=self.monitor()
-        self.assertIn('1 feito',next(t for t,_,_ in monitor.poll() if t.startswith('▸')))
+        self.assertIn('1 feito',next(t for t,_,_ in monitor.poll() if t.startswith('▶')))
         monitor.toggle('w:t2' if self.record.get('tab') else '—')
         source=monitor.poll()
         worker=self.agent(source,'T1 ·')
