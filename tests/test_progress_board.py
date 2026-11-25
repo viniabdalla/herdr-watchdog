@@ -394,6 +394,24 @@ finally: f.doCleanups()
         os.write(terminal.master, b'q')
         self.assertEqual(terminal.process.wait(timeout=8), 0)
 
+    def test_identity_checks_are_reused_for_thirty_seconds(self):
+        # Spec #21 L43: a refresh every few seconds must stay light; Herdr still shows replacements.
+        from watchdog_app import bindings
+        calls = []
+        bindings.engine().verify = lambda binding: calls.append(binding.session)
+        clock = [1000.0]
+        with patch('watchdog_app.agents_ui.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('watchdog_app.progress_agents.time.monotonic', side_effect=lambda: clock[0]):
+            monitor = self.monitor()
+            monitor.poll(); monitor.poll()
+            self.assertEqual(calls.count('worker'), 1)
+            self.live[1]['agent_session'] = {'kind': 'id', 'value': 'replacement'}
+            self.assertNotIn('12%', self.find(monitor.poll(), 'T1 ·')[0])
+            self.live[1]['agent_session'] = {'kind': 'id', 'value': 'worker'}
+            clock[0] += 31
+            monitor.poll()
+            self.assertEqual(calls.count('worker'), 2)
+
 # Reuse the fixture only; the inherited Spec #1 tests run in their own module.
 for _name in [n for n in dir(test_progress_agents.ProgressAgentsTests) if n.startswith('test_')]:
     setattr(BoardTests, _name, None)

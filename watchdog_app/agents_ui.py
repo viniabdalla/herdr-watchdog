@@ -48,7 +48,8 @@ def agent_rows(session, runs):
     return rows
 
 
-def describe(row, pane, cache, window=None, *, on_verified=None):
+def describe(row, pane, cache, window=None, *, on_verified=None, trusted=None, ttl=30):
+    """trusted: {identity: last verification}; Progress reuses a check for ttl seconds."""
     actor = row['binding']
     if not pane or pane.get('terminal_id') != actor['terminal']:
         return 'Fechado', None
@@ -61,7 +62,12 @@ def describe(row, pane, cache, window=None, *, on_verified=None):
     try:
         runtime = bindings.engine()
         binding = runtime.Binding(**actor)
-        runtime.verify(binding)
+        key = (actor['pane'], actor['terminal'], actor['kind'], actor['session'], actor.get('history'))
+        now = time.monotonic()
+        if trusted is None or now - trusted.get(key, float('-inf')) >= ttl:
+            runtime.verify(binding)
+            if trusted is not None:
+                trusted[key] = now
         if on_verified: on_verified(binding)
         path = Path(actor['history'])
         if actor['kind'] == 'codex':

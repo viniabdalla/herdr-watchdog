@@ -81,6 +81,8 @@ class Agents:
         self.collapsed = {}
         self.sent = set()
         self.leader_pane = None
+        self.trusted = {}
+        self.candidates = (float('-inf'), [])
 
     # -- reading -----------------------------------------------------------
     def poll(self):
@@ -113,7 +115,12 @@ class Agents:
                 leader = asdict(session.binding)
                 live = {p['pane_id']: p for p in Herdr().call('pane', 'list', '--workspace', leader['workspace'])['panes']}
                 if records:
-                    candidates, _ = bindings.engine().candidates()
+                    # Spec #21 L43: the process scan is the costliest read; reuse it briefly.
+                    taken, cached = self.candidates
+                    if time.monotonic() - taken >= 10:
+                        cached, _ = bindings.engine().candidates()
+                        self.candidates = (time.monotonic(), cached)
+                    candidates = cached
         except (OSError, RuntimeError, ValueError, KeyError, TypeError):
             live = {}  # Hide stale usage when the leader's identity cannot be verified.
         if not live and records:
@@ -152,7 +159,7 @@ class Agents:
             result.append(RULE_ROW())
 
         if leader:
-            state, usage = describe({'binding': leader}, live.get(leader['pane']), self.cache)
+            state, usage = describe({'binding': leader}, live.get(leader['pane']), self.cache, trusted=self.trusted)
             view = self.progress.poll()
             kind = 'working' if state == 'Trabalhando' else 'blocked' if state == 'Bloqueado' else 'idle'
             segments = [(f"Líder · {leader['pane']} · {state} · ", None)] + context(usage)
@@ -234,7 +241,7 @@ class Agents:
                 self.activities.pop(key, None)
         usage = None
         if actor:
-            _, usage = describe({'binding': actor}, pane, self.cache, on_verified=read_activity)
+            _, usage = describe({'binding': actor}, pane, self.cache, on_verified=read_activity, trusted=self.trusted)
         self.activities = {k: v for k, v in self.activities.items()
                            if k[0] != record.get('pane') or (verified and k == key)}
 
