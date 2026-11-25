@@ -170,7 +170,7 @@ class TasksUI:
                     if self.pending['kind'] in ('orchestrate', 'fresh'):
                         self.pending['changes'] = pending(self.repo)
                     self.notice = 'TODO changed elsewhere; selected tasks unchanged, confirmation updated'
-                elif self.mode not in ('tasks', 'clean_setup', 'audit'):
+                elif self.mode not in ('tasks', 'clean_setup', 'audit', 'skill_preview'):
                     self.notice = 'A selected task changed; confirmation cancelled. Select again.'
                     self.mode, self.pending = 'tasks', None
             self.snapshot = snapshot
@@ -207,6 +207,12 @@ class TasksUI:
 
     def body(self):
         rows = []
+        if self.mode == 'skill_preview':
+            offer = self.pending
+            return [('Editar comando · Enter envia · Esc cancela', 'In progress', None),
+                    ('Líder: ' + offer['pane'] + ' · ' + self.session.label, None, None),
+                    (offer['warning'], 'Blocked', None),
+                    (offer['prompt'][:self.skill_cursor] + '▏' + offer['prompt'][self.skill_cursor:], None, None)]
         if self.mode == 'audit':
             return self.audit.rows()
         if self.mode == 'dispatch':
@@ -381,7 +387,10 @@ class TasksUI:
             return
         put(screen, 2, self.review_status)
         put(screen, 3, self.notice, curses.A_BOLD)
-        if self.mode == 'audit':
+        if self.mode == 'skill_preview':
+            buttons = [('Enviar Enter', 'enter'), ('Cancelar Esc', 'escape')]
+            hint = 'Digite para editar · ←/→: cursor · Ctrl+U: limpar'
+        elif self.mode == 'audit':
             buttons = [('Confirmar y', 'y'), ('Escolher Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Setas/j/k: escolher · Enter/clique: continuar · y: confirmar · Esc: cancelar'
         elif self.mode == 'confirm' and self.pending['kind'] == 'group_dispatch':
@@ -408,6 +417,9 @@ class TasksUI:
             buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review Curator r', 'r'), ('Verify Leader v', 'v'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Envio avançado D', 'D'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · r: Review Curator · v: Verify Leader · 0: novo agente · P: planejar · C: opções'
+        if self.mode == 'tasks':
+            from .matt_skills import installed
+            buttons += [(command + ' ' + key, key) for key, command in installed(self.repo, self.session.binding)]
         packed, x, line = [], 0, 0
         for label, action in buttons:
             label = '[' + label + ']'
@@ -614,6 +626,38 @@ class TasksUI:
         h, w = self.screen.getmaxyx()
         if h < 10 or w < 24:
             return key != 'q'
+        if self.mode == 'skill_preview':
+            text = self.pending['prompt']
+            position = self.skill_cursor
+            if key == 'enter':
+                from .matt_skills import deliver
+                deliver(self.session, self.pending)
+                self.mode, self.pending = 'tasks', None
+                self.notice = 'Skill enviada ao líder'
+            elif key == '\x15':
+                self.pending['prompt'], self.skill_cursor = '', 0
+            elif key in ('backspace', '\x7f', '\b'):
+                if position:
+                    self.pending['prompt'] = text[:position-1] + text[position:]
+                    self.skill_cursor -= 1
+            elif key == 'left':
+                self.skill_cursor = max(0, position-1)
+            elif key == 'right':
+                self.skill_cursor = min(len(text), position+1)
+            elif key == 'home':
+                self.skill_cursor = 0
+            elif key == 'end':
+                self.skill_cursor = len(text)
+            elif isinstance(key, str) and len(key) == 1 and key.isprintable():
+                self.pending['prompt'] = text[:position] + key + text[position:]
+                self.skill_cursor += 1
+            return True
+        if self.mode == 'tasks' and key in tuple('123456789'):
+            from .matt_skills import preview
+            self.pending = preview(self.session, key)
+            self.skill_cursor = len(self.pending['prompt'])
+            self.mode, self.scroll = 'skill_preview', 0
+            return True
         if self.mode == 'audit':
             if key in ('up', 'k', 'down', 'j'):
                 self.cursor = max(0, self.cursor + (1 if key in ('down', 'j') else -1))
