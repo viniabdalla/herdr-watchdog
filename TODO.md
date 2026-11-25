@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
-- [ ] T10 (#11) Vínculo que acompanha o líder
-  ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
-  Resumo:
-    /clear no mesmo pane segue sem aviso; troca de harness troca os botões e avisa; tecla Religar; reenviar a meta depois do /clear.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #11 (docs/issues/)
-  Execução:
-    Bloqueado por: T7 (#8).
-  Aceite:
-    /clear no Claude mantém o vínculo sem aviso. /clear no Codex mantém o vínculo sem aviso. Troca de harness troca os prefixos e mostra o aviso. Religar liga o painel ao pane escolhido. Outro pane ou sessão antiga ainda viva não é seguido sozinho. Reenviar a meta digita a meta do grupo atual.
 - [ ] T11 (#12) Seção AGENTES no Progress
   ID: 8d30059f-5d67-4f25-81ed-c09fd01c5eb3
   Resumo:
@@ -226,6 +216,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T10 (#11) Vínculo que acompanha o líder
+  ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
+  Resumo:
+    /clear no mesmo pane segue sem aviso; troca de harness troca os botões e avisa; tecla Religar; reenviar a meta depois do /clear.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #11 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8).
+  Aceite:
+    /clear no Claude mantém o vínculo sem aviso. /clear no Codex mantém o vínculo sem aviso. Troca de harness troca os prefixos e mostra o aviso. Religar liga o painel ao pane escolhido. Outro pane ou sessão antiga ainda viva não é seguido sozinho. Reenviar a meta digita a meta do grupo atual.
 - [x] 2026-11-25 T8 (#9) Kit do líder: abrir executor e fechar tarefa
   ID: b50f11f9-edf0-4402-9061-33885c8e1436
   Resumo:
