@@ -4,7 +4,7 @@ status: ativo
 area: pessoal
 prioridade: alta
 resumo: Painéis Herdr para tarefas de projetos, progresso das sessões e arquivos criados pela IA
-atualizado: 2026-11-23
+atualizado: 2026-11-25
 motivo:
 ---
 
@@ -16,6 +16,8 @@ Os itens em Próximo são planos pendentes, inclusive os acordos registrados aba
 o estado de cada tarefa indica o que foi entregue e o que falta.
 Este TODO adota o formato versionado do Watchdog desde 2026-11-18;
 os pedidos e as conclusões anteriores foram preservados na migração.
+
+Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
 
 ## Em andamento
 - [ ] Trazer a orquestração do Left Undone para o Watchdog
@@ -33,6 +35,146 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 
 
 ## Próximo
+- [ ] T1 (#2) Despachar a seleção com a meta do grupo
+  ID: 69bef575-046d-43ab-99de-89c91bea4782
+  Resumo:
+    primeira versão ponta a ponta: Despachar com prévia digita a meta curta que aponta para o grupo; o grupo soma e deduplica; anota a base da integração; o g sai.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #2 (docs/issues/)
+  Execução:
+    Sem bloqueio; pode começar.
+  Aceite:
+    Despachar A, B e C sem meta ativa digita a meta curta no pane do líder, com Enter, e o grupo do Progress mostra 0 de 3. Despachar soma ao grupo existente e uma tarefa já presente não conta duas vezes. No primeiro despacho de um grupo, a ponta da branch de integração do projeto fica anotada como base. A meta cita pelo nome o padrão do dispatch e a seção Dispatch do AGENTS.md. O padrão do dispatch existe com as regras acordadas na spec (executor por tarefa, worktree, aviso, espera sem polling, checagem de spec, integração só no checkout principal, aviso final). A ação antiga de gravar o grupo à mão não existe mais. Testes no ponto de teste A cobrem os cenários acima.
+- [ ] T2 (#3) Nomes Review Curator e Verify Leader
+  ID: 87c5ccbf-3c5d-47e7-9ff7-2d253c321d9e
+  Resumo:
+    renomear Review para Review Curator e Verificar para Verify Leader no Tasks, no README e nos testes.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #3 (docs/issues/)
+  Execução:
+    Sem bloqueio; pode começar.
+  Aceite:
+    O Tasks mostra Review Curator e Verify Leader nos botões, dicas e prévias. O README usa os nomes novos. Os testes do Tasks passam nos dois modos de controles.
+- [ ] T3 (#4) Despacho com meta ativa e zerar o grupo
+  ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
+  Resumo:
+    com meta ativa, enviar só "Grupo atualizado: +…"; zerar sozinho quando tudo está concluído e chega novo despacho; tecla para zerar à mão.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #4 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
+- [ ] T4 (#5) Prévia que classifica a seleção
+  ID: ab2a4cc9-bd50-4311-8733-942263533c3a
+  Resumo:
+    classificar cada tarefa (livre, espera outra, espera fora da seleção, depende do Vini); bloquear quando nada pode começar; avisar projeto sem Dispatch ou sem import no CLAUDE.md.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #5 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    A prévia mostra a classificação de cada tarefa selecionada. Sem nenhuma tarefa livre, nada é enviado até o Vini escolher incluir, cancelar ou mandar assim mesmo. Incluir a dependência acrescenta a tarefa bloqueadora à seleção. Projeto sem seção Dispatch ou sem import no CLAUDE.md mostra um aviso, sem impedir o envio.
+- [ ] T5 (#6) Implementar aqui
+  ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
+  Resumo:
+    segundo modo de despacho, em que o próprio líder implementa numa worktree própria e faz merge na integração.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #6 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    A prévia mostra qual modo foi escolhido. Implementar aqui digita a meta com o texto de implementar nesta sessão. O padrão do dispatch descreve o modo Implementar aqui e o uso de worktree pelo líder. O grupo soma igual ao Despachar.
+- [ ] T6 (#7) Trava por pane e aviso do executor
+  ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
+  Resumo:
+    toda escrita no pane do líder passa por uma trava; comando de aviso pronto/BLOQUEIO para executores.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #7 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
+- [ ] T7 (#8) Faixa de skills do Matt
+  ID: 43ab9d91-244f-45d3-8185-29c844e2de7c
+  Resumo:
+    botões só das skills instaladas para o harness do líder, com / no Claude e $ no Codex, prévia editável e aviso de tracker sem cópia local.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #8 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Líder Claude mostra /to-spec e líder Codex mostra $to-spec. Skill não instalada para aquele harness não aparece. O texto pode ser editado antes do Enter. to-tickets vem com a referência da spec quando o painel a encontra. Tracker sem a seção de cópia local mostra o aviso.
+- [ ] T8 (#9) Kit do líder: abrir executor e fechar tarefa
+  ID: b50f11f9-edf0-4402-9061-33885c8e1436
+  Resumo:
+    abrir executor em worktree e aba da leva, rodapé comum do contrato, pasta de execução no projeto, fechar issue com cópia local.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #9 (docs/issues/)
+  Execução:
+    Bloqueado por: T6 (#7).
+  Aceite:
+    Abrir executor cria a worktree e a branch a partir da integração e o pane na aba da leva. Tarefas liberadas depois entram na aba da leva de que dependiam, enquanto houver espaço. O executor aberto fica registrado para o painel, com tarefa e pane. Modelo e esforço vêm da seção Dispatch do projeto. Fechar tarefa comenta e fecha a issue e atualiza a cópia local. O padrão do dispatch passa a citar o kit, a checagem aos 2, 3 e 4 minutos e o merge da integração antes do aviso. Testes no ponto de teste B cobrem abrir e fechar.
+- [ ] T9 (#10) Skill e botão merge-danger
+  ID: 28d47bb7-865e-44f9-9c45-ce72d2baa1c1
+  Resumo:
+    skill nova que classifica porta e raio da integração e devolve integra, revisar ou não integrar; botão na faixa.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #10 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8).
+  Aceite:
+    A skill fica instalada para Claude e Codex. O botão aparece na faixa com o prefixo do harness. A resposta lista porta, raio e decisão por parte. Itens da lista de "sempre mão única" do projeto saem sempre como porta única.
+- [ ] T10 (#11) Vínculo que acompanha o líder
+  ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
+  Resumo:
+    /clear no mesmo pane segue sem aviso; troca de harness troca os botões e avisa; tecla Religar; reenviar a meta depois do /clear.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #11 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8).
+  Aceite:
+    /clear no Claude mantém o vínculo sem aviso. /clear no Codex mantém o vínculo sem aviso. Troca de harness troca os prefixos e mostra o aviso. Religar liga o painel ao pane escolhido. Outro pane ou sessão antiga ainda viva não é seguido sozinho. Reenviar a meta digita a meta do grupo atual.
+- [ ] T11 (#12) Seção AGENTES no Progress
+  ID: 8d30059f-5d67-4f25-81ed-c09fd01c5eb3
+  Resumo:
+    sempre visível, sem botão: líder e executores com estado, contexto ao vivo e checagem inicial; tarefas que esperam ou dependem do Vini.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #12 (docs/issues/)
+  Execução:
+    Bloqueado por: T8 (#9).
+  Aceite:
+    O líder e cada executor registrado aparecem com pane, estado e contexto ao vivo. A checagem inicial aparece na linha do executor. Tarefas que esperam outra ou dependem do Vini aparecem sem pane. A seção não tem botão e não envia nada.
+- [ ] T12 (#13) Code review em duas abas
+  ID: fdc62343-7c2f-4cfc-99de-347a7cf816e5
+  Resumo:
+    botão code-review com a base do grupo; aba Code Review com Standards e Spec pelo kit; lado a lado; correção em aba nova após o ok.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #13 (docs/issues/)
+  Execução:
+    Bloqueado por: T7 (#8), T8 (#9).
+  Aceite:
+    O botão sai com a base do grupo e a branch de integração, editáveis. O padrão traz os contratos-modelo de Standards e Spec. Os relatórios ficam na pasta de execução do projeto. A correção abre numa aba nova só depois do ok.
+- [ ] T13 (#14) Pergunta pendente e meta encerrada
+  ID: 595712f8-ab5f-4540-b943-940648397038
+  Resumo:
+    faixa de pergunta de X aguarda você, faixa fixa de fim com resumo e notificação no desktop nos dois casos.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #14 (docs/issues/)
+  Execução:
+    Bloqueado por: T6 (#7), T11 (#12).
+  Aceite:
+    Pergunta para o Vini mostra a faixa e dispara a notificação. Meta encerrada mostra a faixa fixa até o próximo despacho e dispara a notificação. O aviso final do líder segue o formato concluídas com evidência e bloqueadas com motivo e próximo passo.
+- [ ] T14 (#15) Aceite manual
+  ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
+  Resumo:
+    o Vini testa /clear no Claude e no Codex, handoff Claude e Codex, uma rodada real A/B/C e o code review com as abas.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #15 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2), T2 (#3), T3 (#4), T4 (#5), T5 (#6), T6 (#7), T7 (#8), T8 (#9), T9 (#10), T10 (#11), T11 (#12), T12 (#13), T13 (#14).
+  Aceite:
+    /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
 - [ ] Decidir os itens restantes do brainstorm do Watchdog
   ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
   Resumo:
@@ -164,6 +306,15 @@ os pedidos e as conclusões anteriores foram preservados na migração.
 ## Bloqueado
 
 ## Feito
+- [x] 2026-11-25 Brainstorm do Watchdog como painel do long run, setup das skills do Matt, spec #1 e tickets T1–T14 publicados
+  ID: f14cf1e7-f4e0-42dc-9482-22f8a43b93b9
+  Resumo:
+    decisões D1–D23 sintetizadas na spec #1; T1–T14 como sub-issues com bloqueio nativo e cópia em docs/issues/; GLOSSARY.md, AGENTS.md e CLAUDE.md criados.
+  Origem: pedido-humano
+  Execução:
+    Spec #1 e issues #2–#15 em viniabdalla/herdr-watchdog.
+  Aceite:
+    Spec e tickets visíveis no GitHub e no Tasks; grupo T1–T14 no Progress.
 - [x] Melhorar o painel de agentes
   ID: 5daa552a-b547-441a-b2f2-12976b061e72
   Resumo:
