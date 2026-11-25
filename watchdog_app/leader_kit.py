@@ -300,7 +300,16 @@ def main(argv=None):
     checking = actions.add_parser('checar')
     for flag in ('grupo','ticket','resumo'):checking.add_argument('--'+flag,required=True)
     checking.add_argument('--etapa',type=int,choices=(1,2,3),required=True)
-    for sub in (opening,listing,closing,checking):sub.add_argument('--repo',type=Path,required=True)
+    asking = actions.add_parser('perguntar')
+    asking.add_argument('--tarefa','--ticket',dest='ticket',required=True,help='UUID, chave do grupo, título inequívoco ou atalho Tn')
+    asking.add_argument('--duvida',required=True)
+    answered = actions.add_parser('responder')
+    answered.add_argument('--tarefa','--ticket',dest='ticket',required=True,help='Mesma identidade usada para perguntar')
+    ending = actions.add_parser('encerrar')
+    ending.add_argument('--concluida',action='append',default=[],metavar='TAREFA|EVIDÊNCIA')
+    ending.add_argument('--bloqueada',action='append',default=[],metavar='TAREFA|MOTIVO|PRÓXIMO PASSO')
+    for sub in (asking,answered,ending):sub.add_argument('--grupo',required=True)
+    for sub in (opening,listing,closing,checking,asking,answered,ending):sub.add_argument('--repo',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
         if args.action == 'abrir':
@@ -310,6 +319,11 @@ def main(argv=None):
                                    review_axis=args.revisor,review_base=args.base,review_head=args.fim)
         elif args.action == 'checar':
             result = record_check(args.repo,group=args.grupo,ticket=args.ticket,step=args.etapa,summary=args.resumo)
+        elif args.action in ('perguntar','responder','encerrar'):
+            from .progress_notices import update
+            result = update(args.repo,args.grupo,args.action,ticket=getattr(args,'ticket',None),
+                            question=getattr(args,'duvida',None),completed=getattr(args,'concluida',()),
+                            blocked=getattr(args,'bloqueada',()))
         elif args.action == 'listar':result = executors(args.repo,args.grupo)
         else:result = close_issue(args.repo,issue=args.issue,copy=args.copia,comment=args.comentario)
         print(json.dumps(result,ensure_ascii=False,indent=2)); return 0

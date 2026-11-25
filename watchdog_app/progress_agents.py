@@ -23,6 +23,8 @@ class Agents:
     def poll(self):
         result = [('AGENTES', 'ready', None)]
         group = long_run.record(self.repo) or {}
+        from .progress_notices import rows as notice_rows
+        result.extend(notice_rows(group))
         try:
             records = leader_kit.executors(self.repo, group=group['base'])['executors'] if group.get('base') else []
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
@@ -87,7 +89,7 @@ class Agents:
                            'done' if task and task.done else 'blocked' if record.get('state') == 'failed' else 'working', None))
         try:
             if snapshot is None:
-                return result + [('', None, None)]
+                return result + notice_rows(group, details=True) + [('', None, None)]
             tasks = [t for t in tasks if not t.done]
             registered = {r['ticket'] for r in records}
             for item in classify(snapshot, [t.id for t in tasks]):
@@ -99,4 +101,4 @@ class Agents:
                 result.append((item['title'] + ' · — · ' + note + detail, 'blocked' if item['label'] != 'livre' else 'ready', None))
         except (OSError, RuntimeError, ValueError, KeyError, TypeError):
             pass
-        return result + [('', None, None)]
+        return result + notice_rows(group, details=True) + [('', None, None)]

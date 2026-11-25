@@ -52,6 +52,9 @@ def preview(session, snapshot, ids, mode='dispatch'):
             group.append(key)
             added.append(task)
     state = dict(previous or {}, members=group)
+    if state.get('notices', {}).get('ended'):
+        state.pop('notices', None)
+        state.pop('goal', None)
     if restart:
         for field in ('base', 'integration_branch', 'goal', 'modes'):
             state.pop(field, None)
@@ -64,7 +67,7 @@ def preview(session, snapshot, ids, mode='dispatch'):
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
     prompt = group_goal(session.binding, snapshot.repo, state)
-    if group and not restart and previous and previous.get('goal') == goal_identity(session.binding):
+    if group and not restart and previous and previous.get('goal') == goal_identity(session.binding) and not previous.get('notices', {}).get('ended'):
         prompt = 'Grupo atualizado: ' + (', '.join('+' + task.title for task in added)
                                            or 'nenhuma tarefa nova.')
     return {'kind': 'group_dispatch', 'mode': mode, 'snapshot': snapshot, 'ids': set(ids),
@@ -132,11 +135,14 @@ def deliver(session, offer):
             if (branch, base) != (offer['group']['integration_branch'], offer['group']['base']):
                 raise RuntimeError('A integração mudou; confira uma nova prévia antes de despachar')
         # The leader can read the group as soon as Enter reaches its pane.
-        atomic(long_run.path_for(snapshot.repo), offer['group'])
+        staged = dict(offer['group'])
+        if (offer['previous'] or {}).get('notices', {}).get('ended'):
+            staged['notices'] = offer['previous']['notices']
+        atomic(long_run.path_for(snapshot.repo), staged)
         state = dict(offer['group'], goal=goal_identity(session.binding))
         try:
             send(offer['pane'], offer['prompt'], binding=offer['binding'], on_confirm={
-                'path': str(long_run.path_for(snapshot.repo)), 'expected': offer['group'], 'value': state})
+                'path': str(long_run.path_for(snapshot.repo)), 'expected': staged, 'value': state})
         except DeliveryPending as error:
             raise DeliveryPending('Despacho guardado; aguarde a confirmação, sem reenviar. '+str(error)) from error
         except (RuntimeError, OSError) as error:

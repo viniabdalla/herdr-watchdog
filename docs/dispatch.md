@@ -124,8 +124,12 @@ teclas e após o consumo; uma mudança observada suspende o envio.
    escreva na conversa `Tn concluído: commit, testes`. Reavalie as tarefas liberadas.
 4. Responda sozinho a bloqueios decididos pela spec. Se ela não decidir, pergunte
    imediatamente ao Vini sem parar as outras tarefas; registre o próximo passo.
+   Registre a pergunta no painel com `watchdog kit perguntar`; após a resposta,
+   use `watchdog kit responder` (comandos em [Agentes no Progress](agents/progress-agentes.md)).
 5. Ao encerrar, avise o Vini na conversa: concluídos com commit e testes;
    bloqueados com motivo e próximo passo. Não espere que ele volte e pergunte.
+   Registre esse mesmo resumo com `watchdog kit encerrar` para manter a faixa
+   no Progress e notificar no desktop; veja [os comandos](agents/progress-agentes.md).
 
 ## Revisão e saída da máquina
 
