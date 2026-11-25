@@ -222,7 +222,7 @@ def panel(screen, repo, binding_file=None):
             else:
                 rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])
         selected=min(selected,max(0,len(rendered)-1));page=max(1,h-5)
-        offset=min(offset,selected)
+        offset=min(offset,selected,max(0,len(rendered)-page))
         if selected>=offset+page:offset=selected-page+1
         hits={}
         for i,(text,color,meta) in enumerate(rendered[offset:offset+page],offset):
@@ -248,6 +248,11 @@ def panel(screen, repo, binding_file=None):
         if key==curses.KEY_MOUSE:
             try:mouse=curses.getmouse()
             except curses.error:pass
+        if mouse and mouse[4]&(curses.BUTTON4_PRESSED|getattr(curses,'BUTTON5_PRESSED',0)):
+            # Spec #21 L43: the wheel scrolls the page and the selection together.
+            step=-3 if mouse[4]&curses.BUTTON4_PRESSED else 3
+            selected=max(0,min(len(rendered)-1,selected+step));offset=max(0,offset+step)
+            continue
         if mouse:
             try:
                 _,mx,my,_,mask=mouse
@@ -286,9 +291,8 @@ def panel(screen, repo, binding_file=None):
         elif key==curses.KEY_MOUSE and mouse:
             try:
                 _,_,y,_,mask=mouse
-                if 3<=y<h-2:
-                    selected=min(len(rendered)-1,max(0,offset+y-3))
-                    if mask&(curses.BUTTON1_CLICKED|curses.BUTTON1_DOUBLE_CLICKED):key=10
+                if 3<=y<h-2 and mask&(curses.BUTTON1_CLICKED|curses.BUTTON1_DOUBLE_CLICKED):
+                    selected=min(len(rendered)-1,max(0,offset+y-3));key=10
             except curses.error:pass
         if key==ord('x') and rendered:
             run=rendered[min(selected,len(rendered)-1)][2]

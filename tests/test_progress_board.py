@@ -330,6 +330,39 @@ finally: f.doCleanups()
         self.assertIn('Trabalhando', line)
         self.assertNotIn('12%', line)
 
+    def test_pty_short_pane_scrolls_with_wheel_and_keys(self):
+        # Spec #21 L43: the panel fits a ~60x14 pane; wheel and j reach the lower lines.
+        import fcntl, struct, termios
+        from test_artifacts_yazi import Terminal
+        boot = """
+import sys, curses
+sys.path.insert(0, sys.argv[1])
+import test_progress_board as m
+f = m.BoardTests('test_go_button_focuses_exact_pane'); f.setUp()
+for n in range(6): f.add_worker('W' + str(n), 'w:pw' + str(n), 'tw' + str(n), tab='w:t' + str(n + 3))
+from watchdog_app.herdr import Herdr
+Herdr.call = lambda self, *a: {'panes': f.live} if a[:2] == ('pane', 'list') else {}
+import watchdog_app.progress_ui as ui
+try: curses.wrapper(ui.panel, f.repo, f.file)
+finally: f.doCleanups()
+"""
+        def opened():
+            terminal = Terminal(['python3', '-c', boot, str(Path(__file__).parent)], dict(os.environ, TERM='xterm-256color'))
+            self.addCleanup(terminal.close)
+            fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack('HHHH', 14, 60, 0, 0))
+            self.assertTrue(terminal.wait_for('AGENTES'), terminal.output.decode(errors='replace'))
+            self.assertNotIn(b't8', terminal.output)
+            return terminal
+        wheel = opened()
+        for _ in range(20):
+            os.write(wheel.master, b'\x1b[<65;5;8M')
+        self.assertTrue(wheel.wait_for('t8 '), wheel.output.decode(errors='replace')[-1500:])
+        os.write(wheel.master, b'q')
+        keys = opened()
+        os.write(keys.master, b'j' * 60)
+        self.assertTrue(keys.wait_for('t8 '), keys.output.decode(errors='replace')[-1500:])
+        os.write(keys.master, b'q')
+
 # Reuse the fixture only; the inherited Spec #1 tests run in their own module.
 for _name in [n for n in dir(test_progress_agents.ProgressAgentsTests) if n.startswith('test_')]:
     setattr(BoardTests, _name, None)
