@@ -51,16 +51,8 @@ class LeaderLinkTests(unittest.TestCase):
         self.file = self.store.root/(self.old.key+'.json')
         self.live(self.old)
         herdr = self.repo/'herdr'
-        herdr.write_text('''#!/usr/bin/env python3
-import sys,json
-from pathlib import Path
-root=Path(__file__).parent
-args=sys.argv[1:]
-with (root/'commands.jsonl').open('a') as f:f.write(json.dumps(args)+'\\n')
-live=json.loads((root/'live.json').read_text())
-b=next((b for b in live if len(args)>2 and b['pane']==args[2]),live[0])
-print(json.dumps({'result':{'pane':{'pane_id':b['pane'],'terminal_id':b['terminal']}}}))
-''')
+        from pane_submission_fixture import IDLE_SCRIPT
+        herdr.write_text(IDLE_SCRIPT)
         herdr.chmod(0o755)
         self.env = dict(os.environ, TERM='xterm-256color', WATCHDOG_STATE_DIR=str(self.store.root),
                         XDG_STATE_HOME=str(self.repo/'xdg'), HERDR_BIN_PATH=str(herdr))

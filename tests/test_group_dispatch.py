@@ -37,9 +37,8 @@ class GroupDispatchTests(unittest.TestCase):
         binding = self.repo / 'binding.json'
         binding.write_text(json.dumps({'repo': str(self.repo), 'binding': asdict(FakeBinding())}))
         herdr = self.repo / 'herdr-fake'
-        herdr.write_text('#!/usr/bin/env python3\nimport json,sys\nfrom pathlib import Path\n'
-                         'with (Path(__file__).parent/"commands.jsonl").open("a") as f: f.write(json.dumps(sys.argv[1:])+"\\n")\n'
-                         'print(json.dumps({"result":{}}))\n')
+        from pane_submission_fixture import IDLE_SCRIPT
+        herdr.write_text(IDLE_SCRIPT)
         herdr.chmod(0o755)
         self.env = dict(os.environ, TERM='xterm-256color', WATCHDOG_STATE_DIR=str(self.repo/'state'),
                         HERDR_BIN_PATH=str(herdr), XDG_STATE_HOME=str(self.repo/'xdg'))

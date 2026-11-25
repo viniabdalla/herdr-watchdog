@@ -609,7 +609,7 @@ class TasksUI:
             self.session.verify()
             pane = self.session.binding.pane
             from .pane_delivery import send
-            send(pane, offer['prompt'], enter='enter')
+            send(pane, offer['prompt'], binding=self.session.binding, enter='enter')
             self.notice = f"Pedido de verificação enviado à sessão principal ({len(offer['ids'])} tarefa(s))"
         elif offer['kind'] in ('send', 'queue'):
             try:
