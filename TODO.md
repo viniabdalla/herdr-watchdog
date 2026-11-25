@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Sem bloqueio; pode começar.
   Aceite:
     Despachar A, B e C sem meta ativa digita a meta curta no pane do líder, com Enter, e o grupo do Progress mostra 0 de 3. Despachar soma ao grupo existente e uma tarefa já presente não conta duas vezes. No primeiro despacho de um grupo, a ponta da branch de integração do projeto fica anotada como base. A meta cita pelo nome o padrão do dispatch e a seção Dispatch do AGENTS.md. O padrão do dispatch existe com as regras acordadas na spec (executor por tarefa, worktree, aviso, espera sem polling, checagem de spec, integração só no checkout principal, aviso final). A ação antiga de gravar o grupo à mão não existe mais. Testes no ponto de teste A cobrem os cenários acima.
-- [ ] T2 (#3) Nomes Review Curator e Verify Leader
-  ID: 87c5ccbf-3c5d-47e7-9ff7-2d253c321d9e
-  Resumo:
-    renomear Review para Review Curator e Verificar para Verify Leader no Tasks, no README e nos testes.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #3 (docs/issues/)
-  Execução:
-    Sem bloqueio; pode começar.
-  Aceite:
-    O Tasks mostra Review Curator e Verify Leader nos botões, dicas e prévias. O README usa os nomes novos. Os testes do Tasks passam nos dois modos de controles.
 - [ ] T3 (#4) Despacho com meta ativa e zerar o grupo
   ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
   Resumo:
@@ -306,6 +296,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T2 (#3) Nomes Review Curator e Verify Leader
+  ID: 87c5ccbf-3c5d-47e7-9ff7-2d253c321d9e
+  Resumo:
+    renomear Review para Review Curator e Verificar para Verify Leader no Tasks, no README e nos testes.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #3 (docs/issues/)
+  Execução:
+    Sem bloqueio; pode começar.
+  Aceite:
+    O Tasks mostra Review Curator e Verify Leader nos botões, dicas e prévias. O README usa os nomes novos. Os testes do Tasks passam nos dois modos de controles.
 - [x] 2026-11-25 Brainstorm do Watchdog como painel do long run, setup das skills do Matt, spec #1 e tickets T1–T14 publicados
   ID: f14cf1e7-f4e0-42dc-9482-22f8a43b93b9
   Resumo:
