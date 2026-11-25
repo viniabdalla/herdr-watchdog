@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Dois avisos simultâneos chegam como duas mensagens inteiras. Um texto do Tasks e um aviso simultâneos não se misturam. O comando de aviso aceita pronto (commit, testes, resumo) e BLOQUEIO (dúvida). O padrão do dispatch passa a usar esse comando no contrato. Testes no ponto de teste B com Herdr falso cobrem os cenários.
 
 ## Próximo
-- [ ] T8 (#9) Kit do líder: abrir executor e fechar tarefa
-  ID: b50f11f9-edf0-4402-9061-33885c8e1436
-  Resumo:
-    abrir executor em worktree e aba da leva, rodapé comum do contrato, pasta de execução no projeto, fechar issue com cópia local.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #9 (docs/issues/)
-  Execução:
-    Bloqueado por: T6 (#7).
-  Aceite:
-    Abrir executor cria a worktree e a branch a partir da integração e o pane na aba da leva. Tarefas liberadas depois entram na aba da leva de que dependiam, enquanto houver espaço. O executor aberto fica registrado para o painel, com tarefa e pane. Modelo e esforço vêm da seção Dispatch do projeto. Fechar tarefa comenta e fecha a issue e atualiza a cópia local. O padrão do dispatch passa a citar o kit, a checagem aos 2, 3 e 4 minutos e o merge da integração antes do aviso. Testes no ponto de teste B cobrem abrir e fechar.
 - [ ] T10 (#11) Vínculo que acompanha o líder
   ID: 7fc2a094-f6c5-4838-b6f3-2f144bae2dd0
   Resumo:
@@ -236,6 +226,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T8 (#9) Kit do líder: abrir executor e fechar tarefa
+  ID: b50f11f9-edf0-4402-9061-33885c8e1436
+  Resumo:
+    abrir executor em worktree e aba da leva, rodapé comum do contrato, pasta de execução no projeto, fechar issue com cópia local.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #9 (docs/issues/)
+  Execução:
+    Bloqueado por: T6 (#7).
+  Aceite:
+    Abrir executor cria a worktree e a branch a partir da integração e o pane na aba da leva. Tarefas liberadas depois entram na aba da leva de que dependiam, enquanto houver espaço. O executor aberto fica registrado para o painel, com tarefa e pane. Modelo e esforço vêm da seção Dispatch do projeto. Fechar tarefa comenta e fecha a issue e atualiza a cópia local. O padrão do dispatch passa a citar o kit, a checagem aos 2, 3 e 4 minutos e o merge da integração antes do aviso. Testes no ponto de teste B cobrem abrir e fechar.
 - [x] 2026-11-25 T5 (#6) Implementar aqui
   ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
   Resumo:
