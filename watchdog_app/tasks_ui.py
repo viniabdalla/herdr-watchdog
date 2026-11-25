@@ -671,7 +671,8 @@ class TasksUI:
                 from .dispatch import preview
                 additions = {identity for task in self.pending['classification'] for identity in task['outside']}
                 selection = self.selected | additions
-                offer = preview(self.session, self.pending['snapshot'], selection)
+                offer = preview(self.session, self.pending['snapshot'], selection,
+                                mode=self.pending['mode'])
                 self.selected, self.pending, self.scroll = selection, offer, 0
             elif key == '!' and blocked(self.pending):
                 self.pending['allow_blocked'] = True

@@ -61,3 +61,36 @@ class ImplementHereTests(unittest.TestCase):
         with patch.dict(os.environ, self.env):
             self.assertEqual(long_run.load(self.repo), ['title:A', 'title:B'])
         self.assertEqual((self.repo / 'TODO.md').read_bytes(), original)
+
+    def test_including_dependency_rebuilds_classification_without_changing_implement_here_mode(self):
+        # Spec #1 L29,43,51,87,138,159-160: inclusion keeps the chosen execution mode.
+        original = '## Next\n- [ ] B\n  Bloqueado por: A.\n- [ ] A\n'
+        (self.repo / 'TODO.md').write_text(original)
+        for full in (False, True):
+            with self.subTest(full=full):
+                with patch.dict(os.environ, self.env):
+                    long_run.path_for(self.repo).unlink(missing_ok=True)
+                before = len(self.commands())
+                terminal = self.open(full)
+                os.write(terminal.master, b' h')
+                self.wait(terminal, 'Modo: Implementar aqui')
+                self.wait(terminal, 'B: espera fora da seleção')
+                self.wait(terminal, 'Nenhuma tarefa livre')
+                terminal.output = b''
+                os.write(terminal.master, b'i')
+                self.wait(terminal, 'A: livre')
+                self.wait(terminal, 'outra da seleção')
+                self.assertNotIn(b'Despachar', terminal.output)
+                self.assertEqual(len(self.commands()), before)
+                with patch.dict(os.environ, self.env):
+                    self.assertIsNone(long_run.load(self.repo))
+                os.write(terminal.master, b'y')
+                self.wait(terminal, 'Despacho enviado')
+                sent = self.commands()[before:]
+                self.assertEqual(len(sent), 2)
+                self.assertIn('Implementar nesta sessão', sent[0][3])
+                self.assertNotIn('Despache um executor', sent[0][3])
+                with patch.dict(os.environ, self.env):
+                    self.assertEqual(long_run.load(self.repo), ['title:B', 'title:A'])
+                self.assertEqual((self.repo / 'TODO.md').read_text(), original)
+                terminal.close()
