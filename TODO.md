@@ -22,6 +22,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
+- [ ] T15 (#16) Fila travada no pane do líder
+  ID: 184d02f0-64ad-48c1-9af4-c75d8fd5d1d2
+  Resumo:
+    Detectar dois minutos sem progresso, preservar a entrega e avisar o líder pelo pane.
+  Origem: pedido-humano
+  Referência: Spec #1 e issue #16 (docs/issues/16-t15-fila-travada.md).
+  Execução:
+    Implementar em worktree própria na integração após a correção da revisão R1.
+  Aceite:
+    Aviso único, cópia preservada, fila retomada e estado visível no Tasks. Ver critérios e seção aprovada na issue.
 - [ ] Decidir os itens restantes do brainstorm do Watchdog
   ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
   Resumo:
