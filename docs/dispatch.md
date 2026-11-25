@@ -123,20 +123,24 @@ real é limitada por `--capacidade` (padrão 4). Sem espaço, cria outra aba.
 Use `--session NOME` em `abrir` quando o Herdr exigir sessão explícita.
 
 O contrato em `.watchdog/run/<data>/` inclui os ponteiros, configuração, panes,
-rodapé comum e aviso com trava. O registro `.watchdog/executors.json` versão 1
+rodapé comum e aviso com trava. O Codex inicia com `--no-daemon`; o contrato
+é submetido com `agent prompt --wait --until working` sob a trava do T6.
+O registro `.watchdog/executors.json` versão 1
 identifica projeto, grupo, tarefa, leva, branch, base, worktree, pane, terminal,
-sessão nativa confirmada quando disponível, modelo, esforço, contrato e estado.
+sessão nativa confirmada quando disponível, modelo, esforço, contrato, estado e
+`created_at` (segundos Unix, para a checagem aos 2, 3 e 4 minutos).
 `listar` devolve esse registro em JSON, filtrado pelo grupo quando informado;
 `watchdog_app.leader_kit.executors(repo, group=None)` oferece a mesma leitura
 para Progress e revisão. Sessão nativa indisponível permanece `null`.
-`state: ready` confirma abertura e entrega do contrato; não significa tarefa
+`state: ready` confirma abertura, entrega do contrato e início de trabalho; não significa tarefa
 concluída. Estados `preparing`/`failed` conservam a operação e os recursos para
 inspeção. Confira-os antes de repetir; o kit recusa duplicar a mesma tarefa do
 mesmo grupo e nunca remove recursos após resultado incerto.
 
 `fechar` é uma operação externa: use quando o Vini tiver autorizado o fechamento.
 Guarda o comentário de evidências em `.watchdog/run/<data>/`, consulta o estado,
-comenta com `gh issue comment --body-file`, fecha e consulta novamente. Só então
+confere se o comentário idêntico já existe, publica com `gh issue comment
+--body-file` quando necessário, fecha se ainda aberta e consulta novamente. Só então
 atualiza estado, corpo e comentários da cópia local, preservando campos próprios
 do cabeçalho. Se falhar, confira o estado remoto e o comentário guardado antes
 de repetir. O kit não integra branches, atualiza TODO, faz commit ou push.

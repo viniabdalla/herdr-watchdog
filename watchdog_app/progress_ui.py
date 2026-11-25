@@ -179,10 +179,17 @@ def panel(screen, repo, binding_file=None):
         if selected>=offset+page:offset=selected-page+1
         for i,(text,color,_) in enumerate(rendered[offset:offset+page],offset):
             put(screen,i-offset+3,text,palette.get(color,0)|(curses.A_REVERSE if i==selected else 0))
-        put(screen,h-1,notice or 'j/k: scroll · Enter/click: execution tab · x: close run · q: exit',curses.A_DIM)
+        put(screen,h-1,notice or 'j/k: scroll · Enter/click: execution tab · x: close run · z: zerar grupo · q: exit',curses.A_DIM)
         screen.refresh();key=screen.getch()
         if key!=-1 and key!=ord('x'):notice=''
         if key in (ord('q'),27):return
+        if key == ord('z'):
+            try:
+                long_run.reset(repo)
+                notice = 'Grupo zerado'
+            except (RuntimeError, OSError, ValueError) as error:
+                notice = str(error)
+            continue
         if key in (ord('j'),curses.KEY_DOWN):selected+=1
         elif key in (ord('k'),curses.KEY_UP):selected=max(0,selected-1)
         elif key==curses.KEY_NPAGE:selected+=page

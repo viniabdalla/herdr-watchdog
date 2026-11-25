@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,7 +49,14 @@ if args[:2]==['tab','create']:
 elif args[:2]==['pane','split']:
  anchor=next(p for p in panes if p['pane_id']==args[2]);p=pane(len(panes)+1,anchor['tab_id']);panes.append(p);result={'pane':p}
 elif args[:2]==['pane','list']:result={'panes':panes}
-elif args[:2]==['pane','get']:result={'pane':next(p for p in panes if p['pane_id']==args[2])}
+elif args[:2]==['pane','get']:
+ p=dict(next(p for p in panes if p['pane_id']==args[2]))
+ if os.environ.get('KIT_SESSION_ON_PROMPT') and not (root/'prompted').exists():p['agent_session']=None
+ result={'pane':p}
+elif args[:2]==['agent','prompt']:
+ if os.environ.get('KIT_FAIL_PROMPT'):sys.exit('agent_prompt_stalled')
+ (root/'prompted').touch()
+ result={'status':'working'}
 elif args[:2] in (['agent','start'],['pane','send-text'],['pane','send-keys']):
  if os.environ.get('KIT_FAIL_START') and args[:2]==['agent','start']:sys.exit('startup uncertain')
  result={}
@@ -95,7 +103,9 @@ p.write_text(json.dumps(v));print(json.dumps(v))
 
     def test_open_isolated_worktree_contract_and_confirmed_identity(self):
         # L72-80, L136, L173: wrong base, missing identity/contract or wrong model must fail.
+        before=time.time()
         result=json.loads(self.open().stdout)
+        self.assertGreaterEqual(result['created_at'],before)
         tree=Path(result['worktree'])
         self.assertEqual(self.git('-C',str(tree),'rev-parse','HEAD'),self.base)
         self.assertFalse((tree/'leader-only').exists())
@@ -107,6 +117,12 @@ p.write_text(json.dumps(v));print(json.dumps(v))
         self.assertEqual(self.records()[0]['ticket'],'A')
         calls=[json.loads(s) for s in (self.root/'herdr.jsonl').read_text().splitlines()]
         start=next(c for c in calls if c[:2]==['agent','start'])
+        self.assertIn('--no-daemon',start[start.index('--')+1:])
+        prompt=next(c for c in calls if c[:2]==['agent','prompt'])
+        self.assertIn('--wait',prompt)
+        self.assertEqual(prompt[prompt.index('--until')+1],'working')
+        self.assertEqual(prompt[2],result['pane'])
+        self.assertEqual(prompt[3],Path(result['contract']).read_text())
         self.assertIn('gpt-6.1-sol',start)
         self.assertIn('model_reasoning_effort="medium"',start)
         contract=Path(result['contract']).read_text()
@@ -180,6 +196,34 @@ p.write_text(json.dumps(v));print(json.dumps(v))
             out, err = process.communicate(timeout=20)
             self.assertEqual(process.returncode,0,err)
         self.assertEqual({r['ticket'] for r in self.records()},{'A','B'})
+
+    def test_draft_contract_is_not_reported_as_ready(self):
+        # L77-80, L151: accepted text without a working turn is not delivery.
+        self.env['KIT_FAIL_PROMPT']='1'
+        result = self.open(ok=False)
+        self.assertIn('agent_prompt_stalled',result.stderr)
+        self.assertEqual(self.records()[0]['state'],'failed')
+        self.assertEqual(self.records()[0]['operation'],'contract')
+
+    def test_retry_partial_close_does_not_repeat_existing_comment(self):
+        # L176 + user correction: retrying a partial close keeps one evidence comment.
+        self.env['KIT_FAIL_CLOSE']='1'
+        args=('fechar','--issue','9','--copia','docs/issues/9-ticket.md','--comentario','Evidence')
+        self.cli(*args,ok=False)
+        self.env.pop('KIT_FAIL_CLOSE')
+        self.cli(*args)
+        remote=json.loads((self.root/'issue.json').read_text())
+        self.assertEqual(remote['state'],'CLOSED')
+        self.assertEqual([c['body'] for c in remote['comments']],['Evidence'])
+        calls=[json.loads(s) for s in (self.root/'gh.jsonl').read_text().splitlines()]
+        self.assertEqual(sum(c[:2]==['issue','comment'] for c in calls),1)
+        self.assertIn('Evidence',(self.repo/'docs/issues/9-ticket.md').read_text())
+
+    def test_session_available_after_prompt_is_registered(self):
+        # L92-93 + user correction: use confirmed session from the working pane.
+        self.env['KIT_SESSION_ON_PROMPT']='1'
+        result=json.loads(self.open().stdout)
+        self.assertEqual(result['session'],'thread1')
 
 
 if __name__ == '__main__':unittest.main()

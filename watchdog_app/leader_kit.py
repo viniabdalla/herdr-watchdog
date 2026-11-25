@@ -10,11 +10,12 @@ from pathlib import Path
 import re
 import shlex
 import sys
+import time
 import uuid
 
 from .herdr import Herdr
 from .mission_launch import command, git
-from .pane_delivery import pane_lock, send
+from .pane_delivery import pane_lock
 from .store import atomic
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +123,8 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
                       acceptance=acceptance, spec=spec, model=config['model'], effort=config['effort'],
                       herdr_session=session, pane=None, terminal=None, session=None, tab=None,
                       contract=str(run_dir/(ticket+'-'+identity[:8]+'-contrato.md')),
-                      state='preparing', operation='worktree', created=date.today().isoformat())
+                      state='preparing', operation='worktree', created=date.today().isoformat(),
+                      created_at=time.time())
         data['executors'].append(record)
         save = lambda: atomic(repo/'.watchdog/executors.json', data)
         save()
@@ -156,7 +158,7 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
             permissions = config['permissions'].lower()
             sandbox = {'full access':'danger-full-access'}.get(permissions, permissions)
             api.call('agent','start','wd-'+identity[:12], '--kind','codex','--pane',record['pane'],
-                     '--','--model',config['model'],'--sandbox',sandbox,'--ask-for-approval','never',
+                     '--timeout','15000','--','--no-daemon','--model',config['model'],'--sandbox',sandbox,'--ask-for-approval','never',
                      '-c','model_reasoning_effort='+json.dumps(config['effort']))
             live = api.checked(pane)
             if live.get('agent') != 'codex':
@@ -164,7 +166,14 @@ def open_executor(repo, *, ticket, group, leader, workspace, leva, acceptance, s
             native = live.get('agent_session') or {}
             record['session'] = native.get('value') if native.get('kind') == 'id' else None
             record['operation'] = 'contract'; save()
-            send(record['pane'], Path(record['contract']).read_text(), api=api)
+            with pane_lock(record['pane'], session):
+                api.call('agent','prompt',record['pane'],Path(record['contract']).read_text(),
+                         '--wait','--until','working','--timeout','15000')
+            live = api.checked(pane)
+            if live.get('agent') != 'codex':
+                raise RuntimeError('Harness mudou após submissão do contrato')
+            native = live.get('agent_session') or {}
+            record['session'] = native.get('value') if native.get('kind') == 'id' else None
             record.update(state='ready', operation=None); save()
             return record
         except Exception as error:
@@ -188,14 +197,18 @@ def close_issue(repo, *, issue, copy, comment):
     gh = lambda *args: command(['gh','issue',*args],cwd=repo)
     # Check status before mutation; closing an already closed issue must still
     # publish its evidence comment (gh close --comment silently drops it).
-    gh('view',str(issue),'--json','number,state')
+    existing = json.loads(gh('view',str(issue),'--json','number,state,comments'))
+    if existing['number'] != issue:
+        raise RuntimeError('Issue consultada não corresponde ao número solicitado')
     ignored_directories(repo)
     folder = repo/'.watchdog/run'/date.today().isoformat()
     folder.mkdir(parents=True,exist_ok=True)
     evidence = folder/(str(issue)+'-'+uuid.uuid4().hex[:8]+'-comentario.md')
     evidence.write_text(comment)
-    gh('comment',str(issue),'--body-file',str(evidence))
-    gh('close',str(issue))
+    if not any(entry.get('body') == comment for entry in existing['comments']):
+        gh('comment',str(issue),'--body-file',str(evidence))
+    if existing['state'].upper() != 'CLOSED':
+        gh('close',str(issue))
     current = json.loads(gh('view',str(issue),'--json','number,title,body,labels,state,comments,url'))
     if current['number'] != issue or current['state'].upper() != 'CLOSED':
         raise RuntimeError('Fechamento não confirmado; confira issue antes de repetir')
