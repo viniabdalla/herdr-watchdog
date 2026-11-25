@@ -191,6 +191,9 @@ def main(argv=None):
     if argv[:1] == ['plugin-panel']:
         from .plugin_panel import main as plugin_panel_main
         return plugin_panel_main(argv[1:])
+    if argv[:1] == ['religar']:
+        from .relink import main as relink_main
+        return relink_main(argv[1:])
     if argv[:1] == ['kit']:
         from .leader_kit import main as kit_main
         return kit_main(argv[1:])
