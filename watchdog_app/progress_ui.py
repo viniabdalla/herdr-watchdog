@@ -14,6 +14,32 @@ from .session_progress import Progress
 from .actions import Session
 from .clean_sessions_ui import Controller
 from .progress_agents import Item
+import threading
+
+
+class Refresher(threading.Thread):
+    """Spec #21 L43: reading agents takes ~1 s; keys and scrolling never wait for it."""
+    def __init__(self, compute, interval=3):
+        super().__init__(daemon=True)
+        self.compute, self.interval = compute, interval
+        self.result, self.error, self.wake = None, None, threading.Event()
+
+    def run(self):
+        while True:
+            try:
+                self.result, self.error = self.compute(), None
+            except Exception as error:  # keep the last good screen and show why
+                self.error = ('Progress · ' + str(error), 'blocked', None)
+            self.wake.wait(self.interval)
+            self.wake.clear()
+
+    def latest(self):
+        if self.result is None:
+            return [self.error] if self.error else None
+        return self.result + ([self.error] if self.error else [])
+
+    def now(self):
+        self.wake.set()
 
 FOOTER='j/k · clique seleciona · [ir] [fechar] [unblock] · Enter: grupo/execução · x: fechar run · z: zerar grupo · q: sair'
 DOTS={'blocked':'alarm','working':'dot_working','queued':'dot_queued','done':'dot_done','idle':'dot_idle'}
@@ -197,24 +223,30 @@ def panel(screen, repo, binding_file=None):
                 curses.init_pair(i,color if curses.COLORS>=16 else color%8,bg);palette[name]=curses.color_pair(i)
     except curses.error:pass
     selected=offset=0;notice='';armed=None;closing=None
-    progress=Progress(repo,binding_file)
-    clean=Controller(repo)
     from .progress_agents import Agents
     agents=Agents(repo,binding_file)
-    while True:
-        screen.erase();h,w=screen.getmaxyx()
-        put(screen,0,'WATCHDOG / PROGRESS',curses.A_BOLD);put(screen,1,Path(repo).name)
+    state=dict(binding_file=binding_file,progress=Progress(repo,binding_file),clean=Controller(repo),width=80)
+
+    def compute():
         try:
-            if binding_file:
-                session=Session.for_panel(binding_file,Path(repo))
-                if session.file!=Path(binding_file):
-                    binding_file=session.file;progress=Progress(repo,binding_file)
-                clean.poll(session.binding)
+            if state['binding_file']:
+                session=Session.for_panel(state['binding_file'],Path(repo))
+                if session.file!=Path(state['binding_file']):
+                    state['binding_file']=session.file;state['progress']=Progress(repo,session.file)
+                state['clean'].poll(session.binding)
             cleanup_rows = [(text, 'blocked' if color == 'Blocked' else 'working', None)
-                            for text, color, _ in clean.rows()]
+                            for text, color, _ in state['clean'].rows()]
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
             cleanup_rows = [('Session · ' + str(error), 'blocked', None)]
-        source = rows(repo, progress=progress, width=w, agents=agents) + cleanup_rows
+        return rows(repo, progress=state['progress'], width=state['width'], agents=agents) + cleanup_rows
+
+    refresher=Refresher(compute)
+    refresher.start()
+    screen.timeout(200)
+    while True:
+        screen.erase();h,w=screen.getmaxyx();state['width']=w
+        put(screen,0,'WATCHDOG / PROGRESS',curses.A_BOLD);put(screen,1,Path(repo).name)
+        source = refresher.latest() or [('Lendo agentes…', None, None)]
         rendered=[]
         for text,color,run in source:
             if isinstance(run,Item):
@@ -237,7 +269,7 @@ def panel(screen, repo, binding_file=None):
             # Spec #21 L41: only Y closes; any other key cancels and is consumed.
             target,closing=closing,None
             if key in (ord('Y'),ord('y')):
-                try:notice=agents.close(target)
+                try:notice=agents.close(target);refresher.now()
                 except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:notice=str(error)
             else:notice='Fechamento cancelado'
             continue
@@ -270,8 +302,8 @@ def panel(screen, repo, binding_file=None):
         if action and isinstance(current,Item):
             try:
                 if action=='ir':notice=agents.go(current)
-                elif action=='unblock':notice=agents.unblock(current)
-                elif action=='toggle':agents.toggle(current.group)
+                elif action=='unblock':notice=agents.unblock(current);refresher.now()
+                elif action=='toggle':agents.toggle(current.group);refresher.now()
                 elif action=='fechar' and current.closable:
                     closing=current;notice=f'Fechar {current.ticket} ({current.pane})? Y confirma · outra tecla cancela'
             except (RuntimeError,OSError,ValueError,KeyError,TypeError) as error:notice=str(error)
@@ -281,6 +313,7 @@ def panel(screen, repo, binding_file=None):
             try:
                 long_run.reset(repo)
                 notice = 'Grupo zerado'
+                refresher.now()
             except (RuntimeError, OSError, ValueError) as error:
                 notice = str(error)
             continue

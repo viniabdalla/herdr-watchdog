@@ -363,6 +363,37 @@ finally: f.doCleanups()
         self.assertTrue(keys.wait_for('t8 '), keys.output.decode(errors='replace')[-1500:])
         os.write(keys.master, b'q')
 
+    def test_pty_keys_do_not_wait_for_a_slow_refresh(self):
+        # Spec #21 L43: reading agents (about 1 s with real data) never blocks keys.
+        import fcntl, struct, termios
+        from test_artifacts_yazi import Terminal
+        boot = """
+import sys, curses, time
+sys.path.insert(0, sys.argv[1])
+import test_progress_board as m
+f = m.BoardTests('test_go_button_focuses_exact_pane'); f.setUp()
+for n in range(6): f.add_worker('W' + str(n), 'w:pw' + str(n), 'tw' + str(n), tab='w:t' + str(n + 3))
+from watchdog_app.herdr import Herdr
+Herdr.call = lambda self, *a: {'panes': f.live} if a[:2] == ('pane', 'list') else {}
+from watchdog_app import progress_agents
+slow = progress_agents.Agents.poll
+def poll(self):
+    time.sleep(1.5)
+    return slow(self)
+progress_agents.Agents.poll = poll
+import watchdog_app.progress_ui as ui
+try: curses.wrapper(ui.panel, f.repo, f.file)
+finally: f.doCleanups()
+"""
+        terminal = Terminal(['python3', '-c', boot, str(Path(__file__).parent)], dict(os.environ, TERM='xterm-256color'))
+        self.addCleanup(terminal.close)
+        fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack('HHHH', 14, 60, 0, 0))
+        self.assertTrue(terminal.wait_for('AGENTES', timeout=15), terminal.output.decode(errors='replace'))
+        os.write(terminal.master, b'j' * 60)
+        self.assertTrue(terminal.wait_for('t8 ', timeout=4), terminal.output.decode(errors='replace')[-1500:])
+        os.write(terminal.master, b'q')
+        self.assertEqual(terminal.process.wait(timeout=8), 0)
+
 # Reuse the fixture only; the inherited Spec #1 tests run in their own module.
 for _name in [n for n in dir(test_progress_agents.ProgressAgentsTests) if n.startswith('test_')]:
     setattr(BoardTests, _name, None)
