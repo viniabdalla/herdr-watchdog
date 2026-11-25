@@ -5,7 +5,7 @@ import re
 from .pane_delivery import send
 
 # Keep numbering stable when one skill is missing. Other tickets extend this list.
-SKILLS = ('grill-with-docs', 'to-spec', 'to-tickets', 'retro')
+SKILLS = ('grill-with-docs', 'to-spec', 'to-tickets', 'retro', 'code-review', 'merge-danger')
 
 
 def installed(repo, binding):

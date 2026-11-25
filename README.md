@@ -8,6 +8,7 @@ The installed Left Undone identity engine is currently required.
 
 ```sh
 python3 install.py
+python3 install-skills.py
 watchdog                       # choose the conversation if needed, then layout
 watchdog layout 2              # direct preset selection
 watchdog layout column-bottom
@@ -15,6 +16,14 @@ watchdog layout --list
 watchdog list                  # verified conversations in the current project
 watchdog status                # inspect the selected conversation without opening panels
 ```
+
+A skill `merge-danger` fica em `skills/merge-danger`; `install-skills.py` a liga
+às pastas `.claude/skills` e `.agents/skills` deste checkout. Para outro projeto
+ou conta, passe `--claude-skills-dir` e `--codex-skills-dir`. O instalador preserva
+skills de terceiros. Depois da implementação, use o botão na faixa do Tasks,
+confira a prévia e informe um intervalo se necessário. A análise lista porta,
+raio e decisão por parte; a decisão de levar a integração para fora da máquina
+continua com o Vini. A invocação automática está desativada nos dois harnesses.
 
 Run from the project folder, or pass `--repo /path/to/project`. `--pane ID
 --session UUID` selects an exact verified conversation. Missing native session
