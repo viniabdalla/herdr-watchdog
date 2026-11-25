@@ -251,6 +251,8 @@ class TasksUI:
                      'apply': 'Review Curator · confirmar alterações',
                      'verify': 'Verify Leader · pedir verificação ao líder'}[offer['kind']]
             rows.append((title, 'In progress', None))
+            if offer['kind'] == 'group_dispatch':
+                rows.append(('Modo: ' + ('Implementar aqui' if offer.get('mode') == 'here' else 'Despachar'), None, None))
             rows.append((self.session.label, None, None))
             if offer['kind'] in ('send', 'queue', 'orchestrate') and self.session.binding:
                 rows.append(('Account: ' + self.session.binding.account, None, None))
@@ -411,10 +413,10 @@ class TasksUI:
             buttons = [('Apply a', 'a'), ('Recheck R', 'R'), ('Back Esc', 'escape')]
             hint = 'Space: select · j/k: move · a: apply selected'
         elif not full_controls():
-            buttons = [('Review Curator r', 'r'), ('Verify Leader v', 'v'), ('Despachar p', 'p'), ('Quit q', 'q')]
+            buttons = [('Review Curator r', 'r'), ('Verify Leader v', 'v'), ('Despachar p', 'p'), ('Implementar aqui h', 'h'), ('Quit q', 'q')]
             hint = 'Space: selecionar · Enter/▸: resumo · r: Review Curator · v: Verify Leader'
         else:
-            buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review Curator r', 'r'), ('Verify Leader v', 'v'),
+            buttons = [('Auditoria A', 'A'), ('Agents m', 'm'), ('Clean sessions c', 'c'), ('Despachar p', 'p'), ('Implementar aqui h', 'h'), ('Orchestrate o', 'o'), ('Send s', 's'), ('Done d', 'd'), ('Review Curator r', 'r'), ('Verify Leader v', 'v'),
                        ('Start i', 'i'), ('Next n', 'n'), ('Envio avançado D', 'D'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · r: Review Curator · v: Verify Leader · 0: novo agente · P: planejar · C: opções'
         if self.mode == 'tasks':
@@ -713,7 +715,8 @@ class TasksUI:
                 from .dispatch import preview
                 additions = {identity for task in self.pending['classification'] for identity in task['outside']}
                 selection = self.selected | additions
-                offer = preview(self.session, self.pending['snapshot'], selection)
+                offer = preview(self.session, self.pending['snapshot'], selection,
+                                mode=self.pending['mode'])
                 self.selected, self.pending, self.scroll = selection, offer, 0
             elif key == '!' and blocked(self.pending):
                 self.pending['allow_blocked'] = True
@@ -787,10 +790,10 @@ class TasksUI:
             return False
         elif not full_controls() and key in DISABLED_KEYS:
             return True
-        elif key == 'p':
+        elif key in ('p', 'h'):
             self.require_selection()
             from .dispatch import preview
-            self.pending = preview(self.session, self.snapshot, self.selected)
+            self.pending = preview(self.session, self.snapshot, self.selected, mode='here' if key == 'h' else 'dispatch')
             self.mode, self.scroll = 'confirm', 0
         elif key == 'v':
             self.require_selection()

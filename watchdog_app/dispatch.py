@@ -33,7 +33,9 @@ def goal_identity(binding):
     return {key: getattr(binding, key) for key in ('kind', 'account', 'session')}
 
 
-def preview(session, snapshot, ids):
+def preview(session, snapshot, ids, mode='dispatch'):
+    if mode not in ('dispatch', 'here'):
+        raise ValueError('Modo de despacho inválido')
     snapshot.assert_current()
     session.verify()
     tasks = snapshot.selected(ids)
@@ -51,21 +53,29 @@ def preview(session, snapshot, ids):
             added.append(task)
     state = dict(previous or {}, members=group)
     if restart:
-        for field in ('base', 'integration_branch', 'goal'):
+        for field in ('base', 'integration_branch', 'goal', 'modes'):
             state.pop(field, None)
+    modes = dict(state.get('modes', {}))
+    for task in added:
+        modes[long_run.identity(snapshot, task)] = mode
+    state['modes'] = modes
     new_base = 'base' not in state
     if new_base:
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
-    phrase = ('Concluir somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
+    action = 'Implementar nesta sessão' if mode == 'here' else 'Concluir'
+    execution = ('Implemente em worktree própria a partir da integração; integre com as mesmas '
+                 'checagens e avise "Tn concluído".' if mode == 'here' else 'Despache um executor por tarefa;')
+    phrase = (action + ' somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
               ', acompanhadas no TODO.md de ' + str(snapshot.repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
-              ' e a seção ## Dispatch do AGENTS.md do projeto. Despache um executor por tarefa; '
+              ' e a seção ## Dispatch do AGENTS.md do projeto. ' + execution + ' '
+              'Leia o modo por identidade no campo modes do grupo a cada atualização; '
               'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
     prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
     if group and not restart and previous and previous.get('goal') == goal_identity(session.binding):
         prompt = 'Grupo atualizado: ' + (', '.join('+' + task.title for task in added)
                                            or 'nenhuma tarefa nova.')
-    return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
+    return {'kind': 'group_dispatch', 'mode': mode, 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
             'previous': previous, 'group': state, 'new_base': new_base,
             'classification': classify(snapshot, set(ids)), 'warnings': warnings(snapshot.repo)}
