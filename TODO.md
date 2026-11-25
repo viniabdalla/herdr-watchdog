@@ -159,6 +159,7 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Referência: spec #1 e issue #15 (docs/issues/)
   Execução:
     Bloqueado por: T1 (#2), T2 (#3), T3 (#4), T4 (#5), T5 (#6), T6 (#7), T7 (#8), T8 (#9), T9 (#10), T10 (#11), T11 (#12), T12 (#13), T13 (#14).
+    Religar manual do Codex (spec #17): #18 e #19 integradas localmente. O aceite #20 depende do Vini para confirmar a sessão após /clear e conferir o grupo no Progress.
   Aceite:
     /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
   Motivo: O aceite manual da issue #15 depende do Vini.
