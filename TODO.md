@@ -32,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Bloqueado por: T1 (#2).
   Aceite:
     Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
-- [ ] T4 (#5) Prévia que classifica a seleção
-  ID: ab2a4cc9-bd50-4311-8733-942263533c3a
-  Resumo:
-    classificar cada tarefa (livre, espera outra, espera fora da seleção, depende do Vini); bloquear quando nada pode começar; avisar projeto sem Dispatch ou sem import no CLAUDE.md.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #5 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    A prévia mostra a classificação de cada tarefa selecionada. Sem nenhuma tarefa livre, nada é enviado até o Vini escolher incluir, cancelar ou mandar assim mesmo. Incluir a dependência acrescenta a tarefa bloqueadora à seleção. Projeto sem seção Dispatch ou sem import no CLAUDE.md mostra um aviso, sem impedir o envio.
 - [ ] T5 (#6) Implementar aqui
   ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
   Resumo:
@@ -286,6 +276,16 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T4 (#5) Prévia que classifica a seleção
+  ID: ab2a4cc9-bd50-4311-8733-942263533c3a
+  Resumo:
+    classificar cada tarefa (livre, espera outra, espera fora da seleção, depende do Vini); bloquear quando nada pode começar; avisar projeto sem Dispatch ou sem import no CLAUDE.md.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #5 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    A prévia mostra a classificação de cada tarefa selecionada. Sem nenhuma tarefa livre, nada é enviado até o Vini escolher incluir, cancelar ou mandar assim mesmo. Incluir a dependência acrescenta a tarefa bloqueadora à seleção. Projeto sem seção Dispatch ou sem import no CLAUDE.md mostra um aviso, sem impedir o envio.
 - [x] 2026-11-25 T1 (#2) Despachar a seleção com a meta do grupo
   ID: 69bef575-046d-43ab-99de-89c91bea4782
   Resumo:
