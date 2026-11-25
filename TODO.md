@@ -22,16 +22,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
-- [ ] T3 (#4) Despacho com meta ativa e zerar o grupo
-  ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
-  Resumo:
-    com meta ativa, enviar só "Grupo atualizado: +…"; zerar sozinho quando tudo está concluído e chega novo despacho; tecla para zerar à mão.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #4 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
 - [ ] T5 (#6) Implementar aqui
   ID: 0270c2fe-4bf9-4c92-b1ff-06cde89a21b6
   Resumo:
@@ -42,16 +32,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Bloqueado por: T1 (#2).
   Aceite:
     A prévia mostra qual modo foi escolhido. Implementar aqui digita a meta com o texto de implementar nesta sessão. O padrão do dispatch descreve o modo Implementar aqui e o uso de worktree pelo líder. O grupo soma igual ao Despachar.
-- [ ] T7 (#8) Faixa de skills do Matt
-  ID: 43ab9d91-244f-45d3-8185-29c844e2de7c
-  Resumo:
-    botões só das skills instaladas para o harness do líder, com / no Claude e $ no Codex, prévia editável e aviso de tracker sem cópia local.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #8 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2).
-  Aceite:
-    Líder Claude mostra /to-spec e líder Codex mostra $to-spec. Skill não instalada para aquele harness não aparece. O texto pode ser editado antes do Enter. to-tickets vem com a referência da spec quando o painel a encontra. Tracker sem a seção de cópia local mostra o aviso.
 - [ ] T8 (#9) Kit do líder: abrir executor e fechar tarefa
   ID: b50f11f9-edf0-4402-9061-33885c8e1436
   Resumo:
@@ -266,6 +246,26 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
   Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
 
 ## Feito
+- [x] 2026-11-25 T3 (#4) Despacho com meta ativa e zerar o grupo
+  ID: 052f8c88-b706-4299-8624-9ce1ac07ffff
+  Resumo:
+    com meta ativa, enviar só "Grupo atualizado: +…"; zerar sozinho quando tudo está concluído e chega novo despacho; tecla para zerar à mão.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #4 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Com meta ativa, despachar D, E e F digita só "Grupo atualizado: +D, +E, +F" e o grupo passa de 3 para 6. Com todo o grupo concluído, o próximo despacho começa um grupo novo e uma base nova. Com tarefa aberta no grupo, o próximo despacho soma. Zerar à mão esvazia o grupo e a próxima prévia volta a ser a meta. A prévia mostra qual dos dois textos será enviado.
+- [x] 2026-11-25 T7 (#8) Faixa de skills do Matt
+  ID: 43ab9d91-244f-45d3-8185-29c844e2de7c
+  Resumo:
+    botões só das skills instaladas para o harness do líder, com / no Claude e $ no Codex, prévia editável e aviso de tracker sem cópia local.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #8 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2).
+  Aceite:
+    Líder Claude mostra /to-spec e líder Codex mostra $to-spec. Skill não instalada para aquele harness não aparece. O texto pode ser editado antes do Enter. to-tickets vem com a referência da spec quando o painel a encontra. Tracker sem a seção de cópia local mostra o aviso.
 - [x] 2026-11-25 T6 (#7) Trava por pane e aviso do executor
   ID: bc16b8da-9694-472d-8f6d-1d7ffb994683
   Resumo:

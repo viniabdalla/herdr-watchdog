@@ -11,7 +11,13 @@ O painel entrega a seleção; o líder coordena a execução.
 O Tasks oferece Despachar (p) e Implementar aqui (h), com o modo escolhido,
 o texto exato e o pane do líder na prévia. Cancelar não envia nem soma ao grupo.
 Ambos usam o mesmo grupo e os mesmos ponteiros de aceite; a escolha vale para
-o envio atual. Em Implementar aqui, o próprio líder implementa nesta sessão,
+as tarefas novas do envio atual. O JSON do grupo contém `members` (identidades)
+e `modes` (modo por identidade): `dispatch` pede executor, `here` pede Implementar
+aqui. Antes de trabalhar e a cada "Grupo atualizado", leia esse mapa, mesmo que
+a meta original tenha pedido executores. Uma tarefa já no grupo mantém seu modo;
+a seleção repetida não troca a escolha anterior. Grupos antigos sem modo para
+uma identidade usam Despachar. Recomeçar o grupo ou zerá-lo descarta os modos
+anteriores. Em Implementar aqui, o próprio líder implementa nesta sessão,
 abrindo sua worktree e branch próprias a partir da branch de integração.
 Confere o aceite e os testes, incorpora a integração antes do último commit
 e integra exclusivamente no checkout de integração, como faria com a entrega

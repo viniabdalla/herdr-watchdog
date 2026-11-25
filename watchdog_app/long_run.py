@@ -20,7 +20,7 @@ def record(repo):
     except FileNotFoundError:
         return None
     group = value.get('members') if isinstance(value, dict) else value
-    if not (isinstance(group, list) and group and all(isinstance(k, str) for k in group)
+    if not (isinstance(group, list) and all(isinstance(k, str) for k in group)
             and len(group) == len(set(group))):
         raise RuntimeError('Grupo do long run inválido')
     return value if isinstance(value, dict) else {'members': group}
@@ -60,3 +60,12 @@ def save(snapshot, selected):
             raise RuntimeError('A seleção contém uma tarefa ambígua no TODO.md')
         atomic(path_for(snapshot.repo), group)
     return group
+
+
+def reset(repo):
+    """Clear the measured group and its goal, keeping state owned by other tools."""
+    with locked(repo):
+        state = dict(record(repo) or {}, members=[])
+        for field in ('base', 'integration_branch', 'goal', 'modes'):
+            state.pop(field, None)
+        atomic(path_for(repo), state)

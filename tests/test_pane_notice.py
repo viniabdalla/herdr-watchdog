@@ -112,7 +112,7 @@ repo=Path(os.environ['FIXTURE_ROOT'])
             body = '''from watchdog_app.dispatch import preview, deliver
 from watchdog_app.todo import Snapshot
 from contextlib import nullcontext
-binding=NS(pane='w11:p8',kind='codex')
+binding=NS(pane='w11:p8',kind='codex',account='fixture',session='fixture-session')
 session=NS(binding=binding,verify=lambda:None,routing=nullcontext)
 snapshot=Snapshot.read(repo)
 offer=preview(session,snapshot,{snapshot.tasks[0].id})

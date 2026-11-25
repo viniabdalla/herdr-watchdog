@@ -1,7 +1,7 @@
 ---
 number: 8
 title: "T7 — Faixa de skills do Matt"
-state: open
+state: closed
 labels: [ready-for-agent]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/8
 parent: 1
@@ -24,3 +24,11 @@ O Tasks mostra uma faixa com as skills de Matt que o harness do líder enxerga (
 - [ ] O texto pode ser editado antes do Enter.
 - [ ] to-tickets vem com a referência da spec quando o painel a encontra.
 - [ ] Tracker sem a seção de cópia local mostra o aviso.
+
+## Comentários
+
+### 2026-11-25 · viniabdalla
+
+O Tasks oferece as skills instaladas do harness do líder, com prévia editável, prefixo próprio e aviso sobre cópia local. A prévia de to-tickets preenche a spec identificada. O envio usa a trava integrada em T6.
+
+Commit do executor `378826f`, integrado em `0e34c40`. A suíte executou 569 testes em cada modo de controles, com 7 ignorados e nenhuma falha.
