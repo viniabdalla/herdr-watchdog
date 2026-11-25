@@ -28,12 +28,18 @@ def integration(repo):
     return branch, git(repo, 'rev-parse', '--verify', 'refs/heads/' + branch + '^{commit}')
 
 
+def goal_identity(binding):
+    return {key: getattr(binding, key) for key in ('kind', 'account', 'session')}
+
+
 def preview(session, snapshot, ids):
     snapshot.assert_current()
     session.verify()
     tasks = snapshot.selected(ids)
     previous = long_run.record(snapshot.repo)
-    group = list(previous['members']) if previous else []
+    old_members = long_run.members(snapshot, previous['members']) if previous else []
+    restart = bool(old_members) and all(task and task.done for task in old_members)
+    group = list(previous['members']) if previous and not restart else []
     keys = [long_run.identity(snapshot, task) for task in tasks]
     if None in long_run.members(snapshot, keys):
         raise RuntimeError('A seleção contém uma tarefa ambígua no TODO.md')
@@ -41,18 +47,23 @@ def preview(session, snapshot, ids):
         if key not in group:
             group.append(key)
     state = dict(previous or {}, members=group)
-    if 'base' not in state:
+    if restart:
+        for field in ('base', 'integration_branch', 'goal'):
+            state.pop(field, None)
+    new_base = 'base' not in state
+    if new_base:
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
-    # T3 owns the active-goal/update policy. T1 always sends the group objective.
     phrase = ('Concluir somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
               ', acompanhadas no TODO.md de ' + str(snapshot.repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
               ' e a seção ## Dispatch do AGENTS.md do projeto. Despache um executor por tarefa; '
               'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
     prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
+    if group and not restart and previous and previous.get('goal') == goal_identity(session.binding):
+        prompt = 'Grupo atualizado: ' + ', '.join('+' + task.title for task in tasks)
     return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
-            'previous': previous, 'group': state}
+            'previous': previous, 'group': state, 'new_base': new_base}
 
 
 def deliver(session, offer):
@@ -65,7 +76,7 @@ def deliver(session, offer):
             raise RuntimeError('O líder mudou; confira uma nova prévia antes de despachar')
         if long_run.record(snapshot.repo) != offer['previous']:
             raise RuntimeError('O grupo mudou; confira uma nova prévia antes de despachar')
-        if not offer['previous'] or 'base' not in offer['previous']:
+        if offer['new_base']:
             branch, base = integration(snapshot.repo)
             if (branch, base) != (offer['group']['integration_branch'], offer['group']['base']):
                 raise RuntimeError('A integração mudou; confira uma nova prévia antes de despachar')
@@ -78,3 +89,6 @@ def deliver(session, offer):
         except (RuntimeError, OSError) as error:
             raise RuntimeError('Despacho não confirmado; grupo preservado. Confira o pane do líder '
                                'antes de tentar novamente; nada foi reenviado automaticamente.') from error
+
+        state = dict(offer['group'], goal=goal_identity(session.binding))
+        atomic(long_run.path_for(snapshot.repo), state)

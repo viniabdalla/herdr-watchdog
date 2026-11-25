@@ -254,7 +254,7 @@ class TasksUI:
                 rows.append(('', None, None))
                 rows.extend((line, None, None) for line in textwrap.wrap(offer['prompt'], 70))
                 rows.append(('', None, None))
-                rows.append((('y digita a meta no pane do líder e aperta Enter.' if offer['kind'] == 'group_dispatch'
+                rows.append((('y digita o texto acima no pane do líder e aperta Enter.' if offer['kind'] == 'group_dispatch'
                               else 'y digita o pedido no prompt da sessão principal e aperta Enter.'), 'In progress', None))
             if offer['kind'] == 'single':
                 actor = offer['executor']['binding']

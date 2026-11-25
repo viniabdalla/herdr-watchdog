@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from test_actions import FakeBinding
-from test_artifacts_yazi import Terminal
+from test_artifacts_yazi import Terminal, SCRIPT
 from test_tasks_ui import BOUND_SCRIPT, ROOT
 from watchdog_app import long_run
 from watchdog_app.progress_ui import rows
@@ -108,19 +108,29 @@ class GroupDispatchTests(unittest.TestCase):
                     metadata = json.loads(long_run.path_for(self.repo).read_text())
                 self.assertEqual(metadata['base'], self.base)
                 self.assertEqual(metadata['integration_branch'], 'integration')
+                # Spec #1 L50,53-54: updates use the same ordinary delivery for every harness.
+                self.assertEqual(self.dispatch(terminal, b'jjj ', 'Grupo atualizado'),
+                                 'Grupo atualizado: +D')
                 terminal.close()
 
     def test_dispatch_adds_and_deduplicates_preserving_base(self):
         # Spec #1 L44-46,139,155-156: open group accumulates; base is immutable.
         terminal = self.open()
         self.dispatch(terminal, b' j j ', 'Concluir')
+        with patch.dict(os.environ, self.env):
+            file = long_run.path_for(self.repo)
+            state = json.loads(file.read_text())
+            state['future_ticket'] = {'keep': True}
+            file.write_text(json.dumps(state))
         self.git('update-ref', 'refs/heads/integration', self.git('rev-parse', 'HEAD'))
-        self.dispatch(terminal, b'jjj j j ')
+        self.assertEqual(self.dispatch(terminal, b'jjj j j ', 'Grupo atualizado'),
+                         'Grupo atualizado: +D, +E, +F')
         self.dispatch(terminal, b' ')
         with patch.dict(os.environ, self.env):
             self.assertEqual(len(long_run.load(self.repo)), 6)
             self.assertIn('0 de 6', '\n'.join(text for text, _, _ in rows(self.repo)))
             self.assertEqual(json.loads(long_run.path_for(self.repo).read_text())['base'], self.base)
+            self.assertEqual(long_run.record(self.repo)['future_ticket'], {'keep': True})
 
     def test_manual_group_action_is_gone(self):
         # Spec #1 L129,168: g no longer writes a group, in either controls mode.
@@ -146,3 +156,49 @@ class GroupDispatchTests(unittest.TestCase):
         with patch.dict(os.environ, self.env):
             self.assertEqual(long_run.load(self.repo), ['title:A', 'title:B', 'title:C'])
             self.assertIn('0 de 3', '\n'.join(text for text, _, _ in rows(self.repo)))
+
+    def test_completed_group_waits_for_dispatch_then_starts_new_base(self):
+        # Spec #1 L47,139,157: keep 3/3 until the next confirmed dispatch.
+        terminal = self.open()
+        self.dispatch(terminal, b' j j ')
+        terminal.close()
+        todo = self.repo / 'TODO.md'
+        todo.write_text(todo.read_text().replace('[ ] A', '[x] A').replace('[ ] B', '[x] B').replace('[ ] C', '[x] C'))
+        self.git('update-ref', 'refs/heads/integration', self.git('rev-parse', 'HEAD'))
+        with patch.dict(os.environ, self.env):
+            self.assertIn('3 de 3', '\n'.join(text for text, _, _ in rows(self.repo)))
+        terminal = self.open()
+        self.dispatch(terminal, b'jjj ', 'Concluir')
+        with patch.dict(os.environ, self.env):
+            self.assertEqual(long_run.load(self.repo), ['title:D'])
+            self.assertEqual(long_run.record(self.repo)['base'], self.git('rev-parse', 'integration'))
+
+    def test_new_session_reissues_goal_for_saved_open_group(self):
+        # Spec #1 L123,138: a saved group does not imply a goal in a new session.
+        terminal = self.open()
+        self.dispatch(terminal, b' ')
+        terminal.close()
+        value = json.loads(self.binding.read_text())
+        value['binding']['session'] = 'after-clear'
+        self.binding.write_text(json.dumps(value))
+        terminal = self.open()
+        self.assertTrue(self.dispatch(terminal, b'j ', 'Concluir').startswith('/goal '))
+        self.assertEqual(self.dispatch(terminal, b'jj ', 'Grupo atualizado'), 'Grupo atualizado: +C')
+        with patch.dict(os.environ, self.env):
+            self.assertEqual(long_run.load(self.repo), ['title:A', 'title:B', 'title:C'])
+
+    def test_progress_reset_empties_group_and_next_preview_is_goal(self):
+        # Spec #1 L48,158: Progress reset also invalidates the goal and base.
+        terminal = self.open()
+        self.dispatch(terminal, b' j j ')
+        progress = Terminal(['python3', str(SCRIPT), 'progress', '--repo', str(self.repo)], self.env)
+        self.addCleanup(progress.close)
+        self.wait(progress, '0 de 3')
+        self.wait(progress, 'z: zerar grupo')
+        os.write(progress.master, b'z')
+        self.wait(progress, 'Grupo zerado')
+        with patch.dict(os.environ, self.env):
+            self.assertFalse(long_run.load(self.repo))
+        self.assertTrue(self.dispatch(terminal, b' ', 'Concluir').startswith('/goal '))
+        with patch.dict(os.environ, self.env):
+            self.assertEqual(long_run.load(self.repo), ['title:A'])
