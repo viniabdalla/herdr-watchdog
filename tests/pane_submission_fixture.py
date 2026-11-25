@@ -35,7 +35,7 @@ elif args[:2]==['agent','read']:
        '\\x1b[0m\\x1b[48;2;51;30;30m› \\x1b[2mAsk Codex to do anything')
  print(text+'\\x1b[0m\\n\\n  GPT-6 Context 10% used');sys.exit(0)
 elif args[:2]==['pane','send-text']:
- s['paste']=args[3];s['materialized_at']=time.monotonic()+.12;save()
+ s['paste']=args[3];s['materialized_at']=time.monotonic()+s.get('paste_delay',.12);save()
  (root/'paste-started').touch();result={}
 elif args[:2]==['pane','send-keys']:
  key=args[3].lower();s.setdefault('keys',[]).append(key)

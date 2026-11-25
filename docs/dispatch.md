@@ -284,3 +284,51 @@ confere se o comentário idêntico já existe, publica com `gh issue comment
 atualiza estado, corpo e comentários da cópia local, preservando campos próprios
 do cabeçalho. Se falhar, confira o estado remoto e o comentário guardado antes
 de repetir. O kit não integra branches, atualiza TODO, faz commit ou push.
+
+### Recuperar entrega suspensa (R1)
+
+Depois de colar, falta de confirmação por 2 segundos de observações suspende a
+entrega em `uncertain`; não confirma consumo. Uma observação válida de texto
+materializado ou consumo tem precedência sobre esse prazo, inclusive após um
+CLI lento. Antes de colar, rascunho humano continua sendo espera legítima, sem
+esse prazo. Registros antigos em `pasting`, sem timestamp, recebem uma janela
+persistida na primeira retomada. Texto, identidade, fase e compositor observado
+ficam no registro; os próximos itens continuam guardados em ordem FIFO.
+
+`resume` nunca resolve `uncertain`. Confira o registro e o pane, a identidade e
+o rascunho real. Um paste pode aparecer atrasado: campo vazio não prova envio,
+cancelamento nem que seja seguro liberar a próxima mensagem. Não apague o
+registro nem repita o paste. Para observar e suspender um registro antigo:
+
+```sh
+python3 -m watchdog_app.pane_delivery resume /caminho/registro.pending.json
+```
+
+Se o paste atrasado já terminou e o compositor mostra exatamente a mensagem
+inteira de A, autorize explicitamente continuar a partir dela, sem novo paste:
+
+```sh
+python3 -m watchdog_app.pane_delivery reconcile /caminho/registro.pending.json \
+  --resolution materialized --evidence 'Texto inteiro e identidade conferidos; paste encerrado'
+python3 -m watchdog_app.pane_delivery resume /caminho/registro.pending.json
+```
+
+Se A foi resolvido manualmente (enviado ou cancelado), primeiro confirme fora do
+Watchdog que o paste antigo terminou e não voltará a escrever. Só então retire
+explicitamente A, registrando o que observou e como resolveu. Isso cancela a
+entrega automática, **não confirma envio** nem executa sua atualização de grupo:
+
+```sh
+python3 -m watchdog_app.pane_delivery reconcile /caminho/registro.pending.json \
+  --resolution retired --evidence 'Paste encerrado; A cancelado manualmente; rascunho humano preservado'
+```
+
+A retirada preserva o rascunho humano e arquiva a entrega com a evidência e a
+identidade observada em `*.reconciled.*.json`. Os workers já em espera retomam a
+fila; se não houver worker, use `resume` nos registros `*.queued.*.json`, na
+ordem dos nomes. B só cola quando o compositor estiver vazio. Após Religar, uma
+entrega antiga jamais tecla na sessão nova: somente a retirada explícita é
+permitida; itens posteriores presos à sessão antiga também precisam de retirada
+com evidência. Novos envios usam a identidade nova. A reconciliação compara o
+registro lido com o que ainda está sob a trava; se tiver mudado, releia e decida
+novamente. Nenhum desses passos deve ser aplicado ao pane real como teste.

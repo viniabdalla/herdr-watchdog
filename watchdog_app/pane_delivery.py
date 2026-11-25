@@ -135,16 +135,48 @@ def surface(api, pane):
     return composer(api.output('agent', 'read', pane, '--source', 'visible', '--format', 'ansi'))
 
 
+# This bounds confirmation after a side effect, not legitimate waiting for a draft.
+CONFIRM_TIMEOUT = 2.0
+
+
+def suspend(job, pending, error, rows=None):
+    if job['phase'] != 'uncertain':
+        job.update(uncertain_phase=job['phase'], phase='uncertain', error=str(error),
+                   observed_composer=rows, suspended_at=time.time())
+        atomic(pending, job)
+
+
 def advance(api, job, pending, *, deadline=None):
     pane, text = job['pane'], job['text']
     stable = 0
+    def consumed():
+        live(api, pane, job['identity'])
+        callback = job.get('on_confirm')
+        if callback:
+            path = Path(callback['path'])
+            if json.loads(path.read_text()) == callback['expected']:
+                atomic(path, callback['value'])
+        pending.unlink()
+        return 'consumed'
     while True:
         if deadline is not None and time.monotonic() >= deadline:
             raise DeliveryPending('Entrega guardada, aguardando confirmação em '+str(pending))
         agent = live(api, pane, job['identity'])
         rows = surface(api, pane)
         phase = job['phase']
+        progress = (phase, len(job.get('keys', [])))
+        if phase == 'uncertain':
+            raise RuntimeError('Entrega suspensa; reconcilie explicitamente o registro '+str(pending))
+        # Old R1 jobs start one persisted observation window on their first resume.
+        if phase != 'waiting' and 'confirmation_started_at' not in job:
+            job['confirmation_started_at'] = time.time(); atomic(pending, job)
+        def check_timeout():
+            if phase != 'waiting' and time.time() - job['confirmation_started_at'] >= CONFIRM_TIMEOUT:
+                error = 'Confirmação ausente após colar; reconciliação explícita necessária'
+                suspend(job, pending, error, rows)
+                raise RuntimeError(error)
         if agent['agent_status'] not in ('idle', 'done', 'working'):
+            check_timeout()
             time.sleep(.05 if deadline is not None else .25)
             continue
         if phase == 'waiting':
@@ -152,23 +184,18 @@ def advance(api, job, pending, *, deadline=None):
                 # Recheck both identity and the empty surface immediately before paste.
                 live(api, pane, job['identity'])
                 if surface(api, pane) != []: continue
-                job['phase'] = 'pasting'; atomic(pending, job)
+                job.update(phase='pasting', confirmation_started_at=time.time()); atomic(pending, job)
                 api.call('pane', 'send-text', pane, text)
         elif phase == 'pasting':
             if matches(rows, text):
-                job['phase'] = 'materialized'; atomic(pending, job)
+                job.update(phase='materialized', confirmation_started_at=time.time()); atomic(pending, job)
         elif phase in ('materialized', 'submitting'):
             if phase == 'submitting' and rows == []:
-                live(api, pane, job['identity'])
-                callback = job.get('on_confirm')
-                if callback:
-                    path = Path(callback['path'])
-                    if json.loads(path.read_text()) == callback['expected']:
-                        atomic(path, callback['value'])
-                pending.unlink()
-                return 'consumed'
+                return consumed()
             if not matches(rows, text):
-                raise RuntimeError('O rascunho mudou; nenhum texto foi apagado ou reenviado')
+                error = 'O rascunho mudou; nenhum texto foi apagado ou reenviado'
+                suspend(job, pending, error, rows)
+                raise RuntimeError(error)
             stable += 1
             keys = job.get('keys', [])
             elapsed = time.time() - job.get('last_key_at', 0)
@@ -178,13 +205,24 @@ def advance(api, job, pending, *, deadline=None):
                     key = 'Tab'
                 # A fallback can only act on our exact still-materialized message.
                 live(api, pane, job['identity'])
-                if not matches(surface(api, pane), text): continue
-                job.update(phase='submitting', keys=keys+[key], last_key_at=time.time())
+                rows = surface(api, pane)
+                if phase == 'submitting' and rows == []:
+                    return consumed()
+                if not matches(rows, text):
+                    error = 'O rascunho mudou antes da tecla; entrega suspensa'
+                    suspend(job, pending, error, rows)
+                    raise RuntimeError(error)
+                job.update(phase='submitting', keys=keys+[key], last_key_at=time.time(),
+                           confirmation_started_at=time.time())
                 atomic(pending, job)
                 api.call('pane', 'send-keys', pane, key)
                 stable = 0
         else:
             raise RuntimeError('Entrega suspensa; confira o registro '+str(pending))
+        # After a slow mutation, read its result before judging the deadline.
+        # Valid observations and stage/key progress always take precedence.
+        if progress == (job['phase'], len(job.get('keys', []))):
+            check_timeout()
         time.sleep(.05 if deadline is not None else .25)
 
 
@@ -215,7 +253,7 @@ def send(pane, text, *, api=None, binding=None, timeout=30, background=True, on_
         pinned = identity(agent)
         if pinned[0] != pane: raise RuntimeError('Pane de destino mudou')
         if binding is not None: check_binding(agent, binding)
-        job = dict(version=1, pane=pane, session=api.session, identity=pinned, text=text,
+        job = dict(version=1, delivery_id=uuid.uuid4().hex, pane=pane, session=api.session, identity=pinned, text=text,
                    phase='waiting', on_confirm=on_confirm, enter=enter)
         prefix = pending.name.removesuffix('.pending.json')
         queued = pending.with_name(prefix+'.queued.'+str(time.time_ns())+'.'+uuid.uuid4().hex+'.json')
@@ -236,7 +274,7 @@ def send(pane, text, *, api=None, binding=None, timeout=30, background=True, on_
         raise
     except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
         if claimed and pending.exists():
-            job['phase'] = 'uncertain'; job['error'] = str(error); atomic(pending, job)
+            suspend(job, pending, error)
         raise RuntimeError('Envio não confirmado ao pane '+pane+'; nada foi apagado ou reenviado: '+str(error)) from error
 
 
@@ -262,14 +300,61 @@ def resume(record):
                 try:
                     advance(Herdr(job['session']), job, pending)
                 except Exception as error:
-                    job.update(phase='uncertain', error=str(error)); atomic(pending, job)
+                    suspend(job, pending, error)
                     raise
                 return 0
         # Do not hold the lease while waiting behind another saved delivery.
         time.sleep(.25)
 
 
+def reconcile(record, resolution, evidence):
+    """Operator reconciliation, never automatic consumption or a second paste.
+
+    Retiring requires the operator to establish that any delayed paste has settled.
+    The original job and observations are archived before the FIFO is released.
+    """
+    record = Path(record)
+    original = json.loads(record.read_text())
+    if not evidence.strip(): raise RuntimeError('Informe a evidência da reconciliação')
+    with pane_lock(original['pane'], original['session']) as pending:
+        if record != pending: raise RuntimeError('Reconcilie somente o registro pendente do pane')
+        job = json.loads(pending.read_text())
+        if job != original: raise RuntimeError('O registro mudou durante a espera; releia antes de reconciliar')
+        if job['phase'] != 'uncertain': raise RuntimeError('Suspenda a entrega antes de reconciliar')
+        api = Herdr(job['session'])
+        observed = api.call('agent', 'get', job['pane'])['agent']
+        observed_identity = identity(observed)
+        rows = surface(api, job['pane'])
+        if resolution == 'materialized':
+            if observed_identity != tuple(job['identity']):
+                raise RuntimeError('Identidade mudou; somente retirada explícita é permitida')
+            if job.get('uncertain_phase') != 'pasting' or not matches(rows, job['text']):
+                raise RuntimeError('Continuação exige o texto próprio inteiro e suspensão durante paste')
+        elif resolution != 'retired':
+            raise RuntimeError('Resolução desconhecida')
+        archive = pending.with_name(pending.name.removesuffix('.pending.json')+
+                                    '.reconciled.'+str(time.time_ns())+'.json')
+        atomic(archive, dict(job=job, resolution=resolution, evidence=evidence,
+                             observed_composer=rows, observed_identity=observed_identity, reconciled_at=time.time()))
+        if resolution == 'retired':
+            # Explicit cancellation is NOT an acknowledgement; on_confirm never runs.
+            pending.unlink()
+        else:
+            job.update(phase='materialized', confirmation_started_at=time.time(),
+                       reconciliation=str(archive))
+            atomic(pending, job)
+    return 0
+
+
 if __name__ == '__main__':
-    if len(sys.argv) != 3 or sys.argv[1] != 'resume':
-        raise SystemExit('Uso: python -m watchdog_app.pane_delivery resume <registro.pending.json>')
-    raise SystemExit(resume(sys.argv[2]))
+    import argparse
+    parser = argparse.ArgumentParser(description='Recuperação de entrega pelo pane')
+    commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('resume').add_argument('record')
+    recovery = commands.add_parser('reconcile')
+    recovery.add_argument('record')
+    recovery.add_argument('--resolution', choices=('materialized', 'retired'), required=True)
+    recovery.add_argument('--evidence', required=True)
+    args = parser.parse_args()
+    raise SystemExit(resume(args.record) if args.command == 'resume' else
+                     reconcile(args.record, args.resolution, args.evidence))
