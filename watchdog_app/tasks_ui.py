@@ -118,9 +118,10 @@ class TasksUI:
         self.clean = Controller(self.repo)
         self.binding_file = binding_file
         self.next_reconnect = 0
+        self.next_leader_check = 0
         self.can_confirm = False
         try:
-            self.session = Session.for_panel(binding_file, self.repo) if binding_file else Session(None, self.repo)
+            self.session = Session.for_panel(binding_file, self.repo, allow_unavailable=True) if binding_file else Session(None, self.repo)
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
             self.session = Session(None, self.repo)
             self.notice = str(error)
@@ -142,14 +143,35 @@ class TasksUI:
             target = self.session.successor_file()
             if target:
                 self.job.close()
+                before = self.session.binding
                 self.session = Session(target, self.repo)
-                self.last_auto_key = None
+                self.last_auto_key, self.result = None, None
                 self.mode, self.pending = 'tasks', None
-                self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + self.session.binding.session
+                after = self.session.binding
+                if (before.pane, before.terminal) == (after.pane, after.terminal):
+                    self.notice = ('Harness alterado: ' + before.kind + ' → ' + after.kind
+                                   if before.kind != after.kind else '')
+                else:
+                    self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + after.session
             if self.session.binding:
                 self.clean.poll(self.session.binding)
+                if time.monotonic() >= self.next_leader_check:
+                    self.next_leader_check = time.monotonic() + 2
+                    before = self.session.binding
+                    try:
+                        self.session.verify()
+                    except RuntimeError:
+                        from .leader_link import follow
+                        successor = follow(self.session)
+                        self.job.close()
+                        self.session = successor
+                        self.last_auto_key, self.result = None, None
+                        self.mode, self.pending = 'tasks', None
+                        self.notice = ('Harness alterado: ' + before.kind + ' → ' + successor.binding.kind
+                                       if before.kind != successor.binding.kind else '')
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
-            self.notice = str(error)
+            if self.mode == 'tasks':
+                self.notice = str(error)
         try:
             snapshot = Snapshot.read(self.repo)
             if self.snapshot and snapshot.digest != self.snapshot.digest:
@@ -213,6 +235,15 @@ class TasksUI:
                     ('Líder: ' + offer['pane'] + ' · ' + self.session.label, None, None),
                     (offer['warning'], 'Blocked', None),
                     (offer['prompt'][:self.skill_cursor] + '▏' + offer['prompt'][self.skill_cursor:], None, None)]
+        if self.mode == 'relink':
+            return [('Religar · escolher líder', 'In progress', None)] + [
+                (b.pane + ' · ' + b.kind + ' · ' + b.session, None, i)
+                for i, b in enumerate(self.leader_choices)] + (
+                [] if self.leader_choices else [('Nenhum agente verificado neste workspace e projeto.', 'Blocked', None)])
+        if self.mode == 'confirm' and self.pending['kind'] == 'resend_goal':
+            return [('Reenviar meta do grupo', 'In progress', None),
+                    (self.session.label, None, None), (self.pending['prompt'], None, None),
+                    ('y envia · Esc cancela', None, None)]
         if self.mode == 'audit':
             return self.audit.rows()
         if self.mode == 'dispatch':
@@ -403,7 +434,7 @@ class TasksUI:
         elif self.mode == 'confirm':
             buttons = [('Confirm y', 'y'), ('Cancel Esc', 'escape')]
             hint = 'y: confirm · Esc: cancel · j/k: scroll'
-        elif self.mode in ('dispatch', 'executors', 'grouping'):
+        elif self.mode in ('dispatch', 'executors', 'grouping', 'relink'):
             buttons = [('Escolher Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Setas/j/k: escolher · Enter/clique: continuar · Esc: cancelar'
         elif self.mode == 'clean_setup':
@@ -420,6 +451,7 @@ class TasksUI:
                        ('Start i', 'i'), ('Next n', 'n'), ('Envio avançado D', 'D'), ('Quit q', 'q')]
             hint = 'Space: select · Enter/▸: resumo · r: Review Curator · v: Verify Leader · 0: novo agente · P: planejar · C: opções'
         if self.mode == 'tasks':
+            buttons += [('Religar L', 'L'), ('Reenviar meta G', 'G')]
             from .matt_skills import installed
             buttons += [(command + ' ' + key, key) for key, command in installed(self.repo, self.session.binding)]
         packed, x, line = [], 0, 0
@@ -565,6 +597,10 @@ class TasksUI:
             self.job.close()
             operation = self.clean.start(self.session, offer['policy'])
             self.notice = 'Clean sessions ' + operation['state'] + ' · ' + operation['operation_id']
+        elif offer['kind'] == 'resend_goal':
+            from .dispatch import resend
+            resend(self.session, offer)
+            self.notice = 'Meta reenviada ao líder'
         elif offer['kind'] == 'group_dispatch':
             from .dispatch import deliver
             deliver(self.session, offer)
@@ -728,6 +764,23 @@ class TasksUI:
             if key in ('y', 'enter') and self.can_confirm:
                 self.execute()
             return True
+        if self.mode == 'relink':
+            if key in ('enter', ' '):
+                identities = getattr(self, 'visible_identifiers', [])
+                if identities:
+                    candidate = self.leader_choices[identities[min(self.cursor, len(identities)-1)]]
+                    from .leader_link import connect
+                    before = self.session.binding
+                    successor = connect(self.session, candidate)
+                    self.job.close()
+                    self.session = successor
+                    self.last_auto_key, self.result = None, None
+                    self.mode, self.pending = 'tasks', None
+                    self.cursor, self.scroll = 0, 0
+                    self.notice = 'Líder ligado · ' + candidate.pane
+                    if before.kind != candidate.kind:
+                        self.notice += ' · Harness alterado: ' + before.kind + ' → ' + candidate.kind
+            return True
         if self.mode in ('dispatch', 'executors', 'grouping'):
             if key in ('enter', ' '):
                 identities = getattr(self, 'visible_identifiers', [])
@@ -790,6 +843,14 @@ class TasksUI:
             return False
         elif not full_controls() and key in DISABLED_KEYS:
             return True
+        elif key == 'L':
+            from .leader_link import choices
+            self.leader_choices = choices(self.session)
+            self.mode, self.cursor, self.scroll = 'relink', 0, 0
+        elif key == 'G':
+            from .dispatch import resend_preview
+            self.pending = resend_preview(self.session)
+            self.mode, self.scroll = 'confirm', 0
         elif key in ('p', 'h'):
             self.require_selection()
             from .dispatch import preview

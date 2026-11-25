@@ -177,6 +177,10 @@ class Progress:
         if not self.binding_file: return View('unavailable', 'No conversation binding; open Progress with Watchdog')
         try:
             if self.session is None: self.session = Session(self.binding_file, self.repo)
+            target = self.session.successor_file()
+            if target:
+                self.session = Session.for_panel(target, self.repo)
+                self.binding_file = self.session.file
             self.session.verify()
             binding = self.session.binding
             source = (binding.kind, binding.session, binding.history)

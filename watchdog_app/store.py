@@ -31,6 +31,17 @@ def atomic(path, value):
         temporary.unlink(missing_ok=True)
 
 
+def correlated(source, successor):
+    """Accept the current incoming hop or a verified hop retained on explicit return."""
+    operation = source.get('outgoing_transfer_operation', source.get('transfer_operation'))
+    receipts = [{'operation': successor.get('transfer_operation'),
+                 'predecessor': successor.get('predecessor_binding')}]
+    receipts += successor.get('accepted_incoming_transfers', [])
+    return bool(operation) and any(
+        receipt.get('operation') == operation and receipt.get('predecessor') == source.get('binding')
+        for receipt in receipts)
+
+
 class Store:
     def __init__(self, root=None):
         self.root = Path(root) if root is not None else state_root()
@@ -82,6 +93,39 @@ class Store:
             raise ValueError('Unknown layout')
         atomic(self.root / 'preferences.json', {'layout': preset})
 
+    def retired_target(self, target, source_file, source, new, repo):
+        """A return may reuse only a released ancestor of the active resource owner.
+
+        Source and destination locks are held by transfer. Every valid change to
+        this chain needs its active owner's lock, so the released hops stay fixed.
+        """
+        current, seen = target, set()
+        retired = None
+        for _ in range(16):
+            if current.is_symlink() or current.parent.resolve() != self.root.resolve():
+                raise RuntimeError('Successor binding must stay in Watchdog state')
+            value = json.loads(current.read_text())
+            if (value.get('repo') != str(repo.resolve()) or not source.get('yazi_client_id') or
+                    value.get('yazi_client_id') != source['yazi_client_id']):
+                raise RuntimeError('Destination belongs to another project or panel group')
+            if current == source_file:
+                return retired
+            if current in seen or value.get('ownership') != 'released':
+                raise RuntimeError('Panel ownership already changed; destination is not a released ancestor')
+            seen.add(current)
+            if retired is None:
+                retired = value
+                if any(value.get('binding', {}).get(k) != getattr(new, k) for k in ('kind', 'account', 'session')):
+                    raise RuntimeError('Destination conversation identity differs')
+            following = Path(value['successor_binding_file'])
+            if following.is_symlink() or following.parent.resolve() != self.root.resolve():
+                raise RuntimeError('Successor binding must stay in Watchdog state')
+            successor = json.loads(following.read_text())
+            if not correlated(value, successor):
+                raise RuntimeError('Successor panel transfer correlation changed')
+            current = following
+        raise RuntimeError('Panel redirect chain is cyclic or too long')
+
     def transfer(self, source_file, old, new, repo, operation_id, *, api):
         """Relinquish first, then activate successor with the same panel resources.
 
@@ -96,24 +140,46 @@ class Store:
         if source_file.resolve() != (self.root / (old.key + '.json')).resolve():
             raise RuntimeError('Panel transfer requires the canonical Watchdog binding file')
         with ExitStack() as stack:
-            for binding in sorted((old, new), key=lambda b: b.key):
+            for binding in sorted({b.key: b for b in (old, new)}.values(), key=lambda b: b.key):
                 stack.enter_context(self.lock(binding))
             state = json.loads(source_file.read_text())
             if state.get('binding') != asdict(old) or state.get('repo') != str(repo.resolve()):
                 raise RuntimeError('Source panel ownership changed')
-            if state.get('ownership') in ('released', 'transferring') or target.exists():
+            if state.get('ownership') in ('released', 'transferring'):
                 raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
             if state.get('operation') not in (None, 'ready'):
                 raise RuntimeError('Panel layout operation is unfinished; transfer was withheld')
+            retired = None
+            if new.key != old.key and target.exists():
+                retired = self.retired_target(target, source_file, state, new, repo)
             panes = {role: (pane if role == 'left_undone' else api.panel(pane, repo))
                      for role, pane in state.get('panes', {}).items()}
             conversation = api.checked({'pane_id':new.pane, 'terminal_id':new.terminal})
+            if old.key == new.key:
+                # Explicit Religar of the same conversation: refresh in place,
+                # preserving incoming transfer correlation for older panels.
+                state.setdefault('reopened', []).append(asdict(old))
+                state['reopened'] = state['reopened'][-5:]
+                state.update(binding=asdict(new), conversation=conversation, panes=panes)
+                atomic(source_file, state)
+                return str(source_file)
             successor = copy.deepcopy(state)
             successor['panes'] = panes
             successor['conversation'] = conversation
             successor.update(binding=asdict(new), binding_file=str(target), ownership='active',
                              transfer_operation=operation_id, predecessor_binding=asdict(old))
             successor['panes'].pop('left_undone', None)
+            successor.pop('accepted_incoming_transfers', None)
+            successor.pop('reopened', None)
+            if retired:
+                receipts = list(retired.get('accepted_incoming_transfers', []))
+                if retired.get('transfer_operation'):
+                    receipts.append({'operation':retired['transfer_operation'],
+                                     'predecessor':retired['predecessor_binding']})
+                successor['accepted_incoming_transfers'] = receipts
+                successor['reopened'] = (retired.get('reopened', []) + [retired['binding']])[-5:]
+                if retired.get('panes', {}).get('left_undone'):
+                    successor['panes']['left_undone'] = retired['panes']['left_undone']
             successor.pop('outgoing_transfer_operation', None)
             successor.pop('successor_binding_file', None)
             # Preserve all other resource/layout/client fields exactly. LU stays
