@@ -46,15 +46,39 @@ def preview(session, snapshot, ids):
         branch, base = integration(snapshot.repo)
         state.update(integration_branch=branch, base=base)
     # T3 owns the active-goal/update policy. T1 always sends the group objective.
-    phrase = ('Concluir somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(snapshot.repo)) +
-              ', acompanhadas no TODO.md de ' + str(snapshot.repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
-              ' e a seção ## Dispatch do AGENTS.md do projeto. Despache um executor por tarefa; '
-              'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
-    prompt = ('/goal ' if session.binding.kind in ('codex', 'claude') else '') + phrase
+    prompt = group_goal(session.binding, snapshot.repo)
     return {'kind': 'group_dispatch', 'snapshot': snapshot, 'ids': set(ids),
             'prompt': prompt, 'pane': session.binding.pane, 'binding': session.binding,
             'previous': previous, 'group': state,
             'classification': classify(snapshot, set(ids)), 'warnings': warnings(snapshot.repo)}
+
+
+def group_goal(binding, repo):
+    phrase = ('Concluir somente as tarefas do grupo do Watchdog em ' + str(long_run.path_for(repo)) +
+              ', acompanhadas no TODO.md de ' + str(repo) + '. Leia o padrão do dispatch ' + str(STANDARD) +
+              ' e a seção ## Dispatch do AGENTS.md do projeto. Despache um executor por tarefa; '
+              'siga os ponteiros de aceite e avise ao concluir ou bloquear o grupo.')
+    return ('/goal ' if binding.kind in ('codex', 'claude') else '') + phrase
+
+
+def resend_preview(session):
+    session.verify()
+    group = long_run.record(session.repo)
+    if not group:
+        raise RuntimeError('Não há grupo para reenviar a meta')
+    return {'kind':'resend_goal', 'prompt':group_goal(session.binding, session.repo), 'group':group,
+            'binding':session.binding, 'pane':session.binding.pane}
+
+
+def resend(session, offer):
+    with session.routing(), locked(session.repo):
+        session.verify()
+        if session.binding != offer['binding'] or long_run.record(session.repo) != offer['group']:
+            raise RuntimeError('O líder ou o grupo mudou; confira uma nova prévia da meta')
+        try:
+            send(offer['pane'], offer['prompt'])
+        except (RuntimeError, OSError) as error:
+            raise RuntimeError('Reenvio não confirmado; confira o pane antes de tentar novamente. Nada foi reenviado automaticamente.') from error
 
 
 def deliver(session, offer):

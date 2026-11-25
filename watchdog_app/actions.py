@@ -15,7 +15,7 @@ class Busy(RuntimeError):
 
 
 class Session:
-    def __init__(self, file, repo):
+    def __init__(self, file, repo, *, follow=False, allow_unavailable=False):
         self.file = Path(file) if file else None
         self.repo = Path(repo).resolve()
         self.binding = None
@@ -26,7 +26,18 @@ class Session:
                 raise RuntimeError('Binding belongs to another project')
             self.runtime = bindings.engine()
             self.binding = self.runtime.Binding(**data['binding'])
-            self.verify()
+            try:
+                self.verify()
+            except RuntimeError as unavailable:
+                if not follow:
+                    raise
+                from .leader_link import follow as follow_leader
+                try:
+                    successor = follow_leader(self)
+                    self.file, self.binding, self.runtime = successor.file, successor.binding, successor.runtime
+                except RuntimeError:
+                    if not allow_unavailable:
+                        raise unavailable
 
     @property
     def label(self):
@@ -61,7 +72,7 @@ class Session:
         return live
 
     def reattach(self):
-        """Follow the same verified conversation after its pane was closed and resumed."""
+        """Refresh the same conversation inside the original pane and terminal."""
         from .store import Store, atomic
         if (Path('/proc') / str(self.binding.pid)).exists():
             return False  # The original process still runs: a different pane is not a reopen.
@@ -69,7 +80,8 @@ class Session:
             candidates, _ = bindings.discover(self.repo)
         except Exception:
             return False
-        same = [b for b in candidates if (b.kind, b.account, b.session) == (self.binding.kind, self.binding.account, self.binding.session)]
+        same = [b for b in candidates if (b.kind, b.account, b.session, b.pane, b.terminal) ==
+                (self.binding.kind, self.binding.account, self.binding.session, self.binding.pane, self.binding.terminal)]
         if len(same) != 1 or not isinstance(getattr(same[0], 'key', None), str):
             return False
         with Store(self.file.parent).lock(same[0]):
@@ -84,7 +96,7 @@ class Session:
         return True
 
     @classmethod
-    def for_panel(cls, file, repo):
+    def for_panel(cls, file, repo, *, allow_unavailable=False):
         """Follow only correlated Watchdog redirects; the final identity is live verified."""
         current = Path(file)
         for _ in range(16):
@@ -92,7 +104,7 @@ class Session:
             if Path(data['repo']).resolve() != Path(repo).resolve():
                 raise RuntimeError('Panel redirect belongs to another project')
             if data.get('ownership') != 'released':
-                return cls(current, repo)
+                return cls(current, repo, follow=True, allow_unavailable=allow_unavailable)
             target = Path(data['successor_binding_file'])
             if target.is_symlink() or target.parent.resolve() != current.parent.resolve():
                 raise RuntimeError('Successor binding must stay in Watchdog state')

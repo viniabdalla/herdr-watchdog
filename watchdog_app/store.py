@@ -96,18 +96,26 @@ class Store:
         if source_file.resolve() != (self.root / (old.key + '.json')).resolve():
             raise RuntimeError('Panel transfer requires the canonical Watchdog binding file')
         with ExitStack() as stack:
-            for binding in sorted((old, new), key=lambda b: b.key):
+            for binding in sorted({b.key: b for b in (old, new)}.values(), key=lambda b: b.key):
                 stack.enter_context(self.lock(binding))
             state = json.loads(source_file.read_text())
             if state.get('binding') != asdict(old) or state.get('repo') != str(repo.resolve()):
                 raise RuntimeError('Source panel ownership changed')
-            if state.get('ownership') in ('released', 'transferring') or target.exists():
+            if state.get('ownership') in ('released', 'transferring') or (new.key != old.key and target.exists()):
                 raise RuntimeError('Panel ownership already changed; inspect transfer without retry')
             if state.get('operation') not in (None, 'ready'):
                 raise RuntimeError('Panel layout operation is unfinished; transfer was withheld')
             panes = {role: (pane if role == 'left_undone' else api.panel(pane, repo))
                      for role, pane in state.get('panes', {}).items()}
             conversation = api.checked({'pane_id':new.pane, 'terminal_id':new.terminal})
+            if old.key == new.key:
+                # Explicit Religar of the same conversation: refresh in place,
+                # preserving incoming transfer correlation for older panels.
+                state.setdefault('reopened', []).append(asdict(old))
+                state['reopened'] = state['reopened'][-5:]
+                state.update(binding=asdict(new), conversation=conversation, panes=panes)
+                atomic(source_file, state)
+                return str(source_file)
             successor = copy.deepcopy(state)
             successor['panes'] = panes
             successor['conversation'] = conversation
