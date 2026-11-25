@@ -5,7 +5,7 @@ import subprocess
 
 from . import long_run
 from .dispatch_preview import classify, warnings, blocked
-from .herdr import Herdr
+from .pane_delivery import send
 from .store import atomic
 from .todo import locked
 
@@ -76,9 +76,7 @@ def deliver(session, offer):
         # The leader can read the group as soon as Enter reaches its pane.
         atomic(long_run.path_for(snapshot.repo), offer['group'])
         try:
-            api = Herdr()
-            api.call('pane', 'send-text', offer['pane'], offer['prompt'])
-            api.call('pane', 'send-keys', offer['pane'], 'Enter')
+            send(offer['pane'], offer['prompt'])
         except (RuntimeError, OSError) as error:
             raise RuntimeError('Despacho não confirmado; grupo preservado. Confira o pane do líder '
                                'antes de tentar novamente; nada foi reenviado automaticamente.') from error

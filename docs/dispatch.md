@@ -38,10 +38,30 @@ O painel entrega a seleção; o líder coordena a execução.
 - Avise o líder pelo pane indicado no contrato, uma mensagem por evento:
   `[Tn · painel <pane próprio>] Tn pronto: commit <sha>, testes <resultado>. <resumo>`.
   Para dúvida não decidida pela spec, envie `BLOQUEIO: <dúvida>` e espere resposta.
-  Use o comando de aviso do kit com trava por pane quando disponível. Toda entrega
-  ao líder deve manter a trava desde o texto até o Enter. Até a integração do kit,
-  use `herdr pane send-text <pane do líder> '<mensagem>'` seguido de
-  `herdr pane send-keys <pane do líder> Enter`, conforme o contrato.
+  Use `watchdog aviso` conforme a CLI abaixo; ela mantém a trava por pane desde
+  o texto até o Enter. Inclua o caminho absoluto do Watchdog no contrato para
+  funcionar também na worktree do executor.
+
+### CLI de aviso (kit T6, usada por T7/T8)
+
+```bash
+/caminho/do/watchdog aviso --lider w11:p8 --pane w11:pE --ticket T6 pronto --commit abc1234 --testes '12 testes OK' --resumo 'Trava por pane pronta'
+/caminho/do/watchdog aviso --lider w11:p8 --pane w11:pE --ticket T6 BLOQUEIO --duvida 'Qual critério decide este caso?'
+```
+
+Substitua pane do líder, pane próprio e ticket pelos valores do contrato. O
+comando escreve uma mensagem inteira e dá Enter; `pronto` exige commit, testes
+e resumo, e `BLOQUEIO` exige dúvida. Para uma sessão Herdr explícita, acrescente
+`--session <nome>` antes do evento. Saída zero confirma os dois comandos; erro
+retorna saída não zero, sem repetição automática: confira o pane antes de tentar
+novamente.
+
+Despacho, Verify Leader e avisos usam a mesma trava por pane e socket Herdr em
+`$XDG_STATE_HOME/herdr-watchdog/pane-locks` (padrão `~/.local/state`). A trava
+independe da worktree e de `WATCHDOG_STATE_DIR`; executores e painéis devem usar
+o mesmo usuário, socket e `XDG_STATE_HOME`. Escritores novos usam
+`watchdog_app.pane_delivery.send(pane, texto, api=Herdr(...))` em vez de separar
+texto e Enter. O envio pelo Herdr continua sendo texto seguido de Enter.
 
 ## Acompanhar e integrar
 

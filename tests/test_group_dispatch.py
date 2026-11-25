@@ -42,7 +42,7 @@ class GroupDispatchTests(unittest.TestCase):
                          'print(json.dumps({"result":{}}))\n')
         herdr.chmod(0o755)
         self.env = dict(os.environ, TERM='xterm-256color', WATCHDOG_STATE_DIR=str(self.repo/'state'),
-                        HERDR_BIN_PATH=str(herdr))
+                        HERDR_BIN_PATH=str(herdr), XDG_STATE_HOME=str(self.repo/'xdg'))
         self.env.pop('WATCHDOG_FULL_CONTROLS', None)
         self.binding = binding
 
