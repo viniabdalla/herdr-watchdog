@@ -24,15 +24,68 @@ class PlatformCompatTests(unittest.TestCase):
             compat.fsync_directory(Path('/not-opened'))
             opened.assert_not_called()
 
-    def test_manifest_covers_all_platforms_and_bootstraps_dependencies(self):
-        import re
-        root=Path(__file__).resolve().parents[1]
-        text=(root/'herdr-plugin.toml').read_text()
-        self.assertIn('platforms = ["linux", "macos", "windows"]',text)
-        commands=re.findall(r'^command = (.+)$',text,re.M)
-        self.assertEqual(len(commands),6)
-        for command in commands[1:]:
-            self.assertIn('plugin-boot.py',command)
+    def test_manifest_installs_skill_and_boots_relevant_actions(self):
+        # Spec L24-26,38,40: consume TOML meaning and run installer/boot, no UI/network.
+        import contextlib
+        import io
+        import json
+        import runpy
+        import shutil
+        import subprocess
+        import sys
+        try:
+            import tomllib
+        except ImportError:  # Python 3.10; declared in requirements-test.txt.
+            import tomli as tomllib
+        from watchdog_app import installation
+        source=Path(__file__).resolve().parents[1]
+        manifest=tomllib.loads((source/'herdr-plugin.toml').read_text())
+        self.assertTrue({'linux','macos','windows'} <= set(manifest['platforms']))
+        panes={entry['id']:entry for entry in manifest['panes']}
+        actions={entry['id']:entry for entry in manifest['actions']}
+        entries=[(actions['open'],['open']),(panes['picker'],['pick']),
+                 (panes['tasks'],['plugin-panel','tasks']),
+                 (panes['progress'],['plugin-panel','progress']),
+                 (panes['artifacts'],['plugin-panel','artifacts'])]
+        with tempfile.TemporaryDirectory(prefix='wd plugin space ') as tmp:
+            root=Path(tmp);account=root/'account';bindir=root/'bin'
+            shutil.copy(source/'plugin-boot.py',root)
+            shutil.copy(source/'install.py',root)
+            skill=root/'skills/religar';skill.mkdir(parents=True)
+            shutil.copy(source/'skills/religar/SKILL.md',skill)
+            python=installation.python_path(root/'.watchdog-runtime')
+            python.parent.mkdir(parents=True)
+            # Stand-in for installed runtime: execute the program it receives.
+            python.write_text('#!'+sys.executable+'\nimport os,sys\nos.environ["WATCHDOG_TEST_RUNTIME"]="installed"\nos.execv(sys.executable,[sys.executable,*sys.argv[1:]])\n')
+            python.chmod(0o755)
+            (root/'watchdog').write_text('import json,os,sys\nprint(json.dumps(dict(args=sys.argv[1:],runtime=os.environ.get("WATCHDOG_TEST_RUNTIME"))))\n')
+            env=dict(os.environ,WATCHDOG_TEST_RUNTIME='',CODEX_HOME=str(account),WATCHDOG_STATE_DIR=str(root/'state'),XDG_STATE_HOME=str(root/'xdg'))
+            with contextlib.redirect_stdout(io.StringIO()),patch.dict(os.environ,env),patch.object(installation,'ROOT',root), \
+                 patch.object(installation,'runtime_python',return_value=python), \
+                 patch.object(installation.subprocess,'run'):
+                # Execute the manifest's installation entry; unrelated builds may coexist.
+                builds=[b for b in manifest['build'] if 'install.py' in b['command']]
+                self.assertTrue(builds,'manifest must install Religar')
+                for entry in builds:
+                    command=entry['command']
+                    script=command.index('install.py')
+                    with patch.object(sys,'argv',[str(root/'install.py'),*command[script+1:],'--bin-dir',str(bindir)]):
+                        runpy.run_path(str(root/'install.py'),run_name='__main__')
+            self.assertTrue((account/'skills/religar/SKILL.md').is_file())
+            launch=subprocess.run([str(bindir/'watchdog'),'religar','reference'],env=env,text=True,capture_output=True)
+            self.assertEqual(launch.returncode,0,launch.stderr)
+            self.assertEqual(json.loads(launch.stdout),dict(args=['religar','reference'],runtime='installed'))
+            for entry,expected in entries:
+                with self.subTest(entry=entry['id']):
+                    command=entry['command']
+                    result=subprocess.run([sys.executable,*command[1:],'--repo',str(root/'project space')],
+                                          cwd=root,env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    self.assertEqual(json.loads(result.stdout),dict(args=[*expected,'--repo',str(root/'project space')],runtime='installed'))
+            python.unlink()
+            result=subprocess.run([sys.executable,str(root/'plugin-boot.py'),'plugin-panel','tasks'],env=env,text=True,capture_output=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('install.py',result.stderr)
 
     def test_windows_command_quoting_preserves_paths_with_spaces(self):
         from watchdog_app.compat import shell_command

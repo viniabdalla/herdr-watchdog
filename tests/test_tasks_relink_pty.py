@@ -85,13 +85,15 @@ class TasksRelinkPtyTests(unittest.TestCase):
         atomic(self.repo/'effective.json',asdict(self.new))
         skill=Path(self.chosen.account)/'skills/religar/SKILL.md';skill.parent.mkdir(parents=True);skill.write_text('fixture')
         self.env['FIXTURE_ROOT']=str(self.repo)
+        subprocess.run(['git','init','-q',str(self.repo)],check=True)
+        (self.repo/'source with spaces').mkdir()
         # Extend fake native CLI with list, foreground processes and project cwd.
         fake=self.repo/'herdr';text=fake.read_text()
         text=text.replace("else:result=dict(agent=agent(),pane=agent())", """elif args[:2]==['agent','list']:
  result=dict(agents=[dict(pane_id=b['pane'],terminal_id=b['terminal'],workspace_id=b['workspace'],agent=b['kind'],agent_status='idle',agent_session=dict(kind='id',value=b['session'])) for b in actors])
 elif args[:2]==['pane','process-info']:
  b=next(b for b in actors if b['pane']==args[-1]);result=dict(process_info=dict(foreground_processes=[dict(pid=b['pid'])]))
-else:result=dict(agent=agent(),pane=dict(agent(),cwd=str(root)))""")
+else:result=dict(agent=agent(),pane=dict(agent(),cwd=str(root/'source with spaces')))""")
         fake.write_text(text)
     def calls(self):
         path=self.repo/'commands.jsonl'

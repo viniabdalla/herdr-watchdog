@@ -15,6 +15,7 @@ import uuid
 
 from . import bindings
 from .herdr import Herdr
+from .portable_runtime import project_root
 from .store import Store, atomic, state_root
 
 TERMINAL = ('confirmed', 'failed', 'cancelled')
@@ -142,8 +143,8 @@ def process_proof(candidate, repo, runtime):
         current=runtime.process_info(candidate.pid)
         if not current or any(str(current[k])!=str(getattr(candidate,k)) for k in ('pid','started','kind','pane','account')):
             raise RuntimeError('O processo do alvo foi substituído')
-        # Foreground CWD may be a nested worktree; project identity comes from metadata.
-        if not Path(process.cwd()).resolve().is_relative_to(Path(repo).resolve()):
+        # A nested repository or another worktree is a distinct project.
+        if project_root(process.cwd()) != project_root(repo):
             raise RuntimeError('O processo do alvo está em outro projeto')
     except psutil.Error as error:
         raise RuntimeError('Não foi possível conferir o processo do alvo: '+str(error)) from error
@@ -162,7 +163,7 @@ def _history_proof(path, session, repo, marker, created):
         try:
             row=json.loads(line);p=row.get('payload',{})
             if row.get('type')=='session_meta':
-                metadata |= p.get('id')==session and Path(p.get('cwd','')).resolve()==Path(repo).resolve()
+                metadata |= p.get('id')==session and bool(p.get('cwd')) and project_root(p['cwd'])==project_root(repo)
             if (row.get('type')!='response_item' or p.get('type')!='message' or p.get('role')!='assistant'
                     or p.get('phase',p.get('channel'))!='commentary'):continue
             stamp=datetime.fromisoformat(row['timestamp'].replace('Z','+00:00')).timestamp()

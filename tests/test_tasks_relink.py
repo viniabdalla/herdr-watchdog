@@ -1,7 +1,7 @@
 """Religar spec 2026-11-25 L10-12,16,19,32-37: Tasks controller contract."""
 from dataclasses import replace
 from pathlib import Path
-import sys
+import os
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -14,14 +14,16 @@ class TasksRelinkTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.repo=Path(self.temp.name)
+        env=patch.dict(os.environ,WATCHDOG_STATE_DIR=str(self.repo/'state'),XDG_STATE_HOME=str(self.repo/'xdg'))
+        env.start();self.addCleanup(env.stop)
         self.b=Binding()
         self.candidate=replace(self.b,pane='project:p9',session='stale-A')
         self.ref='a'*32
         self.state={'state':'pending','pane':self.candidate.pane,'notice':'aguardando prova'}
         self.core=SimpleNamespace(begin=Mock(return_value=self.ref),read=lambda ref:self.state,
             guard=lambda file:None,cancel=Mock(side_effect=lambda ref:self.state.update(state='cancelled')),pending_for=lambda path:self.ref)
-        self.modules=patch.dict(sys.modules,{'watchdog_app.relink':self.core})
-        self.modules.start();self.addCleanup(self.modules.stop)
+        core_patch=patch('watchdog_app.relink',self.core,create=True)
+        core_patch.start();self.addCleanup(core_patch.stop)
         self.ui=TasksUI.__new__(TasksUI)
         self.ui.screen=SimpleNamespace(getmaxyx=lambda:(30,120))
         self.ui.repo=self.repo;self.ui.mode='relink';self.ui.pending=None

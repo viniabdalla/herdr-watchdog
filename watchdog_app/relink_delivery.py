@@ -12,6 +12,7 @@ import time
 
 from . import bindings, pane_delivery as transport
 from .herdr import Herdr
+from .portable_runtime import project_root
 from .store import atomic, state_root
 
 
@@ -47,10 +48,12 @@ def validate(candidate, repo, api):
         raise RuntimeError('Agente do destino não está em primeiro plano')
     live = api.checked({'pane_id':candidate.pane, 'terminal_id':candidate.terminal})
     cwd = live.get('foreground_cwd') or live.get('cwd')
-    if cwd and Path(cwd).resolve() != Path(repo).resolve():
+    if cwd and project_root(cwd) != project_root(repo):
         raise RuntimeError('Projeto do destino mudou')
-    if not cwd and Path(bindings.project_for(candidate)).resolve() != Path(repo).resolve():
-        raise RuntimeError('Projeto do destino não identificado')
+    if not cwd:
+        project = bindings.project_for(candidate)
+        if not project or project_root(project) != project_root(repo):
+            raise RuntimeError('Projeto do destino não identificado')
     return agent
 
 

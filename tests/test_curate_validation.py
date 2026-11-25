@@ -14,7 +14,7 @@ ID='9f4cdfb9-3b30-4d69-a178-aa3ff61301a6'
 class CuratorValidationTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.repo=Path(self.tmp.name)
-        env=patch.dict(os.environ,{'WATCHDOG_STATE_DIR':str(self.repo/'state')});env.start();self.addCleanup(env.stop)
+        env=patch.dict(os.environ,{'WATCHDOG_STATE_DIR':str(self.repo/'state'),'XDG_STATE_HOME':str(self.repo/'xdg')});env.start();self.addCleanup(env.stop)
         (self.repo/'TODO.md').write_text('---\nwatchdog_todo: 1\n---\n## Next\n'+render('Colors',dict(id=ID,summary='Colors',origin='pedido-humano',execution='Details',acceptance='Verify colors')))
         self.snap=Snapshot.read(self.repo);self.log=self.repo/'real-selected.jsonl'
         self.binding=FakeBinding(history=str(self.log));self.session=SimpleNamespace(repo=self.repo,binding=self.binding,verify=lambda:None)
@@ -457,6 +457,7 @@ class CuratorValidationTests(unittest.TestCase):
     def test_tasks_ui_surfaces_oversize_reason_without_starting_review_or_changing_todo(self):
         from watchdog_app.tasks_ui import TasksUI
         self.reply('Colors is complete.\n'+'é'*12000)
+        self.session.file = self.repo/'binding.json'
         self.session.successor_file=lambda:None
         clean=SimpleNamespace(operation=None,poll=lambda binding:None)
         with patch('watchdog_app.tasks_ui.colors',return_value={}), \

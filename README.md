@@ -169,6 +169,8 @@ checkout when the left-undone command is not in PATH. No Git repo is required.
 
 ## Verify
 
+On Python 3.10, install `requirements-test.txt` in the test environment for TOML parsing.
+
 ```sh
 python3 -B -m unittest discover -s tests -q
 # With the disposable wd-test server running:

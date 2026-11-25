@@ -18,6 +18,7 @@ class RelinkTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.repo = Path(self.temp.name)
         self.env = patch.dict(os.environ, WATCHDOG_STATE_DIR=str(self.repo/'state'),
+                              XDG_STATE_HOME=str(self.repo/'xdg'),
                               CODEX_THREAD_ID='12345678-1234-1234-1234-123456789abc')
         self.env.start(); self.addCleanup(self.env.stop)
         self.old = Binding(account=str(self.repo/'account'), history=str(self.repo/'A.jsonl'))
@@ -55,12 +56,29 @@ class RelinkTests(unittest.TestCase):
         self.history()
         self.calls.clear()
 
-    def history(self, phase='commentary', marker=None):
-        rows=[{'type':'session_meta','payload':{'id':self.new.session,'cwd':str(self.repo)}},
+    def history(self, phase='commentary', marker=None, cwd=None):
+        rows=[{'type':'session_meta','payload':{'id':self.new.session,'cwd':str(cwd or self.repo)}},
               {'type':'response_item','timestamp':datetime.now(timezone.utc).isoformat(),
                'payload':{'type':'message','role':'assistant','phase':phase,
                           'content':[{'type':'output_text','text':marker or 'LU-'+self.ref}]}}]
         Path(self.new.history).write_text(''.join(json.dumps(r)+'\n' for r in rows))
+
+    def test_subdirectory_process_and_history_reopen_persisted_project_binding(self):
+        # Spec L9,17-18,26,32,40: R/src belongs to R through proof and reopen.
+        import subprocess
+        subprocess.run(['git','init','-q',str(self.repo)],check=True)
+        src=self.repo/'source with spaces';src.mkdir()
+        self.history(cwd=src)
+        process=SimpleNamespace(environ=lambda:{'CODEX_HOME':self.old.account,'HERDR_PANE_ID':self.old.pane},
+                                cmdline=lambda:['codex'],name=lambda:'codex',cwd=lambda:str(src))
+        self.runtime.process_info=lambda pid:asdict(self.new)
+        with patch.dict('sys.modules',psutil=SimpleNamespace(Process=lambda pid:process,Error=OSError)), \
+             patch.object(self.relink,'process_proof',self.real_process_proof):
+            result=self.relink.complete(self.ref)
+        saved=json.loads(Path(result['successor']).read_text())
+        self.assertEqual(result['state'],'confirmed')
+        self.assertEqual(saved['binding'],asdict(self.new))
+        self.assertEqual(saved['repo'],str(self.repo))
 
     def test_confirmed_reopens_same_full_identity_and_repeated_command_is_noop(self):
         # Spec L18,20,32,34,37: native reread, one transfer, untouched group/requests.
@@ -149,6 +167,8 @@ class RelinkTests(unittest.TestCase):
         # Spec L17,26,33,40: daemon caller is not a descendant of target, cwd unrelated.
         import subprocess
         # Boundary B: the real CLI launches a fake binary and runtime/OS fixtures.
+        subprocess.run(['git','init','-q',str(self.repo)],check=True)
+        src=self.repo/'source with spaces';src.mkdir();self.history(cwd=src)
         binary=self.repo/'fake herdr'
         binary.write_text('''#!/usr/bin/env python3
 import json,os,sys
@@ -179,7 +199,7 @@ class Process:
  def environ(self):return {'CODEX_HOME':os.environ['FIXTURE_ACCOUNT'],'HERDR_PANE_ID':'project:p4'}
  def cmdline(self):return ['codex','--no-daemon']
  def name(self):return 'codex'
- def cwd(self):return os.environ['FIXTURE_ROOT']
+ def cwd(self):return str(Path(os.environ['FIXTURE_ROOT'])/'source with spaces')
 ''')
         (fixture/'left_undone').mkdir();(fixture/'left_undone/__init__.py').write_text('')
         (fixture/'left_undone/runtime.py').write_text('''import os
