@@ -95,7 +95,7 @@ def progress_bar(done, total, width):
     return '[' + '█' * filled + '░' * (size - filled) + ']'
 
 
-def rows(repo, store=None, *, progress=None, width=80):
+def rows(repo, store=None, *, progress=None, width=80, agents=None):
     result, history_rows = [], []
     try:
         snapshot = Snapshot.read(repo)
@@ -132,6 +132,8 @@ def rows(repo, store=None, *, progress=None, width=80):
                                event['from']+' → '+event['to']+' · '+event['evidence'],None,None))
     except (OSError, RuntimeError, ValueError) as error:
         result.append(('PROJECT · '+str(error),'blocked',None))
+    from .progress_agents import Agents
+    result.extend((agents or Agents(repo)).poll())
     result.extend(session_rows((progress or Progress(repo)).poll(), width))
     try:
         result.extend(run_rows(repo, store))
@@ -157,6 +159,8 @@ def panel(screen, repo, binding_file=None):
     selected=offset=0;notice='';armed=None
     progress=Progress(repo,binding_file)
     clean=Controller(repo)
+    from .progress_agents import Agents
+    agents=Agents(repo,binding_file)
     while True:
         screen.erase();h,w=screen.getmaxyx()
         put(screen,0,'WATCHDOG / PROGRESS',curses.A_BOLD);put(screen,1,Path(repo).name)
@@ -170,7 +174,7 @@ def panel(screen, repo, binding_file=None):
                             for text, color, _ in clean.rows()]
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
             cleanup_rows = [('Session · ' + str(error), 'blocked', None)]
-        source = rows(repo, progress=progress, width=w) + cleanup_rows
+        source = rows(repo, progress=progress, width=w, agents=agents) + cleanup_rows
         rendered=[]
         for text,color,run in source:
             rendered.extend((part,color,run) for part in textwrap.wrap(safe(text),max(4,w-2)) or [''])

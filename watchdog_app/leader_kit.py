@@ -76,6 +76,25 @@ def executors(repo, group=None):
     return dict(value, executors=[r for r in value['executors'] if group is None or r['group'] == group])
 
 
+def record_check(repo, *, group, ticket, step, summary):
+    """Persist a leader-confirmed inspection, without contacting any agent."""
+    repo = Path(repo).resolve()
+    if step not in (1, 2, 3) or not summary.strip():
+        raise RuntimeError('Checagem exige etapa 1–3 e resumo')
+    with pane_lock('kit:'+str(repo)):
+        data = registry(repo)
+        matches = [r for r in data['executors'] if r['group'] == group and r['ticket'] == ticket]
+        if len(matches) != 1:
+            raise RuntimeError('Executor sem correspondência única no grupo')
+        record = matches[0]
+        checks = record.setdefault('checks', [])
+        if step != len(checks) + 1:
+            raise RuntimeError('Registre cada checagem em ordem, sem repetir etapas')
+        checks.append(dict(step=step, checked_at=time.time(), summary=summary.strip()))
+        atomic(repo/'.watchdog/executors.json', data)
+        return record
+
+
 def contract(record, config):
     notice = shlex.join([str(ROOT/'watchdog'), 'aviso', '--lider', record['leader'],
                          '--pane', record['pane'], '--ticket', record['ticket']] +
@@ -253,13 +272,18 @@ def main(argv=None):
     closing.add_argument('--issue',type=int,required=True)
     closing.add_argument('--copia',required=True)
     closing.add_argument('--comentario',required=True)
-    for sub in (opening,listing,closing):sub.add_argument('--repo',type=Path,required=True)
+    checking = actions.add_parser('checar')
+    for flag in ('grupo','ticket','resumo'):checking.add_argument('--'+flag,required=True)
+    checking.add_argument('--etapa',type=int,choices=(1,2,3),required=True)
+    for sub in (opening,listing,closing,checking):sub.add_argument('--repo',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
         if args.action == 'abrir':
             result = open_executor(args.repo,ticket=args.ticket,group=args.grupo,leader=args.lider,
                                    workspace=args.workspace,leva=args.leva,acceptance=args.aceite,spec=args.spec,
                                    dependencies=args.depende,capacity=args.capacidade,session=args.session)
+        elif args.action == 'checar':
+            result = record_check(args.repo,group=args.grupo,ticket=args.ticket,step=args.etapa,summary=args.resumo)
         elif args.action == 'listar':result = executors(args.repo,args.grupo)
         else:result = close_issue(args.repo,issue=args.issue,copy=args.copia,comment=args.comentario)
         print(json.dumps(result,ensure_ascii=False,indent=2)); return 0
