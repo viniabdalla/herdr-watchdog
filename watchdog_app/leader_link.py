@@ -42,6 +42,9 @@ def connect(session, candidate):
 
 def follow(session):
     """Follow a new session only inside the same verified pane and terminal."""
+    from .relink_confirmation import blocked
+    if blocked(session):
+        raise RuntimeError('Sessão não confirmada; use Religar')
     old = session.binding
     try:
         session.runtime.verify(old)

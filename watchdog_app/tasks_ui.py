@@ -155,7 +155,7 @@ class TasksUI:
                     self.notice = 'Panel ownership transferred · Tasks and Orchestrate now target ' + after.session
             if self.session.binding:
                 self.clean.poll(self.session.binding)
-                if time.monotonic() >= self.next_leader_check:
+                if self.mode != 'relink_confirm' and time.monotonic() >= self.next_leader_check:
                     self.next_leader_check = time.monotonic() + 2
                     before = self.session.binding
                     try:
@@ -192,7 +192,7 @@ class TasksUI:
                     if self.pending['kind'] in ('orchestrate', 'fresh'):
                         self.pending['changes'] = pending(self.repo)
                     self.notice = 'TODO changed elsewhere; selected tasks unchanged, confirmation updated'
-                elif self.mode not in ('tasks', 'clean_setup', 'audit', 'skill_preview'):
+                elif self.mode not in ('tasks', 'clean_setup', 'audit', 'skill_preview', 'relink_confirm'):
                     self.notice = 'A selected task changed; confirmation cancelled. Select again.'
                     self.mode, self.pending = 'tasks', None
             self.snapshot = snapshot
@@ -235,6 +235,11 @@ class TasksUI:
                     ('Líder: ' + offer['pane'] + ' · ' + self.session.label, None, None),
                     (offer['warning'], 'Blocked', None),
                     (offer['prompt'][:self.skill_cursor] + '▏' + offer['prompt'][self.skill_cursor:], None, None)]
+        if self.mode == 'relink_confirm':
+            from .relink_confirmation import instruction
+            return [('Confirme a sessão no Codex de ' + self.pending['target']['pane'], 'In progress', None),
+                    (instruction(self.pending), None, None),
+                    ('c copia a instrução · Enter confere · Esc cancela', None, None)]
         if self.mode == 'relink':
             return [('Religar · escolher líder', 'In progress', None)] + [
                 (b.pane + ' · ' + b.kind + ' · ' + b.session, None, i)
@@ -427,7 +432,10 @@ class TasksUI:
                 self.notice = ''
         self._queue_was_stalled = bool(delivery_notice)
         put(screen, 3, delivery_notice or self.notice, curses.A_BOLD)
-        if self.mode == 'skill_preview':
+        if self.mode == 'relink_confirm':
+            buttons = [('Copiar c', 'c'), ('Conferir Enter', 'enter'), ('Cancelar Esc', 'escape')]
+            hint = 'Cole no Codex escolhido; depois Enter confere a prova'
+        elif self.mode == 'skill_preview':
             buttons = [('Enviar Enter', 'enter'), ('Cancelar Esc', 'escape')]
             hint = 'Digite para editar · ←/→: cursor · Ctrl+U: limpar'
         elif self.mode == 'audit':
@@ -663,14 +671,47 @@ class TasksUI:
     def handle(self, key):
         if key == 'escape':
             if self.mode != 'tasks':
+                confirming = self.mode == 'relink_confirm'
+                if confirming:
+                    from .relink_confirmation import cancel
+                    cancel(self.session, self.pending)
                 self.mode, self.pending = 'tasks', None
-                self.notice = 'Cancelled';self.scroll = 0;self.cursor = 0;self.follow_cursor = True
+                self.notice = 'Sessão não confirmada' if confirming else 'Cancelled';self.scroll = 0;self.cursor = 0;self.follow_cursor = True
             else:
                 return False
             return True
         h, w = self.screen.getmaxyx()
         if h < 10 or w < 24:
             return key != 'q'
+        if self.mode == 'relink_confirm':
+            if key == 'c':
+                from .relink_confirmation import instruction
+                import shutil, subprocess
+                command = (['wl-copy'] if shutil.which('wl-copy') else
+                           ['xclip', '-selection', 'clipboard'] if shutil.which('xclip') else None)
+                if command is None:
+                    self.notice = 'Copie a instrução exibida; clipboard indisponível'
+                else:
+                    try:
+                        subprocess.run(command, input=instruction(self.pending), text=True, check=True, timeout=3)
+                    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                        self.notice = 'Não foi possível copiar; copie a instrução exibida ou tente c novamente'
+                    else:
+                        self.notice = 'Instrução copiada · cole no Codex de ' + self.pending['target']['pane']
+            elif key == 'enter':
+                from .relink_confirmation import finish, cancel
+                try:
+                    successor = finish(self.session, self.pending)
+                except (RuntimeError, OSError, ValueError, KeyError, TypeError) as error:
+                    cancel(self.session, self.pending)
+                    self.notice = 'Sessão não confirmada: ' + str(error)
+                else:
+                    self.job.close()
+                    self.session = successor
+                    self.last_auto_key, self.result = None, None
+                    self.notice = 'Líder ligado · ' + successor.binding.pane + ' · ' + successor.binding.session[:8]
+                self.mode, self.pending = 'tasks', None
+            return True
         if self.mode == 'skill_preview':
             text = self.pending['prompt']
             position = self.skill_cursor
@@ -776,6 +817,12 @@ class TasksUI:
                 identities = getattr(self, 'visible_identifiers', [])
                 if identities:
                     candidate = self.leader_choices[identities[min(self.cursor, len(identities)-1)]]
+                    from .relink_confirmation import required, begin
+                    if required(self.session, candidate):
+                        self.pending = begin(self.session, candidate)
+                        self.mode, self.cursor, self.scroll = 'relink_confirm', 0, 0
+                        self.notice = ''
+                        return True
                     from .leader_link import connect
                     before = self.session.binding
                     successor = connect(self.session, candidate)
