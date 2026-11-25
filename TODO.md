@@ -22,16 +22,6 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
 ## Em andamento
 
 ## Próximo
-- [ ] T14 (#15) Aceite manual
-  ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
-  Resumo:
-    o Vini testa /clear no Claude e no Codex, handoff Claude e Codex, uma rodada real A/B/C e o code review com as abas.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #15 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2), T2 (#3), T3 (#4), T4 (#5), T5 (#6), T6 (#7), T7 (#8), T8 (#9), T9 (#10), T10 (#11), T11 (#12), T12 (#13), T13 (#14).
-  Aceite:
-    /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
 - [ ] Decidir os itens restantes do brainstorm do Watchdog
   ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
   Resumo:
@@ -161,6 +151,17 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     Demonstrar com evidência verificável o resultado já solicitado: confirmar uma tarefa real no novo fluxo Orchestrate e acompanhar seu progresso de ponta a ponta.
 
 ## Bloqueado
+- [ ] T14 (#15) Aceite manual
+  ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
+  Resumo:
+    o Vini testa /clear no Claude e no Codex, handoff Claude e Codex, uma rodada real A/B/C e o code review com as abas.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #15 (docs/issues/)
+  Execução:
+    Bloqueado por: T1 (#2), T2 (#3), T3 (#4), T4 (#5), T5 (#6), T6 (#7), T7 (#8), T8 (#9), T9 (#10), T10 (#11), T11 (#12), T12 (#13), T13 (#14).
+  Aceite:
+    /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
+  Motivo: O aceite manual da issue #15 depende do Vini.
 - [ ] Trazer a orquestração do Left Undone para o Watchdog
   ID: 9a1da315-9c0d-40b1-a576-dd3bdcfc65d2
   Resumo:
