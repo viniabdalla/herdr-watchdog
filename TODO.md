@@ -4,7 +4,7 @@ status: ativo
 area: pessoal
 prioridade: alta
 resumo: Painéis Herdr para tarefas de projetos, progresso das sessões e arquivos criados pela IA
-atualizado: 2026-11-25
+atualizado: 2026-11-26
 motivo:
 ---
 
@@ -17,57 +17,195 @@ o estado de cada tarefa indica o que foi entregue e o que falta.
 Este TODO adota o formato versionado do Watchdog desde 2026-11-18;
 os pedidos e as conclusões anteriores foram preservados na migração.
 
-Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ordem de execução. Conflitos para paralelizar: T3, T4, T5 e T7 mexem na mesma tela do Tasks (juntar com cuidado e checar as costuras); T11 e T13 na mesma seção do Progress (em sequência).
+A spec #1 tem os tickets T1–T13 em Feito. O aceite manual T14 (#15) está em andamento.
+
+O brainstorm foi encerrado na spec anterior. Em 25/11, Vini retirou do escopo a transferência de orquestração entre Watchdog e Left Undone.
+
+Regras deste arquivo (resumo de `~/.ai-shared/regras-todo.md`):
+- O título começa pelo tipo: `[Spec #n]`, `[Bug #n]`, `[Feature]`, `[Verificação]` ou `[Ticket #n]` (este, só fora de spec).
+- Os tickets de uma spec ficam no item da spec (`Referência:` e `Execução:`), não como itens próprios.
+- Um item por bug. Planos não são itens; aparecem em `Referência:`.
+- Dependências só em `Execução:`, como `Bloqueado por: T1 (#2).`
+- Todo item, inclusive em Feito, tem ID, Resumo, Origem, Execução e Aceite.
 
 ## Em andamento
 
 ## Próximo
-- [ ] Decidir os itens restantes do brainstorm do Watchdog
-  ID: 0b6c2f1e-8a4d-4e39-9c71-5d2a7e4b9f13
+- [ ] [Bug #29] Prévia do despacho classifica errado dependências em texto solto
+  ID: 1cdb7fd0-2848-4f93-a26d-9bfd2bd00a7a
   Resumo:
-    definir as políticas restantes de curadoria, handoff, contexto e avisos; a portabilidade da orquestração para Watchdog já foi autorizada.
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
   Origem: pedido-humano
-  Referência: brief brainstorm-3-way-merge.md (omarchy2, 2026-11-19)
+  Referência: docs/issues/29-previa-dependencia-texto-solto.md
   Execução:
-    Brainstorm salvo em docs/merge-brainstorm-2026-11-19.md (recomendação: Watchdog como produto, Left Undone como inbox; Gossip fora das execuções novas).
-    Correção aprovada em 2026-11-19: mudanças apenas no Watchdog, LU intacto, orquestração trazida do LU para o Watchdog e Gossip congelado. Fusão dos aplicativos e mudanças no LU saem deste escopo.
+    Aguarda a triagem do Vini (needs-triage).
   Aceite:
-    Registrar as escolhas restantes antes de implementar mudanças nessas políticas.
-- [ ] Mostrar o uso de contexto por agente
+    Os critérios da issue #29.
+- [ ] [Bug #30] Um item do TODO sem ID derruba o Tasks inteiro
+  ID: d08d60fb-90ff-4286-9b3b-84573aa17eff
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
+  Origem: pedido-humano
+  Referência: docs/issues/30-todo-item-sem-id-derruba-tasks.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #30.
+- [ ] [Bug #31] Seleção guarda tarefas que sumiram do TODO e trava o despacho
+  ID: 1c768125-eac9-42cf-917d-394c99e7b9c2
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
+  Origem: pedido-humano
+  Referência: docs/issues/31-selecao-fantasma-trava-despacho.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #31.
+- [ ] [Bug #32] Meta colada no Claude sem Enter: despacho não confirmado e Fila travada falsa
+  ID: fabe3044-b23a-4475-a920-71c8c7077d63
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase. É o mais grave: travou a fila do líder e deixou o grupo sem goal.
+  Origem: pedido-humano
+  Referência: docs/issues/32-meta-colada-sem-enter-no-claude.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #32.
+- [ ] [Bug #33] Curador mostra falha em estados transitórios depois do /clear
+  ID: ee7dfc7b-de01-4441-a248-160bbfe66e3d
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
+  Origem: pedido-humano
+  Referência: docs/issues/33-curador-falha-transitoria-apos-clear.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #33.
+- [ ] [Bug #34] kit abrir para na tela de confiança do Codex e entrega sem trava
+  ID: 13e604b6-d07e-481a-9543-8b79a0857acb
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
+  Origem: pedido-humano
+  Referência: docs/issues/34-kit-abrir-tela-de-confianca-codex.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #34.
+- [ ] [Bug #35] Progress mostra executor ativo como Bloqueado com JSON cru
+  ID: 515fcc72-d3e2-40c3-a401-51733c0aef30
+  Resumo:
+    Visto na rodada A/B/C do aceite T14 em test-watchdog-erase.
+  Origem: pedido-humano
+  Referência: docs/issues/35-progress-executor-ativo-bloqueado.md
+  Execução:
+    Aguarda a triagem do Vini (needs-triage).
+  Aceite:
+    Os critérios da issue #35.
+- [ ] [Feature] Correções da revisão R3: três P2 no Progress e um P3 no instalador
+  ID: fb43c591-17d7-4201-b5a8-5b416e7bb648
+  Resumo:
+    Vini pediu spec antes de implementar; depois os tickets vão para o Dispatch.
+  Origem: pedido-humano
+  Referência: .watchdog/run/2026-11-25/R3-Integral-Spec-c6ed3067-relatorio.md e R3-Integral-Standards-8ea9753c-relatorio.md
+  Execução:
+    Ainda não iniciada.
+  Aceite:
+    Spec publicada com aprovação do Vini e tickets prontos para o Dispatch.
+- [ ] [Spec #25] Trocar a pasta dos painéis da aba pelo Tasks
+  ID: 77a81630-043d-4d38-8ff6-ed62009155bd
+  Resumo:
+    Escolher a worktree que Tasks, Progress, Artifacts e Yazi acompanham e continuar na conversa do líder já aberto.
+  Origem: pedido-humano
+  Referência: docs/issues/25-spec-trocar-pasta-no-tasks.md; tickets #26 e #27 (docs/issues/26-*, 27-*)
+  Execução:
+    Reproduzidas as duas recusas em uma worktree Git temporária com identidade de sessão simulada. O ticket #26 troca e lembra a pasta da aba. O #27 despacha ao mesmo líder depois da troca e depende do #26.
+  Aceite:
+    Trocar pasta atualiza os quatro painéis da aba nos mesmos panes e Despachar entrega à mesma conversa com o caminho novo. Reabrir mantém a escolha e a pasta original pode ser selecionada na mesma lista. Toda recusa mostra motivo e próximo passo. Outras abas e o state.db ficam intactos.
+- [ ] [Spec #24] Usar as tarefas marcadas nos botões de skill do Tasks
+  ID: b739b7ea-d08c-419c-8d71-f06e80ccd48a
+  Resumo:
+    As seis skills recebem as tarefas marcadas. Com a seleção vazia, continuam na conversa atual do líder.
+  Origem: pedido-humano
+  Referência: docs/issues/24-spec-selecao-nos-botoes-de-skill.md; ticket #28 (docs/issues/28-*)
+  Execução:
+    Spec #24 publicada. O ticket #28 cobre os seis botões e pode começar em paralelo com o #26. Reproduzido em terminal isolado que grill-with-docs envia só o nome da skill mesmo com tarefa marcada.
+  Aceite:
+    Em Claude e Codex, conferir a prévia e a mensagem dos seis botões com zero, uma e várias tarefas marcadas. Preservar os argumentos próprios das skills, a edição e o cancelamento.
+- [ ] [Verificação] Conferir o limite de contexto e a leitura após compactação
   ID: e3f85c0d-2191-449c-a650-95e52a95c3e2
   Resumo:
-    comparar a ocupação atual da janela de contexto de cada sessão com o limite escolhido pelo usuário, inicialmente 500.000 tokens.
+    Confirmar o limite usado por cada sessão e observar a leitura depois de compactar.
   Origem: pedido-humano
   Execução:
-    Resumo: comparar a ocupação atual da janela de contexto de cada sessão com o limite escolhido pelo usuário, inicialmente 500.000 tokens.
-    Aceite: mostrar usado/limite, percentual e estado em texto e cor. Sugestão: verde abaixo de 80%, amarelo a partir de 80%, vermelho ao atingir ou ultrapassar 100%. Dado ausente aparece como indisponível. Verificar o limite exato e a atualização após compactação.
+    O Progress já mostra usado/limite, barra por nível e ausência de dados (spec #21, a74a7ae e tests/test_progress_board.py). Agents mostra o percentual e permite ajustar a janela do Claude. O mesmo UUID consta em Feito na branch feat/bundled-matt-workflow (9fb46f3). Neste checkout o Codex usa a janela informada pela sessão. Resta confirmar a política dos 500.000 tokens e observar uma compactação real.
   Aceite:
     mostrar usado/limite, percentual e estado em texto e cor. Sugestão: verde abaixo de 80%, amarelo a partir de 80%, vermelho ao atingir ou ultrapassar 100%. Dado ausente aparece como indisponível. Verificar o limite exato e a atualização após compactação.
-- [ ] Permitir execução com um agente
-  ID: 56b84864-b28d-4a82-b341-84b8d3545e3e
-  Resumo:
-    oferecer um modo econômico explícito com um único executor e revisão pelo líder, reduzindo o consumo de cota.
-  Origem: pedido-humano
-  Execução:
-    Resumo: oferecer um modo econômico explícito com um único executor e revisão pelo líder, reduzindo o consumo de cota.
-    O fluxo de equipe mantém executor e QA. O modo Para um agente foi implementado: seleciona um executor Codex ocioso pelo painel em uma worktree limpa do projeto; o líder registra revisão com evidências para o commit e a versão exatos do resultado. Aguarda aceite do usuário.
-    Aceite: escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
-    Proposta de interface: ação Despachar com opções Para um agente e Orquestrar equipe. Na primeira, escolher o executor identificado pelo painel, confirmar o destinatário e acompanhar o resultado em Progresso. Preservar o envio simples já existente.
-    Entrega verificada em 2026-11-18: menu Despachar, seleção por painel/conta/sessão, confirmação separada e Progresso com revisão pelo líder; uma tarefa lógica por execução. Equipe e envio simples preservados. 385 testes sem falhas, 7 opt-in ignorados; teclado/mouse e fluxo em PTY real, integração Git temporária com rejeição de aprovação sem revisão. Painel real recarregado e menu conferido nos terminais existentes. A lista ao vivo não encontrou executor elegível; falta uma sessão dedicada ociosa em worktree limpa para validar uma execução real de modelo. Tarefa permanece aberta para aceite.
-    Reconciliação em 2026-11-19: implementação commitada em 98c09e4529ea9d8a1d053aae74de5deef6637004 e enviada ao origin/main por autorização do usuário antes desta passagem de contexto. Suíte repetida: 385 testes, sem falhas, 7 ignorados. Execução com modelo real e aceite do usuário continuam pendentes; commit, push e abertura dos painéis não concluem a tarefa.
-  Aceite:
-    escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
-- [ ] Abrir uma auditoria independente do projeto
+- [ ] [Verificação] Validar a auditoria independente em uma aba real
   ID: cfd2e586-f9a2-413f-b9cc-5598ef64970d
   Resumo:
-    abrir uma nova janela no Herdr para uma sessão com contexto limpo, iniciada no diretório do projeto e dedicada à leitura do estado atual.
+    A auditoria já existe. Falta observar a sessão nova na pasta do projeto e a entrega do relatório ao líder.
   Origem: pedido-humano
   Execução:
-    Resumo: abrir uma nova janela no Herdr para uma sessão com contexto limpo, iniciada no diretório do projeto e dedicada à leitura do estado atual.
-    Permitir escolher o modelo, com preferência por GPT Astra 6.1 quando disponível. Exibir o modelo efetivo. Entregar ao líder achados com evidências, lacunas e próximos passos, sem herdar a conversa ou assumir a liderança.
+    O run 4d9a065c-b879-4f18-b95e-6f8fbb2e081e integrou d7f5ca1 em 4803b90. Auditoria está disponível no modo de controles completos. docs/verification-audit-2026-11-23.md registra a escolha de modelo, a sessão somente leitura e o relatório com Herdr e Codex simulados. O aceite de ponta a ponta continua pendente.
   Aceite:
     Demonstrar com evidência verificável o resultado já solicitado: abrir uma nova janela no Herdr para uma sessão com contexto limpo, iniciada no diretório do projeto e dedicada à leitura do estado atual.
-- [ ] Registrar pedidos durante a conversa
+- [ ] [Verificação] Confirmar a leitura das instruções de TODO por um agente
+  ID: 9f4cdfb9-3b30-4d69-a178-aa3ff61301a6
+  Resumo:
+    A instalação e a verificação de AGENTS.md e CLAUDE.md já existem. Falta o registro da leitura pelo agente do projeto.
+  Origem: legado-nao-confirmado
+  Execução:
+    O run cb0a2492-8455-45ed-ba2b-1b3b39638fdb integrou o trabalho em ae529e2. O comando project-instructions oferece preview, apply com confirmação e check. Conforme docs/project-instructions.md, resta o agente confirmar na conversa a versão lida, como registra pedidos e sugestões e qual evidência exige para concluir.
+  Aceite:
+    identificar instruções ausentes ou desatualizadas, apresentar a atualização antes de aplicá-la e verificar sua leitura pelo agente; não criar outra lista nem alterar TODOs de outros projetos sem autorização.
+- [ ] [Feature] Trazer a tradução já existente para os painéis desta branch
+  ID: ba3b21fa-c410-4952-8fe8-222a5bc6f9de
+  Resumo:
+    A tradução EN/pt-BR e o seletor compartilhado foram entregues no P9 da branch feat/bundled-matt-workflow.
+  Origem: legado-nao-confirmado
+  Execução:
+    Run 7aa353c2-9f6d-4e2f-b038-886a7fd92115, candidato b1b75b3 integrado naquela branch. O guia de lá é docs/interface-languages.md e o fechamento do P9 está em d45b935. Este checkout ainda tem rótulos em inglês e não contém o catálogo do P9. Resta conferir o reaproveitamento nos quatro painéis e o idioma inicial. O P9 inicia em inglês.
+  Aceite:
+    Demonstrar com evidência verificável o resultado já solicitado: apresentar primeiro os painéis Tarefas, Progresso, Arquivos e Agentes em português para facilitar o uso.
+
+## Bloqueado
+- [ ] [Verificação] Dar aceite ao modo Para um agente
+  ID: 56b84864-b28d-4a82-b341-84b8d3545e3e
+  Resumo:
+    O modo econômico já teve execução real com um executor e revisão pelo líder.
+  Origem: pedido-humano
+  Execução:
+    Implementação 98c09e4. Menu, escolha do executor e confirmação verificados em docs/verification/2026-11-18-single-agent-dispatch.md. O run 539166d4-316b-4906-b5ef-5336a50a8717 terminou em modo single, com executor existente. O líder aprovou o candidato 8b93f6e na versão 12 e o integrou em 2f207ad.
+  Aceite:
+    escolha explícita do modo, revisão pelo líder e evidências verificáveis antes de aceitar a entrega.
+  Motivo: O teste com modelo real já ocorreu. Falta o aceite do Vini previsto na tarefa.
+
+## Feito
+- [x] 2026-11-26 T14 (#15) Aceite manual
+  ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
+  Resumo:
+    o Vini testa /clear no Claude e no Codex, handoff Claude e Codex, uma rodada real A/B/C e o code review com as abas.
+  Origem: pedido-humano
+  Referência: spec #1 e issue #15 (docs/issues/)
+  Execução:
+    Aceite humano iniciado. As 13 dependências técnicas da #15 estão fechadas. A revisão R1 abriu dois revisores na aba Code Review e a correção na aba seguinte (R1-Correcao-fechamento.md).
+    No Codex, o /clear deixou a sessão antiga no painel. A recuperação manual por CLI foi registrada às 17h15. Às 18h43 o Religar pela skill confirmou a nova conversa no mesmo pane. Conferidos os 15 integrantes na mesma ordem, base, modos e meta. O Progress mostra 14 de 15; no histórico da conversa de destino só entraram a invocação e a definição da skill durante a tentativa. Evidências em .watchdog/run/2026-11-25/T14-retomada-aceite-real.json.
+    Próxima etapa com Vini: em uma sessão de aceite do Claude vinculada ao Tasks, observar o painel antes e depois de /clear. Ainda faltam a troca Claude ↔ Codex pelos dois prefixos e a rodada real A/B/C. O resultado negativo do acompanhamento automático no Codex continua registrado.
+    Preparação em 26/11: estado da aba e do grupo guardado em .watchdog/run/2026-11-26/T14-antes-de-vincular-Claude-163725.json.
+    Aceite em 26/11 no projeto descartável test-watchdog-erase (w14): /clear no Claude manteve o painel e seguiu sozinho de 293f2207 para 15dbea79; rodada A/B/C terminou 3 de 3 (T1 ed1c5b7, T2 7a4e29b, T3 353c810, 12 testes OK) com T2 esperando T1 e T3 aguardando a decisão do Vini. Direções Claude ↔ Codex confirmadas pelo Vini. Achados viraram as issues #29 a #35. Evidências em .watchdog/run/2026-11-26/T14-w14-*.json.
+  Aceite:
+    /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
+
+- [x] Validar as sugestões do curador
+  ID: a7b83b35-b133-451a-bbd7-85c7477bd849
+  Resumo:
+    Avaliar propostas reais de conclusão e bloqueio, mantendo a confirmação do usuário.
+  Origem: legado-nao-confirmado
+  Execução:
+    Em 25/11, conferidas as duas citações da revisão 5577d0ee6db9 no turno Codex 01a1efe4-3d4a-7970-afc1-ca91953fac92. O curador propôs concluir e bloquear a mesma tarefa. Ao reavaliar a resposta completa, o validador reteve ambas. Na revisão 2b1131967a14, turno 01a20909-cf6, também reteve um bloqueio com contexto contraditório. Nenhuma proposta foi aplicada. Os 36 testes de curadoria passaram, incluindo confirmação e revalidação.
+  Aceite:
+    Demonstrar com evidência verificável o resultado já solicitado: avaliar propostas de conclusão e bloqueio em conversas reais, mantendo obrigatória a confirmação do usuário.
+- [x] Registrar pedidos durante a conversa
   ID: 4f9fae9f-54e0-49c4-9700-8f2e90929246
   Resumo:
     manter os pedidos claros do usuário no arquivo do projeto enquanto a conversa acontece, sem esperar um commit.
@@ -77,107 +215,50 @@ Spec #1 (Watchdog como painel do long run): tickets T1–T14 em Próximo, na ord
     O líder registra os pedidos claros antes de commit; ideias dos agentes ficam identificadas separadamente como sugestões, sem virarem pedidos aprovados automaticamente.
     Ler o mesmo TODO.md, sem uma segunda lista de tarefas; detectar alterações e conflitos antes de aplicar atualizações. Regras gerais pertencem ao AGENTS.md e instruções específicas ficam na tarefa.
     Aceite: líder e painel compartilham a mesma fonte, com conflitos visíveis e sugestões distinguíveis de pedidos.
+    Verificação: O pedido Trocar pasta foi registrado durante a conversa como pedido-humano no TODO lido pelo Tasks. tests/test_todo_format.py cobre sugestao-agente e recusa de edição obsoleta.
   Aceite:
     líder e painel compartilham a mesma fonte, com conflitos visíveis e sugestões distinguíveis de pedidos.
-- [ ] Orientar os agentes a manter o TODO atualizado
-  ID: 9f4cdfb9-3b30-4d69-a178-aa3ff61301a6
-  Resumo:
-    ajudar a preparar cada projeto para que seus agentes saibam registrar pedidos e atualizar tarefas durante a conversa, sem esperar commit.
-  Origem: legado-nao-confirmado
-  Execução:
-    Resumo: ajudar a preparar cada projeto para que seus agentes saibam registrar pedidos e atualizar tarefas durante a conversa, sem esperar commit.
-    Dependência: implementar primeiro o formato comum e o leitor. O Watchdog define e valida o formato; cada projeto o adota e seu agente líder mantém o conteúdo.
-    Oferecer instalação e verificação de instruções em AGENTS.md e CLAUDE.md, preservando regras existentes e evitando duplicações. Explicar título e resumo simples, detalhes técnicos separados, identidade estável, estados, sugestões dos agentes e evidências necessárias para concluir.
-    Aceite: identificar instruções ausentes ou desatualizadas, apresentar a atualização antes de aplicá-la e verificar sua leitura pelo agente; não criar outra lista nem alterar TODOs de outros projetos sem autorização.
-  Aceite:
-    identificar instruções ausentes ou desatualizadas, apresentar a atualização antes de aplicá-la e verificar sua leitura pelo agente; não criar outra lista nem alterar TODOs de outros projetos sem autorização.
-- [ ] Mostrar a interface em português
-  ID: ba3b21fa-c410-4952-8fe8-222a5bc6f9de
-  Resumo:
-    apresentar primeiro os painéis Tarefas, Progresso, Arquivos e Agentes em português para facilitar o uso.
-  Origem: legado-nao-confirmado
-  Execução:
-    Resumo: apresentar primeiro os painéis Tarefas, Progresso, Arquivos e Agentes em português para facilitar o uso.
-    Definir rótulos por código e traduções revisadas; não depender de LLM durante a renderização. Preservar arquivos canônicos dos projetos, protocolos e a integração com Yazi.
-    Manter como etapa posterior o seletor português/inglês em Tarefas, aplicado aos quatro painéis, preservando o pedido anterior de opção em inglês. Assistência de LLM pode apoiar a preparação de traduções para revisão, sem traduzir a interface em tempo de execução.
-  Aceite:
-    Demonstrar com evidência verificável o resultado já solicitado: apresentar primeiro os painéis Tarefas, Progresso, Arquivos e Agentes em português para facilitar o uso.
-- [ ] Ler planos do projeto
+- [x] Ler planos do projeto
   ID: e3d9935a-b4c3-4256-b3a5-f0fa08dffe24
   Resumo:
     transformar um plano explícito do projeto em instruções delimitadas para as tarefas, sem reler o histórico inteiro das conversas.
   Origem: legado-nao-confirmado
   Execução:
     Resumo: transformar um plano explícito do projeto em instruções delimitadas para as tarefas, sem reler o histórico inteiro das conversas.
+    Verificação: docs/project-plans.md e tests/test_project_plans.py. O leitor gera contratos a partir do plano explícito e verifica IDs, escopo e mudanças de conteúdo.
   Aceite:
     Demonstrar com evidência verificável o resultado já solicitado: transformar um plano explícito do projeto em instruções delimitadas para as tarefas, sem reler o histórico inteiro das conversas.
-- [ ] Descobrir arquivos criados pela IA
+- [x] Descobrir arquivos criados pela IA
   ID: bad09fc3-a213-4fa6-9877-a33a7cf65aa4
   Resumo:
     descobrir e resumir automaticamente arquivos criados ou alterados pela IA, preservando o vínculo funcional com Yazi.
   Origem: legado-nao-confirmado
   Execução:
     Resumo: descobrir e resumir automaticamente arquivos criados ou alterados pela IA, preservando o vínculo funcional com Yazi.
+    Verificação: docs/artifact-discovery.md, tests/test_artifacts.py e tests/test_artifacts_yazi.py. Conferidas a descoberta por conversa e a abertura do arquivo no Yazi por teclado e mouse.
   Aceite:
     Demonstrar com evidência verificável o resultado já solicitado: descobrir e resumir automaticamente arquivos criados ou alterados pela IA, preservando o vínculo funcional com Yazi.
-- [ ] Preservar o progresso do projeto
+- [x] Preservar o progresso do projeto
   ID: 7b33fb64-2f30-4140-b9bb-e09d5095011b
   Resumo:
     manter um histórico durável de conclusões para acompanhar o progresso entre edições do TODO.
   Origem: legado-nao-confirmado
   Execução:
     Resumo: manter um histórico durável de conclusões para acompanhar o progresso entre edições do TODO.
-    As entradas em Feito e as cópias de segurança das edições já existem; falta o histórico durável de progresso entre edições.
+    Verificação: docs/project-progress-history.md e tests/test_project_history.py. O histórico registra transições por UUID e recupera gravações interrompidas.
   Aceite:
     Demonstrar com evidência verificável o resultado já solicitado: manter um histórico durável de conclusões para acompanhar o progresso entre edições do TODO.
-- [ ] Validar as sugestões do curador
-  ID: a7b83b35-b133-451a-bbd7-85c7477bd849
-  Resumo:
-    avaliar propostas de conclusão e bloqueio em conversas reais, mantendo obrigatória a confirmação do usuário.
-  Origem: legado-nao-confirmado
-  Execução:
-    Resumo: avaliar propostas de conclusão e bloqueio em conversas reais, mantendo obrigatória a confirmação do usuário.
-  Aceite:
-    Demonstrar com evidência verificável o resultado já solicitado: avaliar propostas de conclusão e bloqueio em conversas reais, mantendo obrigatória a confirmação do usuário.
-- [ ] Testar uma execução real completa
+- [x] Testar uma execução real completa
   ID: b6cb93d7-46ca-4f00-8d4d-ce3ac0dce6fe
   Resumo:
     confirmar uma tarefa real no novo fluxo Orchestrate e acompanhar seu progresso de ponta a ponta.
   Origem: legado-nao-confirmado
   Execução:
     Resumo: confirmar uma tarefa real no novo fluxo Orchestrate e acompanhar seu progresso de ponta a ponta.
-    Verificar em Progresso as etapas Preparando → Executando → Verificando → Aguardando aprovação. Esse fluxo ainda não foi exercitado ao vivo, para economizar a cota do Codex.
+    Verificar em Progresso as etapas Preparando → Executando → Verificando → Aguardando aprovação.
+    Verificação: Run cb0a2492-8455-45ed-ba2b-1b3b39638fdb. O verificador encontrou as quatro etapas em ordem, com QA do candidato ae529e2 e integração confirmada.
   Aceite:
     Demonstrar com evidência verificável o resultado já solicitado: confirmar uma tarefa real no novo fluxo Orchestrate e acompanhar seu progresso de ponta a ponta.
-
-## Bloqueado
-- [ ] T14 (#15) Aceite manual
-  ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
-  Resumo:
-    o Vini testa /clear no Claude e no Codex, handoff Claude e Codex, uma rodada real A/B/C e o code review com as abas.
-  Origem: pedido-humano
-  Referência: spec #1 e issue #15 (docs/issues/)
-  Execução:
-    Bloqueado por: T1 (#2), T2 (#3), T3 (#4), T4 (#5), T5 (#6), T6 (#7), T7 (#8), T8 (#9), T9 (#10), T10 (#11), T11 (#12), T12 (#13), T13 (#14).
-    Religar manual do Codex (spec #17): #18 e #19 integradas localmente. O aceite #20 depende do Vini para confirmar a sessão após /clear e conferir o grupo no Progress.
-  Aceite:
-    /clear no Claude e no Codex mantém o painel. Handoff Claude para Codex com Religar mostra $; Codex para Claude volta a /. Rodada real com A livre, B dependente de A e C dependente do Vini termina com o aviso certo. O code review abre as duas abas e a correção em aba nova.
-  Motivo: O aceite manual da issue #15 depende do Vini.
-- [ ] Trazer a orquestração do Left Undone para o Watchdog
-  ID: 9a1da315-9c0d-40b1-a576-dd3bdcfc65d2
-  Resumo:
-    abrir novos executores Codex ou Claude pelo Watchdog, com tarefas juntas ou separadas e planejamento antes da execução.
-  Origem: pedido-humano
-  Execução:
-    Escopo corrigido por Vini em 2026-11-19: modificar apenas Watchdog, manter Left Undone intacto e congelar Gossip.
-    Adaptar o fluxo do LU ao registro de execuções e às worktrees do Watchdog; não chamar o dispatcher nem alterar dados do LU.
-    Implementado em 2026-11-19: novo executor, contrato no lançamento, callbacks autenticados, continuação em nova tentativa, agrupamento, planejamento nativo e confirmação na interface. Verificação: 435 testes, sem falhas, 7 ignorados; revisão independente com seis correções comprovadas por regressões; telas conferidas em janela temporária. Evidências em docs/verification-orchestration-2026-11-19.md.
-    Não interpretar a entrega como aprovação das outras decisões do brainstorm. Validação com modelos reais e aceite operacional continuam separados dos testes automatizados.
-  Aceite:
-    Comprovar despacho e retorno no Watchdog para Codex e Claude, sem alterar LU; propostas não concluem implementação e resultados aguardam revisão do líder.
-  Motivo: adiada pelo Vini em 2026-11-25; depois da spec #1 a orquestração vai do Watchdog para o Left Undone, não o contrário.
-
-## Feito
 - [x] 2026-11-25 T15 (#16) Fila travada no pane do líder
   ID: 184d02f0-64ad-48c1-9af4-c75d8fd5d1d2
   Resumo:
