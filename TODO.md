@@ -31,6 +31,68 @@ Regras deste arquivo (resumo de `docs/agents/todo.md`):
 ## Em andamento
 
 ## Próximo
+- [ ] T16 (#38) Regra do TODO: um item por ticket, criado no /to-tickets
+  ID: 1bf9aa52-7c42-413f-81c4-ec054474ed41
+  Resumo:
+    Regra do TODO: um item por ticket, criado no /to-tickets.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #38 (docs/issues/38-regra-todo-um-item-por-ticket.md)
+  Execução:
+    Liberado.
+  Aceite:
+    `docs/agents/todo.md` diz: um item por ticket com título `Tn (#issue) título`, `Referência:` com a spec e a issue, e dependências em `Execução: Bloqueado por: Tn (#issue).`
+    Os tipos `[Bug #n]`, `[Feature]` e `[Verificação]` continuam valendo para o que não é ticket. O prefixo `[Spec #n]` deixa de existir como item.
+    `docs/templates/agents-todo.md` e `docs/templates/todo.md` seguem a mesma regra. O preâmbulo do `TODO.md` vira uma linha que aponta para `docs/agents/todo.md`.
+    `watchdog todo validate --repo .` passa.
+- [ ] T17 (#39) Gatilho do TODO no docs/agents/issue-tracker.md
+  ID: c0e90ca1-adbe-4bfd-ada9-1ab2c131510e
+  Resumo:
+    Gatilho do TODO no docs/agents/issue-tracker.md.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #39 (docs/issues/39-gatilho-todo-no-issue-tracker.md)
+  Execução:
+    Bloqueado por: T16 (#38).
+  Aceite:
+    `docs/agents/issue-tracker.md` deste repositório manda, depois de publicar os tickets, criar ou atualizar o `TODO.md` conforme `docs/agents/todo.md`: um item por ticket, na ordem das dependências.
+    Um modelo dessa seção fica em `docs/templates/`, para copiar em projetos preparados para o Watchdog.
+    Nenhum arquivo em `~/.agents/skills` é editado.
+- [ ] T18 (#40) Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28
+  ID: 3abbcc32-cb2f-4282-ab9f-8424e89a7327
+  Resumo:
+    Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #40 (docs/issues/40-converter-specs-24-25-em-tickets.md)
+  Execução:
+    Bloqueado por: T16 (#38).
+  Aceite:
+    `[Spec #25] Trocar a pasta dos painéis` vira os itens dos tickets #26 e #27, com o #27 `Bloqueado por: #26` no formato aceito.
+    `[Spec #24] Botões de skill` vira o item do ticket #28.
+    Os IDs dos itens antigos não são reaproveitados. `watchdog todo validate --repo .` passa e o Tasks mostra os itens.
+- [ ] T19 (#41) Atualizar o diagrama regra-todo para o gatilho no /to-tickets
+  ID: 364c9718-c8fa-4366-86b5-d2a5ff670384
+  Resumo:
+    Atualizar o diagrama regra-todo para o gatilho no /to-tickets.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #41 (docs/issues/41-diagrama-regra-todo-to-tickets.md)
+  Execução:
+    Bloqueado por: T16 (#38), T17 (#39).
+  Aceite:
+    O TODO sai de `/to-spec` e passa a nascer em `/to-tickets`, pelo gatilho em `docs/agents/issue-tracker.md`.
+    O diagrama mostra `docs/agents/todo.md` como regra, os modelos em `docs/templates` e o global só com o git-todo e a linha de ponteiro.
+    O `finalize` do Archify passa em todas as verificações.
+- [ ] T20 (#42) Preparar projeto novo com a regra e o gatilho do TODO
+  ID: e6ae5354-2679-462f-94b0-0983ece6b9dc
+  Resumo:
+    Preparar projeto novo com a regra e o gatilho do TODO.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #42 (docs/issues/42-preparar-projeto-com-regra-todo.md)
+  Execução:
+    Bloqueado por: T16 (#38), T17 (#39).
+  Aceite:
+    Num projeto sem esses arquivos, a preparação cria só o que falta, com prévia e confirmação.
+    Arquivos existentes nunca são sobrescritos. Seção ausente é acrescentada.
+    Sem `docs/agents/issue-tracker.md`, a preparação avisa para rodar `/setup-matt-pocock-skills` e não inventa o arquivo.
+    Testes isolados cobrem criação, preservação e aviso.
 - [ ] [Bug #29] Prévia do despacho classifica errado dependências em texto solto
   ID: 1cdb7fd0-2848-4f93-a26d-9bfd2bd00a7a
   Resumo:
