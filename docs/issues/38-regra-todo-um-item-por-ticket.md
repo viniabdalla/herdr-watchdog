@@ -1,7 +1,7 @@
 ---
 number: 38
 title: "Regra do TODO: um item por ticket, criado no /to-tickets"
-state: open
+state: closed
 labels: ["ready-for-agent"]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/38
 blocked_by: []
@@ -16,10 +16,14 @@ Corrigir a regra do TODO do projeto: o TODO tem **um item por ticket**, criado o
 
 ## Acceptance criteria
 
-- [ ] `docs/agents/todo.md` diz: um item por ticket com título `Tn (#issue) título`, `Referência:` com a spec e a issue, e dependências em `Execução: Bloqueado por: Tn (#issue).`
-- [ ] Os tipos `[Bug #n]`, `[Feature]` e `[Verificação]` continuam valendo para o que não é ticket. O prefixo `[Spec #n]` deixa de existir como item.
-- [ ] `docs/templates/agents-todo.md` e `docs/templates/todo.md` seguem a mesma regra. O preâmbulo do `TODO.md` vira uma linha que aponta para `docs/agents/todo.md`.
-- [ ] `watchdog todo validate --repo .` passa.
+- [x] `docs/agents/todo.md` diz: um item por ticket com título `Tn (#issue) título`, `Referência:` com a spec e a issue, e dependências em `Execução: Bloqueado por: Tn (#issue).`
+- [x] Os tipos `[Bug #n]`, `[Feature]` e `[Verificação]` continuam valendo para o que não é ticket. O prefixo `[Spec #n]` deixa de existir como item.
+- [x] `docs/templates/agents-todo.md` e `docs/templates/todo.md` seguem a mesma regra. O preâmbulo do `TODO.md` vira uma linha que aponta para `docs/agents/todo.md`.
+- [x] `watchdog todo validate --repo .` passa.
 
 
 ## Comentários
+
+### 2026-11-26 · viniabdalla (via Claude)
+
+Concluído no commit b327fa9 (feat/tasks-somente-leitura, local). docs/agents/todo.md reescrito: um item por ticket, criado depois do /to-tickets, com a seção "Como escrever cada tipo". Modelos em docs/templates/agents-todo.md e docs/templates/todo.md. O preâmbulo do TODO virou uma linha. `watchdog todo validate` passa.
