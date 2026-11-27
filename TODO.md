@@ -26,19 +26,6 @@ Como escrever neste arquivo: `docs/agents/todo.md` (um item por ticket, criado d
 ## Em andamento
 
 ## Próximo
-- [ ] T20 (#42) Preparar projeto novo com a regra e o gatilho do TODO
-  ID: e6ae5354-2679-462f-94b0-0983ece6b9dc
-  Resumo:
-    Preparar projeto novo com a regra e o gatilho do TODO.
-  Origem: pedido-humano
-  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #42 (docs/issues/42-preparar-projeto-com-regra-todo.md)
-  Execução:
-    Bloqueado por: T16 (#38), T17 (#39).
-  Aceite:
-    Num projeto sem esses arquivos, a preparação cria só o que falta, com prévia e confirmação.
-    Arquivos existentes nunca são sobrescritos. Seção ausente é acrescentada.
-    Sem `docs/agents/issue-tracker.md`, a preparação avisa para rodar `/setup-matt-pocock-skills` e não inventa o arquivo.
-    Testes isolados cobrem criação, preservação e aviso.
 - [ ] [Bug #29] Prévia do despacho classifica errado dependências em texto solto
   ID: 1cdb7fd0-2848-4f93-a26d-9bfd2bd00a7a
   Resumo:
@@ -210,6 +197,20 @@ Como escrever neste arquivo: `docs/agents/todo.md` (um item por ticket, criado d
   Motivo: O teste com modelo real já ocorreu. Falta o aceite do Vini previsto na tarefa.
 
 ## Feito
+- [x] 2026-11-26 T20 (#42) Preparar projeto novo com a regra e o gatilho do TODO
+  ID: e6ae5354-2679-462f-94b0-0983ece6b9dc
+  Resumo:
+    Preparar projeto novo com a regra e o gatilho do TODO.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #42 (docs/issues/42-preparar-projeto-com-regra-todo.md)
+  Execução:
+    Bloqueado por: T16 (#38), T17 (#39).
+    Concluído: executor Codex w11:p18 (commit 7f6dd8c), integrado em 93e7238. watchdog project-instructions preview/apply passa a instalar o ponteiro ### TODO, docs/agents/todo.md e o gatilho no issue-tracker.md, com aviso se o tracker faltar. Testes: 772 por modo, 7 ignorados.
+  Aceite:
+    Num projeto sem esses arquivos, a preparação cria só o que falta, com prévia e confirmação.
+    Arquivos existentes nunca são sobrescritos. Seção ausente é acrescentada.
+    Sem `docs/agents/issue-tracker.md`, a preparação avisa para rodar `/setup-matt-pocock-skills` e não inventa o arquivo.
+    Testes isolados cobrem criação, preservação e aviso.
 - [x] 2026-11-26 T16 (#38) Regra do TODO: um item por ticket, criado no /to-tickets
   ID: 1bf9aa52-7c42-413f-81c4-ec054474ed41
   Resumo:

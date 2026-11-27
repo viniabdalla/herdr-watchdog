@@ -1,8 +1,8 @@
 ---
 number: 42
 title: "Preparar projeto novo com a regra e o gatilho do TODO"
-state: open
-labels: ["needs-triage"]
+state: closed
+labels: ["ready-for-agent"]
 url: https://github.com/viniabdalla/herdr-watchdog/issues/42
 blocked_by: [38, 39]
 updated: 2026-11-26
@@ -23,3 +23,7 @@ Fechar a lacuna dos projetos novos: preparar um projeto para o Watchdog instala 
 
 
 ## Comentários
+
+### 2026-11-27T01:41:47Z · viniabdalla
+
+T20 concluído: commit 7f6dd8c (executor Codex w11:p18), integrado em 93e7238 na feat/tasks-somente-leitura. Testes na integração: 772 por modo, OK, 7 ignorados, nos dois modos (com e sem WATCHDOG_FULL_CONTROLS). watchdog project-instructions preview/apply instala o ponteiro ### TODO no AGENTS.md, docs/agents/todo.md com esqueleto local e o gatilho no docs/agents/issue-tracker.md; avisa se o tracker faltar, sem criá-lo.
