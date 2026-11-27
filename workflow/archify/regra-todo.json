@@ -3,43 +3,214 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "Onde fica a regra do TODO",
-    "subtitle": "Claude e Codex usam a mesma regra global; só o projeto com docs/agents/todo.md segue a regra do Watchdog",
+    "subtitle": "O TODO nasce depois do /to-tickets, pelo gatilho no issue-tracker.md do projeto; o global só aponta para a regra",
     "output": "workflow/archify/regra-todo.html",
     "quality_profile": "showcase",
     "visual_preset": "signal-flow"
   },
   "lanes": [
-    { "id": "global", "label": "Regra global (mínima)" },
-    { "id": "planejamento", "label": "Fluxo de planejamento" },
-    { "id": "projeto", "label": "Arquivos do projeto" },
-    { "id": "watchdog", "label": "Watchdog" }
+    {
+      "id": "global",
+      "label": "Regra global (mínima)"
+    },
+    {
+      "id": "planejamento",
+      "label": "Fluxo de planejamento"
+    },
+    {
+      "id": "projeto",
+      "label": "Arquivos do projeto"
+    },
+    {
+      "id": "watchdog",
+      "label": "Watchdog"
+    }
   ],
-  "mainPath": ["claude", "decide", "grill", "spec", "tickets", "tasks"],
+  "mainPath": [
+    "claude",
+    "decide",
+    "grill",
+    "spec",
+    "tickets",
+    "gatilho",
+    "todo",
+    "tasks"
+  ],
   "nodes": [
-    { "id": "claude", "lane": "global", "col": 0, "type": "frontend", "label": "Claude", "sublabel": "~/.claude/CLAUDE.md", "width": 160 },
-    { "id": "codex", "lane": "global", "col": 1, "type": "frontend", "label": "Codex", "sublabel": "~/.codex/AGENTS.md", "width": 160 },
-    { "id": "decide", "lane": "global", "col": 2, "type": "security", "label": "docs/agents/todo.md?", "sublabel": "Linha nova da regra", "width": 170 },
-    { "id": "outros", "lane": "global", "col": 3, "type": "external", "label": "Outros projetos", "sublabel": "Só git-todo, como antes", "width": 170 },
-    { "id": "grill", "lane": "planejamento", "col": 2, "type": "frontend", "label": "/grill-with-docs", "sublabel": "Garante GLOSSARY.md", "width": 170 },
-    { "id": "spec", "lane": "planejamento", "col": 3, "type": "database", "label": "/to-spec", "sublabel": "Cria TODO e [Spec #n]", "width": 170 },
-    { "id": "tickets", "lane": "planejamento", "col": 4, "type": "database", "label": "/to-tickets", "sublabel": "Tickets no item da spec", "width": 170 },
-    { "id": "regra", "lane": "projeto", "col": 2, "type": "database", "label": "docs/agents/todo.md", "sublabel": "Tipos, formato, arquivos", "width": 170 },
-    { "id": "todo", "lane": "projeto", "col": 3, "type": "database", "label": "TODO.md", "sublabel": "watchdog_todo: 1", "width": 170 },
-    { "id": "dispatch", "lane": "projeto", "col": 4, "type": "database", "label": "AGENTS.md", "sublabel": "Dispatch e .gitignore", "width": 170 },
-    { "id": "modelos", "lane": "watchdog", "col": 1, "type": "cloud", "label": "docs/templates", "sublabel": "Modelos no Watchdog", "width": 170 },
-    { "id": "tasks", "lane": "watchdog", "col": 5, "type": "backend", "label": "Tasks", "sublabel": "Lê o TODO e despacha", "width": 170 }
+    {
+      "id": "claude",
+      "lane": "global",
+      "col": 0,
+      "type": "frontend",
+      "label": "Claude e Codex",
+      "sublabel": "Instruções globais",
+      "width": 150
+    },
+    {
+      "id": "decide",
+      "lane": "global",
+      "col": 1,
+      "type": "security",
+      "label": "docs/agents/todo.md?",
+      "sublabel": "Linha nova da regra",
+      "width": 150
+    },
+    {
+      "id": "outros",
+      "lane": "global",
+      "col": 2,
+      "type": "external",
+      "label": "Outros projetos",
+      "sublabel": "Só git-todo, como antes",
+      "width": 150
+    },
+    {
+      "id": "grill",
+      "lane": "planejamento",
+      "col": 1,
+      "type": "frontend",
+      "label": "/grill-with-docs",
+      "sublabel": "Garante GLOSSARY.md",
+      "width": 150
+    },
+    {
+      "id": "spec",
+      "lane": "planejamento",
+      "col": 2,
+      "type": "database",
+      "label": "/to-spec",
+      "sublabel": "Publica a spec",
+      "width": 150
+    },
+    {
+      "id": "tickets",
+      "lane": "planejamento",
+      "col": 3,
+      "type": "database",
+      "label": "/to-tickets",
+      "sublabel": "Publica os tickets",
+      "width": 150
+    },
+    {
+      "id": "regra",
+      "lane": "projeto",
+      "col": 2,
+      "type": "database",
+      "label": "docs/agents/todo.md",
+      "sublabel": "Como escrever cada tipo",
+      "width": 150
+    },
+    {
+      "id": "gatilho",
+      "lane": "projeto",
+      "col": 4,
+      "type": "security",
+      "label": "issue-tracker.md",
+      "sublabel": "Gatilho ao publicar",
+      "width": 150
+    },
+    {
+      "id": "todo",
+      "lane": "projeto",
+      "col": 5,
+      "type": "database",
+      "label": "TODO.md",
+      "sublabel": "Um item por ticket",
+      "width": 150
+    },
+    {
+      "id": "dispatch",
+      "lane": "projeto",
+      "col": 3,
+      "type": "database",
+      "label": "AGENTS.md",
+      "sublabel": "Dispatch e .gitignore",
+      "width": 150
+    },
+    {
+      "id": "modelos",
+      "lane": "watchdog",
+      "col": 1,
+      "type": "cloud",
+      "label": "docs/templates",
+      "sublabel": "Modelos no Watchdog",
+      "width": 150
+    },
+    {
+      "id": "tasks",
+      "lane": "watchdog",
+      "col": 5,
+      "type": "backend",
+      "label": "Tasks",
+      "sublabel": "Lê o TODO e despacha",
+      "width": 150
+    }
   ],
   "edges": [
-    { "id": "claude-decide", "from": "claude", "to": "decide" },
-    { "id": "codex-decide", "from": "codex", "to": "decide" },
-    { "id": "decide-outros", "from": "decide", "to": "outros", "role": "branch", "label": "não" },
-    { "id": "decide-grill", "from": "decide", "to": "grill", "label": "sim" },
-    { "id": "grill-spec", "from": "grill", "to": "spec" },
-    { "id": "spec-tickets", "from": "spec", "to": "tickets" },
-    { "id": "tickets-tasks", "from": "tickets", "to": "tasks", "label": "Watchdog ligado" },
-    { "id": "regra-todo", "from": "regra", "to": "todo", "label": "define" },
-    { "id": "todo-dispatch", "from": "todo", "to": "dispatch" },
-    { "id": "modelos-regra", "from": "modelos", "to": "regra", "role": "branch", "label": "copiar ao preparar" }
+    {
+      "id": "claude-decide",
+      "from": "claude",
+      "to": "decide"
+    },
+    {
+      "id": "decide-outros",
+      "from": "decide",
+      "to": "outros",
+      "role": "branch",
+      "label": "não"
+    },
+    {
+      "id": "decide-grill",
+      "from": "decide",
+      "to": "grill",
+      "label": "sim"
+    },
+    {
+      "id": "grill-spec",
+      "from": "grill",
+      "to": "spec"
+    },
+    {
+      "id": "spec-tickets",
+      "from": "spec",
+      "to": "tickets"
+    },
+    {
+      "id": "modelos-regra",
+      "from": "modelos",
+      "to": "regra",
+      "role": "branch",
+      "label": "copiar ao preparar"
+    },
+    {
+      "id": "tickets-gatilho",
+      "from": "tickets",
+      "to": "gatilho",
+      "label": "lê ao publicar"
+    },
+    {
+      "id": "gatilho-todo",
+      "from": "gatilho",
+      "to": "todo",
+      "label": "cria"
+    },
+    {
+      "id": "regra-gatilho",
+      "from": "regra",
+      "to": "gatilho",
+      "label": "define"
+    },
+    {
+      "id": "todo-tasks",
+      "from": "todo",
+      "to": "tasks",
+      "label": "Watchdog ligado"
+    },
+    {
+      "id": "todo-dispatch",
+      "from": "todo",
+      "to": "dispatch"
+    }
   ],
   "cards": [
     {
@@ -54,8 +225,8 @@
       "dot": "amber",
       "title": "No projeto",
       "items": [
-        "docs/agents/todo.md diz quem cria o TODO em cada etapa.",
-        "Funciona sem o Watchdog ligado; ele lê o TODO depois."
+        "/to-tickets lê o issue-tracker.md e cria o TODO, um item por ticket.",
+        "docs/agents/todo.md diz como escrever ticket, bug, feature e verificação."
       ]
     },
     {

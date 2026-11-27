@@ -3,29 +3,30 @@
 Esta regra vale mais que a regra global do TODO (git-todo). O que ela não cobre continua valendo pela global.
 O `TODO.md` na raiz é o to-do vivo: o Watchdog (Tasks, Progress, curador e despacho) lê esse arquivo.
 Ele nasce no planejamento, mesmo sem o Watchdog ligado:
-`/grill-with-docs` → `/to-spec` → `/to-tickets` → Watchdog (Tasks → Despachar).
+`/grill-with-docs` → `/to-spec` → `/to-tickets` (cria o TODO) → Watchdog (Tasks → Despachar).
 
 ## Quem cria e quando
 
 - **Fim do `/grill-with-docs`:** garanta os arquivos de domínio (ver "Arquivos obrigatórios").
-- **`/to-spec` publicou uma spec:** se não há `TODO.md`, crie a partir de
-  `docs/templates/todo.md` do Watchdog. Acrescente em `## Próximo` o item `[Spec #n] <título>`,
-  com `Referência:` para a issue e a cópia em `docs/issues/`.
-- **`/to-tickets` publicou os tickets:** não crie um item por ticket. No item da spec, liste os
-  tickets em `Referência:` e as dependências em `Execução:`, como `Bloqueado por: T1 (#2).`
+- **`/to-spec`:** não escreve no TODO. A spec só aparece depois, em `Referência:` dos tickets.
+- **`/to-tickets` publicou os tickets:** crie o `TODO.md` se faltar (modelo `docs/templates/todo.md`
+  do Watchdog) e acrescente em `## Próximo` **um item por ticket**, na ordem das dependências.
+  O gatilho está em `docs/agents/issue-tracker.md`, que as skills leem na hora de publicar.
 - **Issue de defeito aberta:** um item `[Bug #n]` por issue. Nunca junte vários bugs num item.
 - Fora desses momentos, só mexa no TODO para refletir uma mudança real de estado.
 
-## Tipos (o prefixo do título diz qual é)
+## Como escrever cada tipo
 
-- **Spec** `[Spec #n]`: issue-mãe que descreve uma entrega inteira e o aceite dela.
-- **Ticket**: sub-issue de uma spec, uma fatia que um executor entrega sozinho. Fica dentro do item
-  da spec; vira item próprio (`[Ticket #n]`) só quando é executado fora de uma spec.
-- **Bug** `[Bug #n]`: defeito observado, com reprodução. Depois de triado, vira ticket ou entra numa spec.
-- **Feature** `[Feature]`: capacidade nova ainda sem spec, incluindo achados de revisão que vão virar spec.
-- **Verificação** `[Verificação]`: conferência ou aceite que não pede código novo.
-- **Plano**: documento local com o "como" de uma spec ou ticket (`docs/superpowers/plans/`).
-  Não é item do TODO; aparece em `Referência:` do item que implementa.
+- **Ticket** (sub-issue de uma spec, ou ticket avulso): título `Tn (#issue) <título da issue>`,
+  com `n` sequencial no projeto. `Referência: spec #m e issue #issue (docs/issues/...)`.
+  Dependências em `Execução:`, como `Bloqueado por: T1 (#26).` O Watchdog só reconhece a
+  dependência quando existe um item cujo título começa com `T1 (#26)`.
+- **Bug** `[Bug #n] <título>`: defeito observado, com reprodução, ainda não triado. Depois de
+  triado, vira ticket (`Tn (#n)`) ou entra numa spec.
+- **Feature** `[Feature] <título>`: capacidade nova ainda sem spec, incluindo achados de revisão que vão virar spec.
+- **Verificação** `[Verificação] <título>`: conferência ou aceite que não pede código novo.
+- **Spec** não é item: é a issue-mãe, citada em `Referência:` dos tickets dela.
+- **Plano** não é item: documento local (`docs/superpowers/plans/`) citado em `Referência:`.
 
 ## Formato (`watchdog_todo: 1`)
 
@@ -36,7 +37,7 @@ Ele nasce no planejamento, mesmo sem o Watchdog ligado:
   `Referência` e `Motivo` são opcionais. Campos com dois espaços de recuo; conteúdo multilinha com quatro.
 - Dependências só em `Execução:`, como `Bloqueado por: T1 (#2).` ou `Bloqueado por: decisão do Vini sobre X.`
   O Watchdog não entende texto solto como "depende de A" ou "aguarda o Vini".
-- Não pode `Feito` automaticamente: o Progress conta os itens listados. Pergunte ao Vini antes de remover concluídos.
+- Não apague itens de `Feito` por conta própria: o Progress conta os itens listados. Pergunte ao Vini antes.
 - Valide com `watchdog todo validate --repo <projeto>`. Gramática completa no README, seção "Formato único do TODO.md".
 
 ## Arquivos obrigatórios
@@ -47,7 +48,8 @@ Repositório git e branch de integração: pergunte ao Vini, não crie por conta
 | Momento | Arquivo |
 |---|---|
 | Fim do `/grill-with-docs` | `GLOSSARY.md` com os termos decididos na conversa (o contrato do executor exige o arquivo) |
-| `/to-spec` | `TODO.md` (modelo acima) e `docs/issues/` com a cópia local da issue |
+| `/to-spec` | `docs/issues/` com a cópia local da spec |
+| `/to-tickets` | `TODO.md` (modelo acima), um item por ticket |
 | `/to-spec` | Seção "Cópia local" em `docs/agents/issue-tracker.md`; sem esse arquivo, avise para rodar `/setup-matt-pocock-skills` |
 | `/to-tickets` ou antes de abrir o Watchdog | `AGENTS.md` com `## Dispatch` (modelo `docs/templates/dispatch-agents.md` do Watchdog) |
 | `/to-tickets` ou antes de abrir o Watchdog | `CLAUDE.md` com `@AGENTS.md` e `.gitignore` com `.worktrees/` e `.watchdog/` |

@@ -4980,7 +4980,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <div class="pulse-dot"></div>
         <h1>Onde fica a regra do TODO</h1>
       </div>
-      <p class="subtitle">Claude e Codex usam a mesma regra global; só o projeto com docs/agents/todo.md segue a regra do Watchdog</p>
+      <p class="subtitle">O TODO nasce depois do /to-tickets, pelo gatilho no issue-tracker.md do projeto; o global só aponta para a regra</p>
     </div>
 
 
@@ -4988,9 +4988,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / PLATE 04">
-      <svg viewBox="0 0 1133 652" data-layout-contract="readable-v2" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="signal-flow" data-quality-profile="showcase">
+      <svg viewBox="0 0 1184 652" data-layout-contract="readable-v2" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="signal-flow" data-quality-profile="showcase">
         <title id="archify-diagram-title">Onde fica a regra do TODO</title>
-        <desc id="archify-diagram-description">Claude e Codex usam a mesma regra global; só o projeto com docs/agents/todo.md segue a regra do Watchdog</desc>
+        <desc id="archify-diagram-description">O TODO nasce depois do /to-tickets, pelo gatilho no issue-tracker.md do projeto; o global só aponta para a regra</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -5014,16 +5014,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Swimlanes -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-0" x="40" y="52" width="1077" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-0" x="40" y="52" width="1056" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="74" class="t-dim" font-size="10" font-weight="600">01 / Regra global (mínima)</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="176" width="1077" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="176" width="1056" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="198" class="t-dim" font-size="10" font-weight="600">02 / Fluxo de planejamento</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="300" width="1077" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="300" width="1056" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="322" class="t-dim" font-size="10" font-weight="600">03 / Arquivos do projeto</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-3" x="40" y="424" width="1077" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-3" x="40" y="424" width="1056" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="446" class="t-dim" font-size="10" font-weight="600">04 / Watchdog</text>
 
         <!-- Phase headers -->
@@ -5033,192 +5033,198 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 
         <!-- Edge paths -->
-        <path data-edge-from="claude" data-edge-to="decide" data-edge-key="0" data-edge-id="claude-decide" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="128,145;128,161;482,161;482,145" d="M 128 145 L 128 161 L 482 161 L 482 145" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="codex" data-edge-to="decide" data-edge-key="1" data-edge-id="codex-decide" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="376,119;404,119" d="M 376 119 L 404 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="decide" data-edge-to="grill" data-edge-label="sim" data-edge-key="2" data-edge-id="decide-grill" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="574,119;590,119;590,166;489,166;489,217" d="M 574 119 L 590 119 L 590 166 L 489 166 L 489 217" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="decide" data-edge-to="outros" data-edge-label="não" data-edge-key="3" data-edge-id="decide-outros" data-composition-routing="workflow-v2-auto" data-edge-role="branch" data-composition-points="489,93;489,77;705.8,77;705.8,93" d="M 489 93 L 489 77 L 705.8 77 L 705.8 93" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="grill" data-edge-to="spec" data-edge-key="4" data-edge-id="grill-spec" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="574,243;620.8,243" d="M 574 243 L 620.8 243" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="modelos" data-edge-to="regra" data-edge-label="copiar ao preparar" data-edge-key="5" data-edge-id="modelos-regra" data-composition-routing="workflow-v2-auto" data-edge-role="branch" data-composition-points="296,465;296,367;404,367" d="M 296 465 L 296 367 L 404 367" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="regra" data-edge-to="todo" data-edge-label="define" data-edge-key="6" data-edge-id="regra-todo" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="574,367;620.8,367" d="M 574 367 L 620.8 367" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="spec" data-edge-to="tickets" data-edge-key="7" data-edge-id="spec-tickets" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="790.8,243;818.8,243" d="M 790.8 243 L 818.8 243" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tickets" data-edge-to="tasks" data-edge-label="Watchdog ligado" data-edge-key="8" data-edge-id="tickets-tasks" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="903.8,217;903.8,160;1023.8,160;1023.8,465" d="M 903.8 217 L 903.8 160 L 1023.8 160 L 1023.8 465" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="todo" data-edge-to="dispatch" data-edge-key="9" data-edge-id="todo-dispatch" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="790.8,367;818.8,367" d="M 790.8 367 L 818.8 367" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="claude" data-edge-to="decide" data-edge-key="0" data-edge-id="claude-decide" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="198,119;226,119" d="M 198 119 L 226 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="decide" data-edge-to="grill" data-edge-label="sim" data-edge-key="1" data-edge-id="decide-grill" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="301,145;301,217" d="M 301 145 L 301 217" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="decide" data-edge-to="outros" data-edge-label="não" data-edge-key="2" data-edge-id="decide-outros" data-composition-routing="workflow-v2-auto" data-edge-role="branch" data-composition-points="376,119;414,119" d="M 376 119 L 414 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="gatilho" data-edge-to="todo" data-edge-label="cria" data-edge-key="3" data-edge-id="gatilho-todo" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="900,367;938,367" d="M 900 367 L 938 367" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="grill" data-edge-to="spec" data-edge-key="4" data-edge-id="grill-spec" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="376,243;414,243" d="M 376 243 L 414 243" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="modelos" data-edge-to="regra" data-edge-label="copiar ao preparar" data-edge-key="5" data-edge-id="modelos-regra" data-composition-routing="workflow-v2-auto" data-edge-role="branch" data-composition-points="301,465;301,367;414,367" d="M 301 465 L 301 367 L 414 367" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="regra" data-edge-to="gatilho" data-edge-label="define" data-edge-key="6" data-edge-id="regra-gatilho" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="489,341;489,325;818,325;818,341" d="M 489 341 L 489 325 L 818 325 L 818 341" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="spec" data-edge-to="tickets" data-edge-key="7" data-edge-id="spec-tickets" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="564,243;592,243" d="M 564 243 L 592 243" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="tickets" data-edge-to="gatilho" data-edge-label="lê ao publicar" data-edge-key="8" data-edge-id="tickets-gatilho" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="742,243;832,243;832,341" d="M 742 243 L 832 243 L 832 341" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="todo" data-edge-to="dispatch" data-edge-key="9" data-edge-id="todo-dispatch" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="1006,393;1006,409;667,409;667,393" d="M 1006 393 L 1006 409 L 667 409 L 667 393" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="todo" data-edge-to="tasks" data-edge-label="Watchdog ligado" data-edge-key="10" data-edge-id="todo-tasks" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="1088,367;1166,367;1166,491;1088,491" d="M 1088 367 L 1166 367 L 1166 491 L 1088 491" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
 
         <!-- Nodes -->
-        <g id="node-claude" data-node-id="claude" data-node-label="Claude" tabindex="0" role="button" aria-label="Focus Claude, ~/.claude/CLAUDE.md, Regra global (mínima)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="~/.claude/CLAUDE.md" data-node-context="Regra global (mínima)">
-          <title>Claude · ~/.claude/CLAUDE.md · Regra global (mínima)</title>
-          <rect x="48" y="93" width="160" height="52" rx="6" class="c-mask"/>
-          <rect x="48" y="93" width="160" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
+        <g id="node-claude" data-node-id="claude" data-node-label="Claude e Codex" tabindex="0" role="button" aria-label="Focus Claude e Codex, Instruções globais, Regra global (mínima)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="Instruções globais" data-node-context="Regra global (mínima)">
+          <title>Claude e Codex · Instruções globais · Regra global (mínima)</title>
+          <rect x="48" y="93" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="48" y="93" width="150" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(54 99) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="128" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Claude</text>
-          <text data-detail="context" x="128" y="131" class="t-muted" font-size="8" text-anchor="middle">~/.claude/CLAUDE.md</text>
-        </g>
-
-        <g id="node-codex" data-node-id="codex" data-node-label="Codex" tabindex="0" role="button" aria-label="Focus Codex, ~/.codex/AGENTS.md, Regra global (mínima)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="~/.codex/AGENTS.md" data-node-context="Regra global (mínima)">
-          <title>Codex · ~/.codex/AGENTS.md · Regra global (mínima)</title>
-          <rect x="216" y="93" width="160" height="52" rx="6" class="c-mask"/>
-          <rect x="216" y="93" width="160" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(222 99) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="296" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Codex</text>
-          <text data-detail="context" x="296" y="131" class="t-muted" font-size="8" text-anchor="middle">~/.codex/AGENTS.md</text>
+          <text data-node-label="" data-detail-anchor="" x="123" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Claude e Codex</text>
+          <text data-detail="context" x="123" y="131" class="t-muted" font-size="8" text-anchor="middle">Instruções globais</text>
         </g>
 
         <g id="node-decide" data-node-id="decide" data-node-label="docs/agents/todo.md?" tabindex="0" role="button" aria-label="Focus docs/agents/todo.md?, Linha nova da regra, Regra global (mínima)" aria-pressed="false" data-node-kind="security" data-node-sublabel="Linha nova da regra" data-node-context="Regra global (mínima)">
           <title>docs/agents/todo.md? · Linha nova da regra · Regra global (mínima)</title>
-          <rect x="404" y="93" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="404" y="93" width="170" height="52" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(410 99) scale(0.6875)">
+          <rect x="226" y="93" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="226" y="93" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(232 99) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="489" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/agents/todo.md?</text>
-          <text data-detail="context" x="489" y="131" class="t-muted" font-size="8" text-anchor="middle">Linha nova da regra</text>
+          <text data-node-label="" data-detail-anchor="" x="301" y="125.2" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/agents/todo.md?</text>
+          <text data-detail="context" x="301" y="140.1" class="t-muted" font-size="8" text-anchor="middle">Linha nova da regra</text>
         </g>
 
         <g id="node-outros" data-node-id="outros" data-node-label="Outros projetos" tabindex="0" role="button" aria-label="Focus Outros projetos, Só git-todo, como antes, Regra global (mínima)" aria-pressed="false" data-node-kind="external" data-node-sublabel="Só git-todo, como antes" data-node-context="Regra global (mínima)">
           <title>Outros projetos · Só git-todo, como antes · Regra global (mínima)</title>
-          <rect x="620.8" y="93" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="620.8" y="93" width="170" height="52" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(626.8 99) scale(0.6875)">
+          <rect x="414" y="93" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="414" y="93" width="150" height="52" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(420 99) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="705.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Outros projetos</text>
-          <text data-detail="context" x="705.8" y="131" class="t-muted" font-size="8" text-anchor="middle">Só git-todo, como antes</text>
+          <text data-node-label="" data-detail-anchor="" x="489" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Outros projetos</text>
+          <text data-detail="context" x="489" y="131" class="t-muted" font-size="8" text-anchor="middle">Só git-todo, como antes</text>
         </g>
 
         <g id="node-grill" data-node-id="grill" data-node-label="/grill-with-docs" tabindex="0" role="button" aria-label="Focus /grill-with-docs, Garante GLOSSARY.md, Fluxo de planejamento" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="Garante GLOSSARY.md" data-node-context="Fluxo de planejamento">
           <title>/grill-with-docs · Garante GLOSSARY.md · Fluxo de planejamento</title>
-          <rect x="404" y="217" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="404" y="217" width="170" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(410 223) scale(0.6875)">
+          <rect x="226" y="217" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="226" y="217" width="150" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(232 223) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="489" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/grill-with-docs</text>
-          <text data-detail="context" x="489" y="255" class="t-muted" font-size="8" text-anchor="middle">Garante GLOSSARY.md</text>
+          <text data-node-label="" data-detail-anchor="" x="301" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/grill-with-docs</text>
+          <text data-detail="context" x="301" y="255" class="t-muted" font-size="8" text-anchor="middle">Garante GLOSSARY.md</text>
         </g>
 
-        <g id="node-spec" data-node-id="spec" data-node-label="/to-spec" tabindex="0" role="button" aria-label="Focus /to-spec, Cria TODO e [Spec #n], Fluxo de planejamento" aria-pressed="false" data-node-kind="database" data-node-sublabel="Cria TODO e [Spec #n]" data-node-context="Fluxo de planejamento">
-          <title>/to-spec · Cria TODO e [Spec #n] · Fluxo de planejamento</title>
-          <rect x="620.8" y="217" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="620.8" y="217" width="170" height="52" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(626.8 223) scale(0.6875)">
+        <g id="node-spec" data-node-id="spec" data-node-label="/to-spec" tabindex="0" role="button" aria-label="Focus /to-spec, Publica a spec, Fluxo de planejamento" aria-pressed="false" data-node-kind="database" data-node-sublabel="Publica a spec" data-node-context="Fluxo de planejamento">
+          <title>/to-spec · Publica a spec · Fluxo de planejamento</title>
+          <rect x="414" y="217" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="414" y="217" width="150" height="52" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(420 223) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="705.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/to-spec</text>
-          <text data-detail="context" x="705.8" y="255" class="t-muted" font-size="8" text-anchor="middle">Cria TODO e [Spec #n]</text>
+          <text data-node-label="" data-detail-anchor="" x="489" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/to-spec</text>
+          <text data-detail="context" x="489" y="255" class="t-muted" font-size="8" text-anchor="middle">Publica a spec</text>
         </g>
 
-        <g id="node-tickets" data-node-id="tickets" data-node-label="/to-tickets" tabindex="0" role="button" aria-label="Focus /to-tickets, Tickets no item da spec, Fluxo de planejamento" aria-pressed="false" data-node-kind="database" data-node-sublabel="Tickets no item da spec" data-node-context="Fluxo de planejamento">
-          <title>/to-tickets · Tickets no item da spec · Fluxo de planejamento</title>
-          <rect x="818.8" y="217" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="818.8" y="217" width="170" height="52" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(824.8 223) scale(0.6875)">
+        <g id="node-tickets" data-node-id="tickets" data-node-label="/to-tickets" tabindex="0" role="button" aria-label="Focus /to-tickets, Publica os tickets, Fluxo de planejamento" aria-pressed="false" data-node-kind="database" data-node-sublabel="Publica os tickets" data-node-context="Fluxo de planejamento">
+          <title>/to-tickets · Publica os tickets · Fluxo de planejamento</title>
+          <rect x="592" y="217" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="592" y="217" width="150" height="52" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(598 223) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="903.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/to-tickets</text>
-          <text data-detail="context" x="903.8" y="255" class="t-muted" font-size="8" text-anchor="middle">Tickets no item da spec</text>
+          <text data-node-label="" data-detail-anchor="" x="667" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">/to-tickets</text>
+          <text data-detail="context" x="667" y="255" class="t-muted" font-size="8" text-anchor="middle">Publica os tickets</text>
         </g>
 
-        <g id="node-regra" data-node-id="regra" data-node-label="docs/agents/todo.md" tabindex="0" role="button" aria-label="Focus docs/agents/todo.md, Tipos, formato, arquivos, Arquivos do projeto" aria-pressed="false" data-node-kind="database" data-node-sublabel="Tipos, formato, arquivos" data-node-context="Arquivos do projeto">
-          <title>docs/agents/todo.md · Tipos, formato, arquivos · Arquivos do projeto</title>
-          <rect x="404" y="341" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="404" y="341" width="170" height="52" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(410 347) scale(0.6875)">
+        <g id="node-regra" data-node-id="regra" data-node-label="docs/agents/todo.md" tabindex="0" role="button" aria-label="Focus docs/agents/todo.md, Como escrever cada tipo, Arquivos do projeto" aria-pressed="false" data-node-kind="database" data-node-sublabel="Como escrever cada tipo" data-node-context="Arquivos do projeto">
+          <title>docs/agents/todo.md · Como escrever cada tipo · Arquivos do projeto</title>
+          <rect x="414" y="341" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="414" y="341" width="150" height="52" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(420 347) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="489" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/agents/todo.md</text>
-          <text data-detail="context" x="489" y="379" class="t-muted" font-size="8" text-anchor="middle">Tipos, formato, arquivos</text>
-        </g>
-
-        <g id="node-todo" data-node-id="todo" data-node-label="TODO.md" tabindex="0" role="button" aria-label="Focus TODO.md, watchdog_todo: 1, Arquivos do projeto" aria-pressed="false" data-node-kind="database" data-node-sublabel="watchdog_todo: 1" data-node-context="Arquivos do projeto">
-          <title>TODO.md · watchdog_todo: 1 · Arquivos do projeto</title>
-          <rect x="620.8" y="341" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="620.8" y="341" width="170" height="52" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(626.8 347) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="705.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TODO.md</text>
-          <text data-detail="context" x="705.8" y="379" class="t-muted" font-size="8" text-anchor="middle">watchdog_todo: 1</text>
+          <text data-node-label="" data-detail-anchor="" x="495.7" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/agents/todo.md</text>
+          <text data-detail="context" x="489" y="379" class="t-muted" font-size="8" text-anchor="middle">Como escrever cada tipo</text>
         </g>
 
         <g id="node-dispatch" data-node-id="dispatch" data-node-label="AGENTS.md" tabindex="0" role="button" aria-label="Focus AGENTS.md, Dispatch e .gitignore, Arquivos do projeto" aria-pressed="false" data-node-kind="database" data-node-sublabel="Dispatch e .gitignore" data-node-context="Arquivos do projeto">
           <title>AGENTS.md · Dispatch e .gitignore · Arquivos do projeto</title>
-          <rect x="818.8" y="341" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="818.8" y="341" width="170" height="52" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(824.8 347) scale(0.6875)">
+          <rect x="592" y="341" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="592" y="341" width="150" height="52" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(598 347) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="903.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AGENTS.md</text>
-          <text data-detail="context" x="903.8" y="379" class="t-muted" font-size="8" text-anchor="middle">Dispatch e .gitignore</text>
+          <text data-node-label="" data-detail-anchor="" x="667" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">AGENTS.md</text>
+          <text data-detail="context" x="667" y="379" class="t-muted" font-size="8" text-anchor="middle">Dispatch e .gitignore</text>
+        </g>
+
+        <g id="node-gatilho" data-node-id="gatilho" data-node-label="issue-tracker.md" tabindex="0" role="button" aria-label="Focus issue-tracker.md, Gatilho ao publicar, Arquivos do projeto" aria-pressed="false" data-node-kind="security" data-node-sublabel="Gatilho ao publicar" data-node-context="Arquivos do projeto">
+          <title>issue-tracker.md · Gatilho ao publicar · Arquivos do projeto</title>
+          <rect x="750" y="341" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="750" y="341" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(756 347) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="825" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">issue-tracker.md</text>
+          <text data-detail="context" x="825" y="379" class="t-muted" font-size="8" text-anchor="middle">Gatilho ao publicar</text>
+        </g>
+
+        <g id="node-todo" data-node-id="todo" data-node-label="TODO.md" tabindex="0" role="button" aria-label="Focus TODO.md, Um item por ticket, Arquivos do projeto" aria-pressed="false" data-node-kind="database" data-node-sublabel="Um item por ticket" data-node-context="Arquivos do projeto">
+          <title>TODO.md · Um item por ticket · Arquivos do projeto</title>
+          <rect x="938" y="341" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="938" y="341" width="150" height="52" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(944 347) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1013" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TODO.md</text>
+          <text data-detail="context" x="1013" y="379" class="t-muted" font-size="8" text-anchor="middle">Um item por ticket</text>
         </g>
 
         <g id="node-modelos" data-node-id="modelos" data-node-label="docs/templates" tabindex="0" role="button" aria-label="Focus docs/templates, Modelos no Watchdog, Watchdog" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Modelos no Watchdog" data-node-context="Watchdog">
           <title>docs/templates · Modelos no Watchdog · Watchdog</title>
-          <rect x="211" y="465" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="211" y="465" width="170" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(217 471) scale(0.6875)">
+          <rect x="226" y="465" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="226" y="465" width="150" height="52" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(232 471) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="296" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/templates</text>
-          <text data-detail="context" x="296" y="503" class="t-muted" font-size="8" text-anchor="middle">Modelos no Watchdog</text>
+          <text data-node-label="" data-detail-anchor="" x="301" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">docs/templates</text>
+          <text data-detail="context" x="301" y="503" class="t-muted" font-size="8" text-anchor="middle">Modelos no Watchdog</text>
         </g>
 
         <g id="node-tasks" data-node-id="tasks" data-node-label="Tasks" tabindex="0" role="button" aria-label="Focus Tasks, Lê o TODO e despacha, Watchdog" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Lê o TODO e despacha" data-node-context="Watchdog">
           <title>Tasks · Lê o TODO e despacha · Watchdog</title>
-          <rect x="938.8" y="465" width="170" height="52" rx="6" class="c-mask"/>
-          <rect x="938.8" y="465" width="170" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(944.8 471) scale(0.6875)">
+          <rect x="938" y="465" width="150" height="52" rx="6" class="c-mask"/>
+          <rect x="938" y="465" width="150" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(944 471) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1023.8" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Tasks</text>
-          <text data-detail="context" x="1023.8" y="503" class="t-muted" font-size="8" text-anchor="middle">Lê o TODO e despacha</text>
+          <text data-node-label="" data-detail-anchor="" x="1013" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Tasks</text>
+          <text data-detail="context" x="1013" y="503" class="t-muted" font-size="8" text-anchor="middle">Lê o TODO e despacha</text>
         </g>
 
         <!-- Edge labels -->
 
-
-        <g data-detail="context" data-edge-from="decide" data-edge-to="grill" data-edge-label="sim" data-edge-key="2" data-edge-id="decide-grill">
-          <rect x="524.5" y="146" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="539.5" y="156" class="t-edge-default" font-size="8" text-anchor="middle">sim</text>
+        <g data-detail="context" data-edge-from="decide" data-edge-to="grill" data-edge-label="sim" data-edge-key="1" data-edge-id="decide-grill">
+          <rect x="286" y="171" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="301" y="181" class="t-edge-default" font-size="8" text-anchor="middle">sim</text>
         </g>
-        <g data-detail="context" data-edge-from="decide" data-edge-to="outros" data-edge-label="não" data-edge-key="3" data-edge-id="decide-outros">
-          <rect x="582.4" y="57" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="597.4" y="67" class="t-edge-default" font-size="8" text-anchor="middle">não</text>
+        <g data-detail="context" data-edge-from="decide" data-edge-to="outros" data-edge-label="não" data-edge-key="2" data-edge-id="decide-outros">
+          <rect x="380" y="99" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="395" y="109" class="t-edge-default" font-size="8" text-anchor="middle">não</text>
+        </g>
+        <g data-detail="context" data-edge-from="gatilho" data-edge-to="todo" data-edge-label="cria" data-edge-key="3" data-edge-id="gatilho-todo">
+          <rect x="904" y="347" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="919" y="357" class="t-edge-default" font-size="8" text-anchor="middle">cria</text>
         </g>
 
         <g data-detail="context" data-edge-from="modelos" data-edge-to="regra" data-edge-label="copiar ao preparar" data-edge-key="5" data-edge-id="modelos-regra">
-          <rect x="301.8" y="347" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="350" y="357" class="t-edge-default" font-size="8" text-anchor="middle">copiar ao preparar</text>
+          <rect x="309.3" y="347" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="357.5" y="357" class="t-edge-default" font-size="8" text-anchor="middle">copiar ao preparar</text>
         </g>
-        <g data-detail="context" data-edge-from="regra" data-edge-to="todo" data-edge-label="define" data-edge-key="6" data-edge-id="regra-todo">
-          <rect x="578" y="347" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="597.4" y="357" class="t-edge-default" font-size="8" text-anchor="middle">define</text>
-        </g>
-
-        <g data-detail="context" data-edge-from="tickets" data-edge-to="tasks" data-edge-label="Watchdog ligado" data-edge-key="8" data-edge-id="tickets-tasks">
-          <rect x="922.8" y="140" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="963.8" y="150" class="t-edge-default" font-size="8" text-anchor="middle">Watchdog ligado</text>
+        <g data-detail="context" data-edge-from="regra" data-edge-to="gatilho" data-edge-label="define" data-edge-key="6" data-edge-id="regra-gatilho">
+          <rect x="634.1" y="305" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="653.5" y="315" class="t-edge-default" font-size="8" text-anchor="middle">define</text>
         </g>
 
+        <g data-detail="context" data-edge-from="tickets" data-edge-to="gatilho" data-edge-label="lê ao publicar" data-edge-key="8" data-edge-id="tickets-gatilho">
+          <rect x="748.4" y="223" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="787" y="233" class="t-edge-default" font-size="8" text-anchor="middle">lê ao publicar</text>
+        </g>
+
+        <g data-detail="context" data-edge-from="todo" data-edge-to="tasks" data-edge-label="Watchdog ligado" data-edge-key="10" data-edge-id="todo-tasks">
+          <rect x="1086" y="347" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1127" y="357" class="t-edge-default" font-size="8" text-anchor="middle">Watchdog ligado</text>
+        </g>
 
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
@@ -5441,8 +5447,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <h3>No projeto</h3>
         </div>
         <ul>
-          <li>docs/agents/todo.md diz quem cria o TODO em cada etapa.</li>
-          <li>Funciona sem o Watchdog ligado; ele lê o TODO depois.</li>
+          <li>/to-tickets lê o issue-tracker.md e cria o TODO, um item por ticket.</li>
+          <li>docs/agents/todo.md diz como escrever ticket, bug, feature e verificação.</li>
         </ul>
       </div>
 

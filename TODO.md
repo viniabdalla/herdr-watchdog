@@ -21,65 +21,11 @@ A spec #1 tem os tickets T1–T13 em Feito. O aceite manual T14 (#15) está em a
 
 O brainstorm foi encerrado na spec anterior. Em 25/11, Vini retirou do escopo a transferência de orquestração entre Watchdog e Left Undone.
 
-Regras deste arquivo (resumo de `docs/agents/todo.md`):
-- O título começa pelo tipo: `[Spec #n]`, `[Bug #n]`, `[Feature]`, `[Verificação]` ou `[Ticket #n]` (este, só fora de spec).
-- Os tickets de uma spec ficam no item da spec (`Referência:` e `Execução:`), não como itens próprios.
-- Um item por bug. Planos não são itens; aparecem em `Referência:`.
-- Dependências só em `Execução:`, como `Bloqueado por: T1 (#2).`
-- Todo item, inclusive em Feito, tem ID, Resumo, Origem, Execução e Aceite.
+Como escrever neste arquivo: `docs/agents/todo.md` (um item por ticket, criado depois do `/to-tickets`).
 
 ## Em andamento
 
 ## Próximo
-- [ ] T16 (#38) Regra do TODO: um item por ticket, criado no /to-tickets
-  ID: 1bf9aa52-7c42-413f-81c4-ec054474ed41
-  Resumo:
-    Regra do TODO: um item por ticket, criado no /to-tickets.
-  Origem: pedido-humano
-  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #38 (docs/issues/38-regra-todo-um-item-por-ticket.md)
-  Execução:
-    Liberado.
-  Aceite:
-    `docs/agents/todo.md` diz: um item por ticket com título `Tn (#issue) título`, `Referência:` com a spec e a issue, e dependências em `Execução: Bloqueado por: Tn (#issue).`
-    Os tipos `[Bug #n]`, `[Feature]` e `[Verificação]` continuam valendo para o que não é ticket. O prefixo `[Spec #n]` deixa de existir como item.
-    `docs/templates/agents-todo.md` e `docs/templates/todo.md` seguem a mesma regra. O preâmbulo do `TODO.md` vira uma linha que aponta para `docs/agents/todo.md`.
-    `watchdog todo validate --repo .` passa.
-- [ ] T17 (#39) Gatilho do TODO no docs/agents/issue-tracker.md
-  ID: c0e90ca1-adbe-4bfd-ada9-1ab2c131510e
-  Resumo:
-    Gatilho do TODO no docs/agents/issue-tracker.md.
-  Origem: pedido-humano
-  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #39 (docs/issues/39-gatilho-todo-no-issue-tracker.md)
-  Execução:
-    Bloqueado por: T16 (#38).
-  Aceite:
-    `docs/agents/issue-tracker.md` deste repositório manda, depois de publicar os tickets, criar ou atualizar o `TODO.md` conforme `docs/agents/todo.md`: um item por ticket, na ordem das dependências.
-    Um modelo dessa seção fica em `docs/templates/`, para copiar em projetos preparados para o Watchdog.
-    Nenhum arquivo em `~/.agents/skills` é editado.
-- [ ] T18 (#40) Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28
-  ID: 3abbcc32-cb2f-4282-ab9f-8424e89a7327
-  Resumo:
-    Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28.
-  Origem: pedido-humano
-  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #40 (docs/issues/40-converter-specs-24-25-em-tickets.md)
-  Execução:
-    Bloqueado por: T16 (#38).
-  Aceite:
-    `[Spec #25] Trocar a pasta dos painéis` vira os itens dos tickets #26 e #27, com o #27 `Bloqueado por: #26` no formato aceito.
-    `[Spec #24] Botões de skill` vira o item do ticket #28.
-    Os IDs dos itens antigos não são reaproveitados. `watchdog todo validate --repo .` passa e o Tasks mostra os itens.
-- [ ] T19 (#41) Atualizar o diagrama regra-todo para o gatilho no /to-tickets
-  ID: 364c9718-c8fa-4366-86b5-d2a5ff670384
-  Resumo:
-    Atualizar o diagrama regra-todo para o gatilho no /to-tickets.
-  Origem: pedido-humano
-  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #41 (docs/issues/41-diagrama-regra-todo-to-tickets.md)
-  Execução:
-    Bloqueado por: T16 (#38), T17 (#39).
-  Aceite:
-    O TODO sai de `/to-spec` e passa a nascer em `/to-tickets`, pelo gatilho em `docs/agents/issue-tracker.md`.
-    O diagrama mostra `docs/agents/todo.md` como regra, os modelos em `docs/templates` e o global só com o git-todo e a linha de ponteiro.
-    O `finalize` do Archify passa em todas as verificações.
 - [ ] T20 (#42) Preparar projeto novo com a regra e o gatilho do TODO
   ID: e6ae5354-2679-462f-94b0-0983ece6b9dc
   Resumo:
@@ -173,26 +119,47 @@ Regras deste arquivo (resumo de `docs/agents/todo.md`):
     Ainda não iniciada.
   Aceite:
     Spec publicada com aprovação do Vini e tickets prontos para o Dispatch.
-- [ ] [Spec #25] Trocar a pasta dos painéis da aba pelo Tasks
-  ID: 77a81630-043d-4d38-8ff6-ed62009155bd
+- [ ] T21 (#26) Trocar e lembrar a pasta da aba
+  ID: e81f510c-ae62-4ee9-8e2b-6b937b521fc4
   Resumo:
-    Escolher a worktree que Tasks, Progress, Artifacts e Yazi acompanham e continuar na conversa do líder já aberto.
+    Trocar e lembrar a pasta da aba.
   Origem: pedido-humano
-  Referência: docs/issues/25-spec-trocar-pasta-no-tasks.md; tickets #26 e #27 (docs/issues/26-*, 27-*)
+  Referência: spec #25 e issue #26 (docs/issues/26-trocar-e-lembrar-a-pasta-da-aba.md)
   Execução:
-    Reproduzidas as duas recusas em uma worktree Git temporária com identidade de sessão simulada. O ticket #26 troca e lembra a pasta da aba. O #27 despacha ao mesmo líder depois da troca e depende do #26.
+    Liberado. A spec #25 teve as duas recusas reproduzidas numa worktree Git temporária.
   Aceite:
-    Trocar pasta atualiza os quatro painéis da aba nos mesmos panes e Despachar entrega à mesma conversa com o caminho novo. Reabrir mantém a escolha e a pasta original pode ser selecionada na mesma lista. Toda recusa mostra motivo e próximo passo. Outras abas e o state.db ficam intactos.
-- [ ] [Spec #24] Usar as tarefas marcadas nos botões de skill do Tasks
-  ID: b739b7ea-d08c-419c-8d71-f06e80ccd48a
+    A lista contém as worktrees do repositório do Tasks, inclusive a original, e identifica a atual.
+    Ao escolher B, o Tasks passa a ler o TODO de B e Progress, Artifacts e Yazi passam a acompanhar B. Os quatro conservam os mesmos panes.
+    Reabrir o Watchdog recupera B. Selecionar A na mesma lista traz os quatro painéis de volta.
+    Quando a troca é recusada, o Tasks informa na tela o motivo e o próximo passo.
+    Demonstrar o percurso com duas worktrees e uma segunda aba em recursos isolados. Conferir que os painéis da outra aba e o state.db compartilhado ficam intactos.
+- [ ] T22 (#27) Despachar ao mesmo líder depois de trocar a pasta
+  ID: daff81d9-4574-42fc-9bd2-ea09e2e2d9c1
   Resumo:
-    As seis skills recebem as tarefas marcadas. Com a seleção vazia, continuam na conversa atual do líder.
+    Despachar ao mesmo líder depois de trocar a pasta.
   Origem: pedido-humano
-  Referência: docs/issues/24-spec-selecao-nos-botoes-de-skill.md; ticket #28 (docs/issues/28-*)
+  Referência: spec #25 e issue #27 (docs/issues/27-despachar-ao-mesmo-lider-depois-da-troca.md)
   Execução:
-    Spec #24 publicada. O ticket #28 cobre os seis botões e pode começar em paralelo com o #26. Reproduzido em terminal isolado que grill-with-docs envia só o nome da skill mesmo com tarefa marcada.
+    Bloqueado por: T21 (#26).
   Aceite:
-    Em Claude e Codex, conferir a prévia e a mensagem dos seis botões com zero, uma e várias tarefas marcadas. Preservar os argumentos próprios das skills, a edição e o cancelamento.
+    Em recursos isolados, ligar o líder em A, trocar a aba para B, marcar uma tarefa de B e confirmar o primeiro despacho. Conferir na mensagem recebida a tarefa e o caminho de B, na mesma conversa.
+    Repetir com um grupo que já tem meta nessa conversa. A atualização incremental também leva o caminho de B. Ao voltar para A, o próximo despacho leva o caminho de A.
+    Religar mantém a conferência de identidade. Se o líder começou em A e o Tasks está em B, uma religação recusada identifica as duas pastas e orienta voltar a A ou abrir um líder em B.
+    Toda recusa de despacho ou religação explica o motivo e o próximo passo na tela. Conferir que as ações preservam os painéis da outra aba e o state.db compartilhado.
+- [ ] T23 (#28) Levar a seleção aos seis botões de skill do Tasks
+  ID: da3dc660-82bc-4771-ac62-6e07bf5e5c6c
+  Resumo:
+    Levar a seleção aos seis botões de skill do Tasks.
+  Origem: pedido-humano
+  Referência: spec #24 e issue #28 (docs/issues/28-selecao-nos-seis-botoes-de-skill.md)
+  Execução:
+    Liberado; pode começar em paralelo com T21 (#26). Reproduzido em terminal isolado que grill-with-docs envia só o nome da skill mesmo com tarefa marcada.
+  Aceite:
+    Com zero tarefas marcadas e o cursor sobre uma linha, enviar o comando habitual com seus argumentos, sem acrescentar tarefa.
+    Com A marcada e o cursor em B, mostrar e enviar o caminho do TODO da worktree, o título e o ID de A.
+    Com várias marcadas, incluir apenas essas tarefas na ordem do painel. Títulos iguais continuam distinguíveis pelos IDs.
+    Em todos os casos, code-review conserva o intervalo do grupo e to-tickets conserva o caminho da spec quando disponíveis. Conferir também os avisos próprios quando faltarem dados.
+    Enter entrega uma vez o texto exibido, inclusive após edição. Esc cancela a prévia sem envio. Abrir e cancelar preservam a seleção e o grupo.
 - [ ] [Verificação] Conferir o limite de contexto e a leitura após compactação
   ID: e3f85c0d-2191-449c-a650-95e52a95c3e2
   Resumo:
@@ -243,6 +210,59 @@ Regras deste arquivo (resumo de `docs/agents/todo.md`):
   Motivo: O teste com modelo real já ocorreu. Falta o aceite do Vini previsto na tarefa.
 
 ## Feito
+- [x] 2026-11-26 T16 (#38) Regra do TODO: um item por ticket, criado no /to-tickets
+  ID: 1bf9aa52-7c42-413f-81c4-ec054474ed41
+  Resumo:
+    Regra do TODO: um item por ticket, criado no /to-tickets.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #38 (docs/issues/38-regra-todo-um-item-por-ticket.md)
+  Execução:
+    Liberado.
+    Concluído: docs/agents/todo.md reescrito (um item por ticket, seção Como escrever cada tipo) e modelos docs/templates/agents-todo.md e todo.md; preâmbulo do TODO virou uma linha.
+  Aceite:
+    `docs/agents/todo.md` diz: um item por ticket com título `Tn (#issue) título`, `Referência:` com a spec e a issue, e dependências em `Execução: Bloqueado por: Tn (#issue).`
+    Os tipos `[Bug #n]`, `[Feature]` e `[Verificação]` continuam valendo para o que não é ticket. O prefixo `[Spec #n]` deixa de existir como item.
+    `docs/templates/agents-todo.md` e `docs/templates/todo.md` seguem a mesma regra. O preâmbulo do `TODO.md` vira uma linha que aponta para `docs/agents/todo.md`.
+    `watchdog todo validate --repo .` passa.
+- [x] 2026-11-26 T17 (#39) Gatilho do TODO no docs/agents/issue-tracker.md
+  ID: c0e90ca1-adbe-4bfd-ada9-1ab2c131510e
+  Resumo:
+    Gatilho do TODO no docs/agents/issue-tracker.md.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #39 (docs/issues/39-gatilho-todo-no-issue-tracker.md)
+  Execução:
+    Bloqueado por: T16 (#38).
+    Concluído: Gatilho na seção 'publish to the issue tracker' de docs/agents/issue-tracker.md; modelo em docs/templates/issue-tracker-todo.md; nenhuma skill editada.
+  Aceite:
+    `docs/agents/issue-tracker.md` deste repositório manda, depois de publicar os tickets, criar ou atualizar o `TODO.md` conforme `docs/agents/todo.md`: um item por ticket, na ordem das dependências.
+    Um modelo dessa seção fica em `docs/templates/`, para copiar em projetos preparados para o Watchdog.
+    Nenhum arquivo em `~/.agents/skills` é editado.
+- [x] 2026-11-26 T18 (#40) Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28
+  ID: 3abbcc32-cb2f-4282-ab9f-8424e89a7327
+  Resumo:
+    Converter as specs #24 e #25 do TODO nos tickets #26, #27 e #28.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #40 (docs/issues/40-converter-specs-24-25-em-tickets.md)
+  Execução:
+    Bloqueado por: T16 (#38).
+    Concluído: [Spec #25] virou T21 (#26) e T22 (#27, Bloqueado por T21); [Spec #24] virou T23 (#28). classify() confirma T22 esperando T21.
+  Aceite:
+    `[Spec #25] Trocar a pasta dos painéis` vira os itens dos tickets #26 e #27, com o #27 `Bloqueado por: #26` no formato aceito.
+    `[Spec #24] Botões de skill` vira o item do ticket #28.
+    Os IDs dos itens antigos não são reaproveitados. `watchdog todo validate --repo .` passa e o Tasks mostra os itens.
+- [x] 2026-11-26 T19 (#41) Atualizar o diagrama regra-todo para o gatilho no /to-tickets
+  ID: 364c9718-c8fa-4366-86b5-d2a5ff670384
+  Resumo:
+    Atualizar o diagrama regra-todo para o gatilho no /to-tickets.
+  Origem: pedido-humano
+  Referência: docs/pesquisa-regra-do-todo-2026-11-26.md e issue #41 (docs/issues/41-diagrama-regra-todo-to-tickets.md)
+  Execução:
+    Bloqueado por: T16 (#38), T17 (#39).
+    Concluído: workflow/archify/regra-todo.html refeito: TODO nasce no /to-tickets pelo issue-tracker.md; finalize do Archify passou nas quatro verificações.
+  Aceite:
+    O TODO sai de `/to-spec` e passa a nascer em `/to-tickets`, pelo gatilho em `docs/agents/issue-tracker.md`.
+    O diagrama mostra `docs/agents/todo.md` como regra, os modelos em `docs/templates` e o global só com o git-todo e a linha de ponteiro.
+    O `finalize` do Archify passa em todas as verificações.
 - [x] 2026-11-26 [Feature] Regra do TODO por projeto em docs/agents/todo.md
   ID: 8492d3f9-f93b-4f10-a327-2ad23727b08d
   Resumo:

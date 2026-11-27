@@ -34,6 +34,11 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 Create a GitHub issue.
 
+Depois de publicar os tickets (`/to-tickets`), crie ou atualize o `TODO.md` na raiz conforme
+`docs/agents/todo.md`: um item por ticket em `## Próximo`, na ordem das dependências, com título
+`Tn (#issue) <título>`, `Referência:` para a spec e a issue, e `Execução: Bloqueado por: Tn (#issue).`
+Faça isso também sem o Watchdog ligado. Uma spec sozinha (`/to-spec`) não entra no TODO.
+
 ## When a skill says "fetch the relevant ticket"
 
 Read it as in **Read an issue** above.
