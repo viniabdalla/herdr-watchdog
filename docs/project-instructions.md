@@ -1,7 +1,8 @@
 # Project instructions
 
 `watchdog project-instructions preview|check|apply --repo PATH` targets only the
-explicitly selected existing project, and only AGENTS.md and CLAUDE.md. It uses
+explicitly selected existing project: AGENTS.md, CLAUDE.md,
+`docs/agents/todo.md` and, when present, `docs/agents/issue-tracker.md`. It uses
 TODO format version 1; it neither creates a second task list nor changes TODO.md.
 The project leader owns its content. A worker contract can further restrict edits.
 
@@ -58,3 +59,25 @@ old/tampered payloads, closed examples, and markers inside examples. Refusal pre
 the original bytes and leaves the other instruction file absent. Markdown checking is
 a conservative fence parser; ambiguous or unresolved source context requires manual
 reconciliation rather than claiming that installed text will be read as instructions.
+
+
+## Preparar a regra do TODO
+
+A mesma prévia inclui o ponteiro `### TODO` dentro de `## Agent skills` no
+AGENTS.md, as seções ausentes da regra `docs/templates/agents-todo.md` e um
+esqueleto de `docs/templates/todo.md` embutido em `docs/agents/todo.md`.
+O projeto pode consultar o esqueleto sem depender do caminho do Watchdog.
+Seções já existentes da regra são preservadas; a preparação acrescenta as ausentes.
+O `TODO.md` do projeto continua sendo criado no momento definido pela regra.
+
+O gatilho de `docs/templates/issue-tracker-todo.md` é acrescentado à seção
+`When a skill says "publish to the issue tracker"` do issue tracker existente.
+Se faltar a seção, ela é acrescentada. Se faltar o arquivo, a prévia e o check
+avisam para rodar `/setup-matt-pocock-skills`; a preparação não o cria.
+Avisos aparecem em `warnings` no JSON e também na saída `--human`.
+
+Todos esses arquivos participam da mesma confirmação e conferência de hashes.
+A ausência do tracker é conferida novamente ao aplicar: se alguém o criar depois
+da prévia, é necessário gerar uma prévia nova. A preparação preserva texto fora
+do bloco gerenciado e das inserções e recusa diretórios intermediários simbólicos.
+A instalação dos arquivos não comprova que um agente seguiu a regra.

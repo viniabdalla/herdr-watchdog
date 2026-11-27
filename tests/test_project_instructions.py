@@ -42,7 +42,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(pi.check(self.repo)['status'],'outdated')
         plan=pi.preview(self.repo);pi.apply(self.repo,plan,confirmed=True)
         data=(self.repo/'AGENTS.md').read_text()
-        self.assertTrue(data.startswith('before\n'+pi.BEGIN));self.assertTrue(data.endswith(pi.END+'\nafter'))
+        self.assertTrue(data.startswith('before\n'+pi.BEGIN));self.assertIn(pi.END+'\nafter',data)
 
     def test_unmanaged_conflicting_copy_and_fenced_markers_are_refused(self):
         for text in ['Watchdog TODO instructions v0\nexisting unmanaged rules',

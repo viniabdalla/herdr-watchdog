@@ -16,6 +16,10 @@ BEGIN='<!-- watchdog-todo:begin -->'
 END='<!-- watchdog-todo:end -->'
 NAMES=('AGENTS.md','CLAUDE.md')
 LIMIT=256*1024
+TEMPLATES=Path(__file__).resolve().parents[1]/'docs/templates'
+TODO_RULE='docs/agents/todo.md'
+TRACKER='docs/agents/issue-tracker.md'
+PUBLISH='## When a skill says "publish to the issue tracker"'
 BODY='''Watchdog TODO instructions v1
 Use this project's TODO.md as the authoritative list (watchdog_todo: 1).
 At a human request, record/update its task during the conversation, without waiting
@@ -106,16 +110,94 @@ def proposed(raw):
     return result.encode()
 
 
+def safe_path(repo, name):
+    path=repo/name
+    for parent in path.parents:
+        if parent==repo:break
+        if parent.is_symlink():raise RuntimeError('Symlink instruction directory refused: '+str(parent))
+    return path
+
+
+def headings(text):
+    """Return real headings, ignoring fenced examples in copied templates."""
+    result=[];fence=None;offset=0
+    for line in text.splitlines(True):
+        mark=re.match(r'^\s*(`{3,}|~{3,})(.*)$',line)
+        if mark:
+            if fence is None:fence=mark[1]
+            elif mark[1][0]==fence[0] and len(mark[1])>=len(fence) and not mark[2].strip():fence=None
+        elif fence is None:
+            match=re.match(r'^(#{1,6}) (.+?)\s*$',line)
+            if match:result.append((match[0].strip(),len(match[1]),offset))
+        offset+=len(line)
+    return result
+
+
+def append_section(text, heading, body):
+    """Fill an absent section; preserve every byte of an existing section."""
+    if any(h==heading for h,_,_ in headings(text)):return text
+    nl='\r\n' if '\r\n' in text else '\n'
+    body=body.replace('\r\n','\n').replace('\n',nl)
+    return text+('' if not text else nl+nl)+heading+nl+nl+body.rstrip()+nl
+
+
+def in_section(text, heading, body, present):
+    sections=headings(text)
+    for i,(title,level,start) in enumerate(sections):
+        if title!=heading:continue
+        end=next((pos for _,depth,pos in sections[i+1:] if depth<=level),len(text))
+        if present(text[start:end]):return text
+        nl='\r\n' if '\r\n' in text else '\n'
+        body=body.replace('\r\n','\n').replace('\n',nl)
+        return text[:end]+nl+body.rstrip()+nl+nl+text[end:]
+    return append_section(text,heading,body)
+
+
+def todo_proposed(name, raw):
+    text=(raw or b'').decode('utf-8')
+    validate_context(text)
+    if name=='AGENTS.md':
+        pointer='### TODO\n\nTODO.md no formato do Watchdog (`watchdog_todo: 1`). See `docs/agents/todo.md`.'
+        text=in_section(text,'## Agent skills',pointer,
+                        lambda section:any(h=='### TODO' for h,_,_ in headings(section)))
+    elif name==TODO_RULE:
+        template=read_regular(TEMPLATES/'agents-todo.md').decode()
+        template=re.sub(r'^<!--.*?-->\s*','',template,flags=re.S)
+        template=template.replace('modelo `docs/templates/todo.md`\n  em `/home/tropico/Projects/herdr-watchdog`',
+                                  'modelo na seção "Modelo local do TODO.md" deste arquivo')
+        template=template.replace(' (`/home/tropico/Projects/herdr-watchdog`)','')
+        if raw is None:text=template
+        else:
+            sections=headings(template)
+            for i,(heading,_,start) in enumerate(sections):
+                end=sections[i+1][2] if i+1<len(sections) else len(template)
+                text=append_section(text,heading,template[start+len(heading):end].strip())
+        skeleton=read_regular(TEMPLATES/'todo.md').decode()
+        text=append_section(text,'## Modelo local do TODO.md','```markdown\n'+skeleton.rstrip()+'\n```')
+    elif name==TRACKER:
+        trigger=read_regular(TEMPLATES/'issue-tracker-todo.md').decode()
+        trigger=re.sub(r'^<!--.*?-->\s*','',trigger,flags=re.S).strip()
+        text=in_section(text,PUBLISH,trigger,lambda section:trigger in section.replace('\r\n','\n'))
+    validate_context(text)
+    return text.encode()
+
+
 def preview(repo):
-    repo=project(repo);files=[]
-    for name in NAMES:
-        before=read_regular(repo/name,missing=True);after=proposed(before)
+    repo=project(repo);files=[];warnings=[]
+    tracker=read_regular(safe_path(repo,TRACKER),missing=True)
+    names=(*NAMES,TODO_RULE,*((TRACKER,) if tracker is not None else ()))
+    if tracker is None:
+        warnings.append('Falta docs/agents/issue-tracker.md: rode /setup-matt-pocock-skills; o arquivo não será criado.')
+    for name in names:
+        before=read_regular(safe_path(repo,name),missing=True)
+        after=proposed(before) if name in NAMES else before
+        if name!='CLAUDE.md':after=todo_proposed(name,after)
         files.append({'path':name,'before_hash':digest(before) if before is not None else None,
             'after':after.decode(),'after_hash':digest(after),
             'status':'absent' if before is None else 'current' if before==after else 'outdated',
             'diff':''.join(difflib.unified_diff((before or b'').decode().splitlines(True),
                         after.decode().splitlines(True),fromfile=name,tofile=name))})
-    return {'version':1,'project':str(repo),'files':files,'agent_reading':'manual-unobserved'}
+    return {'version':1,'project':str(repo),'files':files,'warnings':warnings,'agent_reading':'manual-unobserved'}
 
 
 def check(repo):
@@ -133,11 +215,13 @@ def apply(repo, plan, *, confirmed=False, root=None):
         try:
             for entry in plan['files']:
                 if entry['status']=='current':continue
-                path=repo/entry['path'];before=read_regular(path,missing=True)
+                path=safe_path(repo,entry['path']);before=read_regular(path,missing=True)
                 if (digest(before) if before is not None else None)!=entry['before_hash']:
                     raise RuntimeError('Instructions changed during apply; display a fresh preview')
                 after=entry['after'].encode()
-                fd,temp=tempfile.mkstemp(prefix='.watchdog-instructions-',dir=repo)
+                path.parent.mkdir(parents=True,exist_ok=True)
+                safe_path(repo,entry['path'])
+                fd,temp=tempfile.mkstemp(prefix='.watchdog-instructions-',dir=path.parent)
                 try:
                     with os.fdopen(fd,'wb') as f:
                         f.write(after);f.flush();os.fsync(f.fileno())
@@ -194,6 +278,7 @@ def main(argv=None):
             for entry in result['files']:
                 print(entry['path']+': '+entry['status'])
                 print(entry['diff'],end='')
+            for warning in result['warnings']:print('Warning: '+warning)
             print('Agent reading: '+result['agent_reading'])
         else:print(json.dumps(result,ensure_ascii=False,indent=2))
         return 0
