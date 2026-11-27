@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "97a46c61-c94b-48c9-85ef-94951b2c36de",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/home/tropico/Projects/herdr-watchdog/.worktrees/tasks-somente-leitura/workflow/archify/regra-todo.json",
+  "output": "/home/tropico/Projects/herdr-watchdog/.worktrees/tasks-somente-leitura/workflow/archify/regra-todo.html",
+  "specification": {
+    "sha256": "5fd1d5be06a230b6fe65168364ce97a707b67d89f3ecc7005b10b21355a6bbf8",
+    "bytes": 3942
+  },
+  "artifact": {
+    "sha256": "1e7960ac76b8188399dd35c247dd2ac9394300547bb2787819854b8ef360490c",
+    "bytes": 762926
+  }
+}

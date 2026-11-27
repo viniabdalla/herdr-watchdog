@@ -12,6 +12,10 @@ Rótulos padrão: needs-triage, needs-info, ready-for-agent, ready-for-human, wo
 
 Single-context: GLOSSARY.md na raiz e docs/adr/. See `docs/agents/domain.md`.
 
+### TODO
+
+TODO.md no formato do Watchdog, com tipos, quem cria em cada etapa e arquivos obrigatórios. See `docs/agents/todo.md`.
+
 ## Dispatch
 
 Ao receber uma meta ou atualização do grupo, leia o [padrão do dispatch](docs/dispatch.md)

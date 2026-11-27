@@ -21,7 +21,7 @@ A spec #1 tem os tickets T1–T13 em Feito. O aceite manual T14 (#15) está em a
 
 O brainstorm foi encerrado na spec anterior. Em 25/11, Vini retirou do escopo a transferência de orquestração entre Watchdog e Left Undone.
 
-Regras deste arquivo (resumo de `~/.ai-shared/regras-todo.md`):
+Regras deste arquivo (resumo de `docs/agents/todo.md`):
 - O título começa pelo tipo: `[Spec #n]`, `[Bug #n]`, `[Feature]`, `[Verificação]` ou `[Ticket #n]` (este, só fora de spec).
 - Os tickets de uma spec ficam no item da spec (`Referência:` e `Execução:`), não como itens próprios.
 - Um item por bug. Planos não são itens; aparecem em `Referência:`.
@@ -181,6 +181,16 @@ Regras deste arquivo (resumo de `~/.ai-shared/regras-todo.md`):
   Motivo: O teste com modelo real já ocorreu. Falta o aceite do Vini previsto na tarefa.
 
 ## Feito
+- [x] 2026-11-26 [Feature] Regra do TODO por projeto em docs/agents/todo.md
+  ID: 8492d3f9-f93b-4f10-a327-2ad23727b08d
+  Resumo:
+    Tipos, formato watchdog_todo, quem cria o TODO em cada etapa (grill, to-spec, to-tickets) e arquivos obrigatórios passam a viver no projeto; o global ficou só com o git-todo e uma linha que aponta para docs/agents/todo.md.
+  Origem: pedido-humano
+  Referência: docs/agents/todo.md; modelos docs/templates/agents-todo.md e docs/templates/todo.md; diagrama workflow/archify/regra-todo.html
+  Execução:
+    Globais conferidos por diff (cópias em .watchdog/run/2026-11-26/globais-antes/). oracle, left-undone-herdr e omarchy-bar-groups não têm docs/agents/todo.md e seguem só o git-todo.
+  Aceite:
+    Projeto sem docs/agents/todo.md segue a regra git-todo de antes; este projeto segue docs/agents/todo.md.
 - [x] 2026-11-26 T14 (#15) Aceite manual
   ID: 82e42465-81ee-4d70-9f7b-72f856cf71b9
   Resumo:
